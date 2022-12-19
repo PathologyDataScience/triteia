@@ -1,5 +1,13 @@
 # triton_testing
 
+### Repository organization
+
+- /benchmarking - scripts and notebooks for generating official benchmarking results
+- /configurations - contains .pbtxt files defining triton model serving configurations
+- /notebooks - development notebooks for testing and demonstrating concepts
+- /results - contains outputs of benchmarking experiments
+- /simple_triton - contains repository code for simple_triton tools
+
 ### Using the Docker Engine Utility for Running A Container
 
 - As a user, run the container interactively.
