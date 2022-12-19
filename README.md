@@ -6,7 +6,7 @@
 - /configurations - contains .pbtxt files defining triton model serving configurations
 - /notebooks - development notebooks for testing and demonstrating concepts
 - /results - contains outputs of benchmarking experiments
-- /simple_triton - contains repository code for simple_triton tools
+- /simple_triton - hardened and usable repository code
 
 ### Using the Docker Engine Utility for Running A Container
 
