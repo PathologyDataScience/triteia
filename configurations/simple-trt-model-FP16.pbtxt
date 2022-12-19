@@ -1,0 +1,30 @@
+name: "simple-trt-model-FP16"
+platform: "tensorflow_savedmodel"
+max_batch_size: 2048
+input [
+ {
+    name: "input_0"
+    data_type: TYPE_FP16
+    dims: [ 1024]
+  }
+]
+output {
+    name: "output_0"
+    data_type: TYPE_FP32
+    dims: [ 1 ]
+  }
+instance_group [
+    {
+      count: 4
+      kind: KIND_GPU
+    }
+  ]
+dynamic_batching { }
+response_cache {
+  enable: True
+  }
+optimization { execution_accelerators {
+  gpu_execution_accelerator : [ {
+    name : "tensorrt"
+    parameters { key: "precision_mode" value: "FP16" }}]
+}}
