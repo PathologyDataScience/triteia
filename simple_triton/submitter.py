@@ -2,28 +2,6 @@ import multiprocessing
 from multiprocessing import Process, Queue
 import numpy as np
 import time
-import numpy as np
-import time
-import tritonclient.http as tritonhttpclient
-import tritonclient.grpc as tritongrpcclient
-from tqdm import tqdm
-import argparse
-import gevent.ssl
-import tritonclient.grpc as grpcclient
-import tritonclient.http as httpclient
-from tritonclient.utils import InferenceServerException
-import easydict
-import argparse
-import numpy as np
-import sys
-from builtins import range
-from ctypes import *
-import tritonclient.grpc as grpcclient
-from tritonclient import utils
-import tritonclient.utils.shared_memory as shm
-import tritonclient.http as tritonhttpclient
-from tritonclient.utils import triton_to_np_dtype
-from functools import partial
 
 
 """The submitter maintains a list of inference requests. It pulls samples from
@@ -65,43 +43,6 @@ Todo:
          postprocessing
     -Dynamically adjust sleep period and request queue length
 """
-# create numpy array for consumer to passŒ
-batch_size=1024
-class iterator(object):
-    
-    def __init__(self, B=batch_size, D=1024):
-        self.B = B # batch size
-        self.D = D # dimension
-
-    def __iter__(self):
-        self.i = 0
-        return self
-
-    def __next__(self):
-        output = np.float16(np.random.uniform(size=(self.B, self.D)))
-
-        return output
-
-# create callable for asynchronous requests to triton server
-from functools import partial
-import sys
-
-if sys.version_info >= (3, 0):
-    import queue
-else:
-    import Queue as queue
-
-class UserData:
-
-    def __init__(self):
-        self._completed_requests = queue.Queue()
-        
-def __init__(self):
-    self._completed_requests = queue.Queue()
-def completion_callback(user_data, result, error):
-    # passing error raise and handling out
-    user_data._completed_requests.put((result, error))
-
 
 
 class Submitter(Process):
@@ -120,20 +61,10 @@ class Submitter(Process):
 
         # initialize list of pending inference requests 
         requests = []
-
-        # initialize list of pending asynchronous requests and respons
-        async_requests = []
-        responses = []
         
-
-        #initialize results for callback in async request for triton server
-        results = []
-
         # set flag indicating qin stop signal receipt
         stop = False
-
-
-
+        
         # loop until exit signal received from calling process
         while True:
             
@@ -185,29 +116,9 @@ class Submitter(Process):
 # decremented each time the request is checked, and the time the request was
 # started. When decremented to 0, the request is finished.
 def put_dummy(sample):
-
-    async_requests = []
-    responses = []
-    sent_count = 1
-    user_data = UserData()
-    sent_count = 1
-    async_requests.append(triton_grpc_client.async_infer(model_name, inputs=[input0],
-                                             callback=partial(completion_callback, user_data),
-                                                 outputs=[output]))
-
-
-    # processed_count = 0
-    # while processed_count < sent_count:
-    #     (results, error) = user_data._completed_requests.get()
-    #     processed_count += 1
-    #     if error is not None:
-    #         print("inference failed: " + str(error))
-    #         sys.exit(1)
-    #     responses.append(user_data) 
     request = {"sample": sample,
-              "served": np.random.randint(low=1, high=10),
-              "start": time.time(),
-              "response": async_requests}
+               "served": np.random.randint(low=1, high=10),
+               "start": time.time()}
     return request
     
 
@@ -244,12 +155,7 @@ def print_inference(inference):
     print("Sample {}: {:0.3} seconds".format(inference["sample"],
                                              inference["elapsed"]),
           flush=True)
-# callback for async inference
-def callback(user_data, result, error):
-    if error:
-        user_data.append(error)
-    else:
-        user_data.append(result)
+
 
 if __name__ == '__main__':
     
@@ -258,58 +164,14 @@ if __name__ == '__main__':
     tasks = list(range(N)) # the input sample to each "inference" is just an int
     limit = 5 # limit on number of pending requests per worker
     workers = 4 # total number of Submitter workers
-    grpc_url = 'localhost:8001' # url for grpc access to tirton server
-    model_version = '1' # set model version
-    verbose = False # set verbos as False
-    input_dtype = 'FP16' # set input data type
-    model_name = 'simple-trt-model-FP16' # set model name
-    model_name_test = 'simple-trt-model-FP16-test' # set model name
-    input_name = 'input_0' # set input name
-    output_name = 'output_0' # set putput name
-    model_path_input='models/simple-trt-model-FP16-input/1/model.savedmodel' # set model path
-    model_path_test='models/simple-trt-model-FP16-test/1/model.savedmodel' # set model path
-    batch_size=1024
-
-        # check connectivity with triton server and model
-    import requests
-    res = requests.get('http://localhost:8000/v2/health/ready')
-    print(f"Tirton Server connection status: {res}")
-    res = requests.get('http://localhost:8000/v2/models/simple-trt-model-FP16-test')
-    print(f"Model connection status: {res}")
     
-    # create tirton grpc client: gRPC is a newer, open source remote 
-    # procedure call system initially developed at Google in 2015 that
-    # uses HTTP/2 for transport and Protocol Buffers as the interface 
-    # description language. It is highly efficient.
-    triton_grpc_client = tritongrpcclient.InferenceServerClient(url=grpc_url, verbose=verbose)
-
-
-   # instantiate triton client using the tritonhttpclient.InferenceServerClient class
-   #  access the model metadata with the .get_model_metadata() method as well as get 
-   # our model configuration with the get_model_config() method.
-    triton_grpc_client = tritongrpcclient.InferenceServerClient(url=grpc_url, verbose=verbose)
-    model_metadata = triton_grpc_client.get_model_metadata(model_name=model_name, model_version=model_version)
-    model_config = triton_grpc_client.get_model_config(model_name=model_name, model_version=model_version)
-
-
-    # input data for the Triton Inference Server
-    batch1 = (iterator(batch_size))
-    i = iter(batch1)
-    batch=next(i)
-
-    # use the tritonclient.grpc module to instantiate new InferInput and InferRequestedOutput objects
-    input0 = tritongrpcclient.InferInput(input_name, batch.shape, 'FP16')
-    input0.set_data_from_numpy(batch)
-    output = tritongrpcclient.InferRequestedOutput(output_name)
-
     # start timer
     start = time.time()
     
     # create input, output queues
     qin = Queue()
     qout = Queue()
-
-      
+    
     # Start consumers
     print(f"Creating {workers} workers")
     consumers = [Submitter(qin,
