@@ -65,11 +65,10 @@ Todo:
          postprocessing
     -Dynamically adjust sleep period and request queue length
 """
-# create numpy array for consumer to passŒ
-batch_size=2048
+# create numpy array for consumer to pass
 class iterator(object):
     
-    def __init__(self, B=batch_size, D=1024):
+    def __init__(self, B=2048, D=1024):
         self.B = B # batch size
         self.D = D # dimension
 
