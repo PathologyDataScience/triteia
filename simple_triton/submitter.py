@@ -1,12 +1,10 @@
 import argparse
 from builtins import range
 from ctypes import *
-import easydict
 from functools import partial
 import multiprocessing
 from multiprocessing import Process, Queue
 import numpy as np
-import gevent.ssl
 import requests
 import sys
 if sys.version_info >= (3, 0):
@@ -14,13 +12,7 @@ if sys.version_info >= (3, 0):
 else:
     import Queue as queue
 import time
-from tqdm import tqdm
 import tritonclient.grpc as grpcclient
-from tritonclient import utils
-from tritonclient.utils import InferenceServerException
-import tritonclient.utils.shared_memory as shm
-from tritonclient.utils import triton_to_np_dtype
-
 
 """The submitter maintains a list of inference requests. It pulls samples from
 the queue 'qin' and tracks these in 'requests'. A random number from [1-10]
