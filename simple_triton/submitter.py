@@ -81,13 +81,8 @@ class iterator(object):
 
 # create callable for asynchronous requests to triton server
 class UserData:
-
     def __init__(self):
         self._completed_requests = queue.Queue()
-
-
-def __init__(self):
-    self._completed_requests = queue.Queue()
 
 
 def completion_callback(user_data, result, error):
