@@ -108,10 +108,6 @@ class Submitter(Process):
         # initialize list of pending inference requests
         requests = []
 
-        # initialize list of pending asynchronous requests and respons
-        async_requests = []
-        responses = []
-
         # initialize results for callback in async request for triton server
         results = []
 
@@ -171,7 +167,6 @@ class Submitter(Process):
 def put_dummy(sample):
 
     async_requests = []
-    responses = []
     sent_count = 1
     user_data = UserData()
     sent_count = 1
