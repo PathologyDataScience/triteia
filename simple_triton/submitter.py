@@ -169,7 +169,6 @@ def put_dummy(sample):
     async_requests = []
     sent_count = 1
     user_data = UserData()
-    sent_count = 1
     async_requests.append(triton_grpc_client.async_infer(model_name, inputs=[input0],
                                                          callback=partial(
                                                              completion_callback, user_data),
