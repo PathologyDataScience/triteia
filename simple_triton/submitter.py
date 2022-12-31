@@ -236,25 +236,18 @@ if __name__ == '__main__':
 
     # parameters
     N = 100  # total number of inferences to perform
-    # the input sample to each "inference" is just an int
-    tasks = list(range(N))
+    tasks = list(range(N))     # the input sample to each "inference" is just an int
     limit = 5  # limit on number of pending requests per worker
     workers = 4  # total number of Submitter workers
     grpc_url = 'localhost:8001'  # url for grpc access to tirton server
     model_version = '1'  # set model version
-    verbose = False  # set verbos as False
-    input_dtype = 'FP16'  # set input data type
+    verbose = False  # set verbose as False
     model_name = 'simple-trt-model-FP16'  # set model name
-    model_name_test = 'simple-trt-model-FP16-test'  # set model name
-    input_name = 'input_0'  # set input name
-    output_name = 'output_0'  # set putput name
-    model_path_input = 'models/simple-trt-model-FP16-input/1/model.savedmodel'  # set model path
-    model_path_test = 'models/simple-trt-model-FP16-test/1/model.savedmodel'  # set model path
     batch_size = 2048
 
     # check connectivity with triton server and model
     res = requests.get('http://localhost:8000/v2/health/ready')
-    print(f"Tirton Server connection status: {res}")
+    print(f"Triton Server connection status: {res}")
     res = requests.get(
         'http://localhost:8000/v2/models/simple-trt-model-FP16-test')
     print(f"Model connection status: {res}")
