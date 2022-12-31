@@ -1,29 +1,25 @@
+import argparse
+from builtins import range
+from ctypes import *
+import easydict
+from functools import partial
 import multiprocessing
 from multiprocessing import Process, Queue
 import numpy as np
-import time
-import numpy as np
-import time
-import tritonclient.http as tritonhttpclient
-import tritonclient.grpc as tritongrpcclient
-from tqdm import tqdm
-import argparse
 import gevent.ssl
-import tritonclient.grpc as grpcclient
-import tritonclient.http as httpclient
-from tritonclient.utils import InferenceServerException
-import easydict
-import argparse
-import numpy as np
+import requests
 import sys
-from builtins import range
-from ctypes import *
+if sys.version_info >= (3, 0):
+    import queue
+else:
+    import Queue as queue
+import time
+from tqdm import tqdm
 import tritonclient.grpc as grpcclient
 from tritonclient import utils
+from tritonclient.utils import InferenceServerException
 import tritonclient.utils.shared_memory as shm
-import tritonclient.http as tritonhttpclient
 from tritonclient.utils import triton_to_np_dtype
-from functools import partial
 
 
 """The submitter maintains a list of inference requests. It pulls samples from
@@ -65,9 +61,8 @@ Todo:
          postprocessing
     -Dynamically adjust sleep period and request queue length
 """
+
 # create numpy array for consumer to pass
-
-
 class iterator(object):
 
     def __init__(self, B=2048, D=1024):
@@ -85,13 +80,6 @@ class iterator(object):
 
 
 # create callable for asynchronous requests to triton server
-
-if sys.version_info >= (3, 0):
-    import queue
-else:
-    import Queue as queue
-
-
 class UserData:
 
     def __init__(self):
@@ -276,7 +264,6 @@ if __name__ == '__main__':
     batch_size = 2048
 
     # check connectivity with triton server and model
-    import requests
     res = requests.get('http://localhost:8000/v2/health/ready')
     print(f"Tirton Server connection status: {res}")
     res = requests.get(
@@ -287,13 +274,13 @@ if __name__ == '__main__':
     # procedure call system initially developed at Google in 2015 that
     # uses HTTP/2 for transport and Protocol Buffers as the interface
     # description language. It is highly efficient.
-    triton_grpc_client = tritongrpcclient.InferenceServerClient(
+    triton_grpc_client = grpcclient.InferenceServerClient(
         url=grpc_url, verbose=verbose)
 
    # instantiate triton client using the tritonhttpclient.InferenceServerClient class
    #  access the model metadata with the .get_model_metadata() method as well as get
    # our model configuration with the get_model_config() method.
-    triton_grpc_client = tritongrpcclient.InferenceServerClient(
+    triton_grpc_client = grpcclient.InferenceServerClient(
         url=grpc_url, verbose=verbose)
     model_metadata = triton_grpc_client.get_model_metadata(
         model_name=model_name, model_version=model_version)
@@ -306,9 +293,9 @@ if __name__ == '__main__':
     batch = next(i)
 
     # use the tritonclient.grpc module to instantiate new InferInput and InferRequestedOutput objects
-    input0 = tritongrpcclient.InferInput(input_name, batch.shape, 'FP16')
+    input0 = grpcclient.InferInput(input_name, batch.shape, 'FP16')
     input0.set_data_from_numpy(batch)
-    output = tritongrpcclient.InferRequestedOutput(output_name)
+    output = grpcclient.InferRequestedOutput(output_name)
 
     # start timer
     start = time.time()
