@@ -6,6 +6,7 @@ import tritonclient.grpc as tritongrpcclient
 from builtins import range
 from functools import partial
 import requests
+from functools import partial
 from tritonclient.utils import InferenceServerException
 
 """The submitter maintains a list of inference requests. It pulls samples from
@@ -47,7 +48,7 @@ Todo:
          postprocessing
     -Dynamically adjust sleep period and request queue length
 """
-# create numpy array for consumer to pass
+# create numpy array for consumer to passŒ
 
 class SimulatedProducer(object):
     
@@ -217,7 +218,7 @@ def put_dummy(sample):
      except :
       print("pass")
       pass 
-    
+
     return request
   
 
@@ -359,17 +360,6 @@ if __name__ == '__main__':
 
 
     while N:
-
-
-    #     batch1 = (SimulatedProducer(batch_size))
-    #     i = iter(batch1)
-    #     batch=next(i)
-
-    #  # use the tritonclient.grpc module to instantiate new InferInput and InferRequestedOutput objects
-    #     input0[x] = tritongrpcclient.InferInput(input_name, batch.shape, 'FP16')
-    #     input0[x].set_data_from_numpy(batch)
-    #     output[x] = tritongrpcclient.InferRequestedOutput(output_name)
-
 
         results.append(qout.get())
         N -= 1
