@@ -6,7 +6,6 @@ import tritonclient.grpc as tritongrpcclient
 from builtins import range
 from functools import partial
 import requests
-from functools import partial
 from tritonclient.utils import InferenceServerException
 
 """The submitter maintains a list of inference requests. It pulls samples from
@@ -48,7 +47,7 @@ Todo:
          postprocessing
     -Dynamically adjust sleep period and request queue length
 """
-# create numpy array for consumer to passŒ
+# create numpy array for consumer to pass
 
 class SimulatedProducer(object):
     
@@ -93,12 +92,6 @@ class Submitter(Process):
 
         # initialize list of pending inference requests 
         requests = []
-
-        # initialize list of pending asynchronous requests and respons
-        async_requests = []
-        responses = []
-
-
 
         # set flag indicating qin stop signal receipt
         stop = False
