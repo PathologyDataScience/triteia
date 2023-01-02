@@ -64,11 +64,6 @@ class SimulatedProducer(object):
 
         return output
 
-def callback(user_data, result, error):
-    if error:
-        user_data.append(error)
-    else:
-        user_data.append(result)   
 
 class Submitter(Process):
     
@@ -81,13 +76,8 @@ class Submitter(Process):
         self.get = get # the function to retrieve an inference request
         self.pre = pre # an optional preprocessing function to apply to data before inference - e.g. color normalization
         self.post = post # an optional postprocessing function to apply to completed inference results
-     
     
-    def callback(user_data, result, error):
-        if error:
-            user_data.append(error)
-        else:
-            user_data.append(result)   
+
     def run(self):
 
         # initialize list of pending inference requests 
@@ -248,12 +238,7 @@ def print_inference(inference):
     print("Sample {}: {:0.3} seconds".format(inference["sample"],
                                              inference["elapsed"]),
           flush=True)
-# callback for async inference
-def callback(user_data, result, error):
-    if error:
-        user_data.append(error)
-    else:
-        user_data.append(result)
+
 
 if __name__ == '__main__':
     
