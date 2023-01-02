@@ -1,11 +1,11 @@
+from builtins import range
+from functools import partial
 import multiprocessing
 from multiprocessing import Process, Queue
 import numpy as np
-import time
-import tritonclient.grpc as tritongrpcclient
-from builtins import range
-from functools import partial
 import requests
+import time
+import tritonclient.grpc as grpcclient
 from tritonclient.utils import InferenceServerException
 
 """The submitter maintains a list of inference requests. It pulls samples from
@@ -289,15 +289,15 @@ if __name__ == '__main__':
     # procedure call system initially developed at Google in 2015 that
     # uses HTTP/2 for transport and Protocol Buffers as the interface 
     # description language. It is highly efficient.
-    triton_grpc_client = tritongrpcclient.InferenceServerClient(url=grpc_url, verbose=verbose)
+    triton_grpc_client = grpcclient.InferenceServerClient(url=grpc_url, verbose=verbose)
 
 
    # instantiate triton client using the tritonhttpclient.InferenceServerClient class
    #  access the model metadata with the .get_model_metadata() method as well as get 
    # our model configuration with the get_model_config() method.
-    triton_grpc_client = tritongrpcclient.InferenceServerClient(url=grpc_url, verbose=verbose)
-    model_metadata = triton_grpc_client.get_model_metadata(model_name=model_name, model_version=model_version)
-    model_config = triton_grpc_client.get_model_config(model_name=model_name, model_version=model_version)
+    client = grpcclient.InferenceServerClient(url=grpc_url, verbose=verbose)
+    model_metadata = client.get_model_metadata(model_name=model_name, model_version=model_version)
+    model_config = client.get_model_config(model_name=model_name, model_version=model_version)
 
     for x in range(N):
 
@@ -312,9 +312,9 @@ if __name__ == '__main__':
         batch=next(i)
 
         # use the tritonclient.grpc module to instantiate new InferInput and InferRequestedOutput objects
-        input0[x] = tritongrpcclient.InferInput(input_name, batch.shape, 'FP16')
+        input0[x] = grpcclient.InferInput(input_name, batch.shape, 'FP16')
         input0[x].set_data_from_numpy(batch)
-        output[x] = tritongrpcclient.InferRequestedOutput(output_name)
+        output[x] = grpcclient.InferRequestedOutput(output_name)
 
 
     # start timer
