@@ -6,7 +6,6 @@ import tritonclient.grpc as tritongrpcclient
 from builtins import range
 from functools import partial
 import requests
-from functools import partial
 from tritonclient.utils import InferenceServerException
 
 """The submitter maintains a list of inference requests. It pulls samples from
