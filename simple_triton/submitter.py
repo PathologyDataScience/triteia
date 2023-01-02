@@ -47,7 +47,7 @@ Todo:
          postprocessing
     -Dynamically adjust sleep period and request queue length
 """
-# create numpy array for consumer to passŒ
+# create numpy array for consumer to pass
 
 class SimulatedProducer(object):
     
