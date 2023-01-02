@@ -4,7 +4,6 @@ import numpy as np
 import time
 import tritonclient.grpc as tritongrpcclient
 from builtins import range
-from tritonclient.utils import triton_to_np_dtype
 from functools import partial
 import requests
 from functools import partial
