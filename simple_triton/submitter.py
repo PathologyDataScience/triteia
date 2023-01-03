@@ -10,6 +10,7 @@ from tritonclient.utils import InferenceServerException
 
 """
 Todo:
+    -Limit input size queue
     -Write put/get functions for GRPC and system shared memory
         -How to pass args to put/get, pre/post function calls
     -Error checking, timeouts, logging, etc.
@@ -278,8 +279,8 @@ class InferenceRunner(Process):
         qin : multiprocessing.Queue
             Input queue containing samples for inference.
         qout : multiprocessing.Queue
-            Output queue receiving completed inference requests and 
-            InferenceRunner process performance information.
+            Output queue receiving completed inference requests and process
+            summary information on process completion.
         limit : int
             The maximum allowable pending requests. Default value is 10.
         rest : float
@@ -411,9 +412,9 @@ def put_dummy(sample):
         break
 
     # Inference call
-     triton_grpc_client.async_infer(model_name, inputs=[input0[count]],
-                                    callback=partial(callback, results_data),
-                                        outputs=[output[count]])
+     grpcclient.async_infer(model_name, inputs=[input0[count]],
+                            callback=partial(callback, results_data),
+                            outputs=[output[count]])
 
     # Wait until the results are available in results_data
      time_out = 10
@@ -457,41 +458,6 @@ def put_dummy(sample):
       pass 
 
     return request
-  
-
-# function for checking if request is completed - should be non-blocking 
-# so that other requests can be checked if one is not ready
-def get_dummy(request):
-    
-    # decrement dummy request value
-    request["served"] = request["served"]-1
-    
-    # check if inference resullt is served
-    if request["served"] == 0:
-        request["elapsed"] = time.time() - request["start"]
-        return request
-    else:
-        return None
-
-
-# preprocessing function - applied to data prior to inference
-# ex. color normalization
-def pre_dummy(sample):
-    return sample
-
-
-# postprocessing function - applied to inference result prior to returning
-# here we just print the "inference" result
-def post_dummy(inference):
-    print_inference(inference)
-    return inference
-
-
-# print request
-def print_inference(inference):
-    print("Sample {}: {:0.3} seconds".format(inference["sample"],
-                                             inference["elapsed"]),
-          flush=True)
 
 
 if __name__ == '__main__':
@@ -499,7 +465,6 @@ if __name__ == '__main__':
     # parameters
     N = 100 # total number of inferences to perform
     count = 0 # postion of input inference and out request in the list
-    tasks = list(range(N)) # the input sample to each "inference" is just an int
     limit = 5 # limit on number of pending requests per worker
     workers = 4 # total number of Submitter workers
     grpc_url = 'localhost:8001' # url for grpc access to tirton server
@@ -510,51 +475,16 @@ if __name__ == '__main__':
     model_name_test = 'simple-trt-model-FP16-test' # set model name
     input_name = 'input_0' # set input name
     output_name = 'output_0' # set putput name
-    model_path_input='models/simple-trt-model-FP16-input/1/model.savedmodel' # set model path
-    model_path_test='models/simple-trt-model-FP16-test/1/model.savedmodel' # set model path
-    batch_size=1024
-    input0 = [i for i in range(N)]
-    output = [i for i in range(N)]
+    model_path_input = 'models/simple-trt-model-FP16-input/1/model.savedmodel' # set model path
+    model_path_test = 'models/simple-trt-model-FP16-test/1/model.savedmodel' # set model path
+    batch_size = 1024
+    dimension = 1024
     
-    
-     
-        # check connectivity with triton server and model
+    # check connectivity with triton server and model
     res = requests.get('http://localhost:8000/v2/health/ready')
     print(f"Tirton Server connection status: {res}")
     res = requests.get('http://localhost:8000/v2/models/simple-trt-model-FP16-test')
     print(f"Model connection status: {res}")
-    
-    # create tirton grpc client: gRPC is a newer, open source remote 
-    # procedure call system initially developed at Google in 2015 that
-    # uses HTTP/2 for transport and Protocol Buffers as the interface 
-    # description language. It is highly efficient.
-    triton_grpc_client = grpcclient.InferenceServerClient(url=grpc_url, verbose=verbose)
-
-
-   # instantiate triton client using the tritonhttpclient.InferenceServerClient class
-   #  access the model metadata with the .get_model_metadata() method as well as get 
-   # our model configuration with the get_model_config() method.
-    client = grpcclient.InferenceServerClient(url=grpc_url, verbose=verbose)
-    model_metadata = client.get_model_metadata(model_name=model_name, model_version=model_version)
-    model_config = client.get_model_config(model_name=model_name, model_version=model_version)
-
-    for x in range(N):
-
-     # Generate the InferInput and corresponding InferRequestedOutput
-    # for the Triton Inference Server here. Values are then pass on 
-    # to put_dummy() for inference.
-    # Alternatively we can generate the input/output pair at put_dummy()
-    # This part of code can be moved to a sperate function
-    # It can be modifed after discussion
-        batch1 = (SimulatedProducer(batch_size))
-        i = iter(batch1)
-        batch=next(i)
-
-        # use the tritonclient.grpc module to instantiate new InferInput and InferRequestedOutput objects
-        input0[x] = grpcclient.InferInput(input_name, batch.shape, 'FP16')
-        input0[x].set_data_from_numpy(batch)
-        output[x] = grpcclient.InferRequestedOutput(output_name)
-
 
     # start timer
     start = time.time()
@@ -562,25 +492,25 @@ if __name__ == '__main__':
     # create input, output queues
     qin = Queue()
     qout = Queue()
-
+    
+    # initialize producer
+    producer = iter(SimulatedProducer(batch_size, dimension, np.float16))
       
     # Start consumers
     print(f"Creating {workers} workers")
-    consumers = [Submitter(qin,
-                           qout,
-                           limit,
-                           put_dummy,
-                           get_dummy,
-                           pre_dummy,
-                           post_dummy)
-                 for i in range(workers)]
+    consumers = [InferenceRunner(grpc_url,
+                                 qin,
+                                 qout,
+                                 limit,
+                                 verbose=verbose)
+                 for _ in range(workers)]
     for w in consumers:
         w.start()
 
     # enqueue tasks
     print("Enqueuing inference jobs")
-    for i in tasks:
-        qin.put(i)
+    for _ in range(N):
+        qin.put(next(producer))
     
     # enqueue stop signals
     for i in range(workers):
@@ -589,10 +519,7 @@ if __name__ == '__main__':
     # collecct results
     print("Collecting results")
     results = []
-
-
     while N:
-
         results.append(qout.get())
         N -= 1
     for result in results:
