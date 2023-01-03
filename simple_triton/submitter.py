@@ -8,46 +8,17 @@ import time
 import tritonclient.grpc as grpcclient
 from tritonclient.utils import InferenceServerException
 
-"""The submitter maintains a list of inference requests. It pulls samples from
-the queue 'qin' and tracks these in 'requests'. A random number from [1-10]
-is generated for each request that is decremented each time the request is 
-checked. The inference result is served when this value reaches 0. On
-completion the input data (a unique int) and time elapsed is printed. The
-completed request is then placed in the output queue 'qout'.
-
-The producer kills the running processes by inserting None values into 
-'qin'.
-
-Relevance to HistomicsML: the producer will read feature files (.tfr or 
-.npy) from disk and insert these into qin. The consumer will make inference
-requests to triton and collect and return the results to the producer
-process.
-
-Why I picked this design: 
-1. If we have significant pre- or post-processing work, or if submitting 
-requests has significant overhead, we can parallelize with multiple submitters. 
-2. The template functions give a lot of flexibility for different inference 
-server protocols or preprocessing tasks. 
-3. We can use this approach to solve a lot of problems besides HistomicsML and
-doing inference with .tfr files. For example, extracting features from images
-to generate .tfr files can be done with this method. Here, the producer
-would read tiles from an image and use triton to infer features for each tile.
-4. We can also stack these submitters if we have sequential inference tasks. 
-For example, say we have 2 models, one for cell detection and the other for 
-cell classification. We can have a submitter to the cell detection model and 
-then feed its output/inferences to the classifier model input queue.
-
+"""
 Todo:
     -Write put/get functions for GRPC and system shared memory
         -How to pass args to put/get, pre/post function calls
     -Error checking, timeouts, logging, etc.
-    -Integrate with class
     -Add throughput / performance tracker
         -Track time spent: preprocessing, waiting for requests, 
          postprocessing
     -Dynamically adjust sleep period and request queue length
 """
-# create numpy array for consumer to pass
+
 
 class SimulatedProducer(object):
     """A simulated producer that emits numpy arrays with specified batch size
@@ -81,7 +52,6 @@ class SimulatedProducer(object):
 
     def __next__(self):
         output = self.dtype(np.random.uniform(size=(self.B, self.D)))
-
         return output
 
 
@@ -92,7 +62,8 @@ class Requests(object):
     It can be used to check on the status of pending requests and to insert
     new requests.
     """
-     
+
+
     def __init__(self, client, limit):
         """Construct
         
