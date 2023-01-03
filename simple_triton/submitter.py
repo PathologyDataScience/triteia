@@ -50,17 +50,37 @@ Todo:
 # create numpy array for consumer to pass
 
 class SimulatedProducer(object):
+    """A simulated producer that emits numpy arrays with specified batch size
+    and feature dimensions.
     
-    def __init__(self, B=1024, D=1024, dt=np.float16):
+    Data is uniformly distributed and so compression ratio will be low.
+    """
+    
+    def __init__(self, B=1024, D=1024, dtype=np.float16):
+        """Constructor.
+        
+        Parameters
+        ----------
+        B : int
+            Batch size. Default value is 1024.
+        D : int
+            Feature dimension. Default value is 1024.
+        dtype : numpy.dtype
+            A numpy dtype for the emited data. Default value is float16.
+        """
+        
         self.B = B # batch size
         self.D = D # dimension
-        self.dt=dt # datatype as float16 or float32
+        self.dttype = dtype # datatype as float16 or float32
+        
+
     def __iter__(self):
         self.i = 0
         return self
 
+
     def __next__(self):
-        output = self.dt(np.random.uniform(size=(self.B, self.D)))
+        output = self.dtype(np.random.uniform(size=(self.B, self.D)))
 
         return output
 
