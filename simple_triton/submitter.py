@@ -285,72 +285,135 @@ class Requests(object):
         self.pending.append(request)
 
 
-class Submitter(Process):
+class InferenceRunner(Process):
+    """InferenceRunner """
     
-    def __init__(self, qin, qout, limit, put, get, pre, post):
+    def __init__(self, 
+                 url, 
+                 qin, 
+                 qout,
+                 limit=10,
+                 rest=1e-2,
+                 timeout=None,
+                 pre=None, 
+                 post=None, 
+                 verbose=False):
+        """InferenceRunner constructor.
+        
+        Parameters
+        ----------
+        url : string
+            The inference server url.
+        qin : multiprocessing.Queue
+            Input queue containing samples for inference.
+        qout : multiprocessing.Queue
+            Output queue receiving completed inference requests and 
+            InferenceRunner process performance information.
+        limit : int
+            The maximum allowable pending requests. Default value is 10.
+        rest : float
+            The resting period for the InferenceRunner process. The process
+            will rest for this period (seconds) after submitting and checking
+            inference requests. Default value is 10 milliseconds.
+        timeout : float
+            The request timeout limit (seconds). This is an input argument
+            to the triton GRPC client async_infer inferface.
+        pre : function
+            A preprocessing function to apply to samples prior to inference.
+            Default value is None.
+        post : function
+            A postprocessing function to apply to inference results. Default
+            value is None.
+        verbose : bool
+            True updates console with inference progress and exceptions. 
+            Default value is False.
+        """
+        
         multiprocessing.Process.__init__(self)
-        self.qin = qin # the input queue that holds data to do inference on
-        self.qout = qout # the output queue that holds inference results
-        self.limit = limit # the limit on number of outstanding inference requests 
-        self.put = put # the function to make an inference request
-        self.get = get # the function to retrieve an inference request
-        self.pre = pre # an optional preprocessing function to apply to data before inference - e.g. color normalization
-        self.post = post # an optional postprocessing function to apply to completed inference results
+        
+        # create GRPC client
+        try:
+            self.client = grpcclient.InferenceServerClient(url=url,
+                                                           verbose=verbose)
+        except Exception as e:
+            print("context creation failed: " + str(e), flush=True)
+            return
+        
+        # capture input arguments
+        self.qin = qin
+        self.qout = qout
+        self.limit = limit
+        self.timeout = timeout
+        self.rest = rest
+        self.pre = pre
+        self.post = post
+        
+        # initialize list to hold performance data
+        self.time_inference = []
     
 
     def run(self):
 
-        # initialize list of pending inference requests 
-        requests = []
-
-        # set flag indicating qin stop signal receipt
+        # set flag indicating qin stop signal received
         stop = False
+                
+        # create requests object
+        req = Requests(self.client, self.limit)
 
         # loop until exit signal received from calling process
         while True:
-     
-            # if pending requests < limit, pull sample from input queue
-            if(len(requests) < self.limit) and not stop:
-                
-                # pull sample from producer
-                sample = self.qin.get()
             
-                # check stop signal
-                if sample is None:
-                    stop = True
-                    continue
-                
-                # apply preprocessing function
-                sample = self.pre(sample)
-            
-                # append request to list
-                requests.append(self.put(sample))
-                
-            # check pending requests
-            delete = []
+            # fill input queue with requests up to limit
+            if not stop:
+                for _ in range(self.limit - len(req.pending)):
+                    
+                    # pull sample
+                    sample = self.qin.get()
+                    
+                    # check if stop signal
+                    if sample is None:
+                        stop = True
+                        break
+                    
+                    # apply preprocessing function
+                    # TBD
 
-            # print("len(requests)",len(requests))
-            for i in range(len(requests)):
-                if requests[i] is not None:
-                 result = self.get(requests[i])
-                if result is not None:
-                    result = self.post(result)
-                    self.qout.put(result)
-                    delete.append(i)
-    
-            # delete completed requests
-            delete.reverse()
-            for i in delete:
-                _ = requests.pop(i)
+                    # fill requests if stop signal not received
+                    req.insert(sample, self.timeout)
+
+            # check pending requests
+            completed = req.check(block=False)
+            
+            # put completed post-processed requests into queue
+            for result in completed:
                 
+                # check if 
+                if type(result) == InferenceServerException:
+                
+                    # add sample to retry
+                    # TBD
+                    print(result, flush=True)
+                
+                else:
+                    
+                    # capture performance data
+                    self.time_inference.append(result["request_elapsed"])
+                
+                    # apply post processing function
+                    # TBD
+                    
+                    # place in queue
+                    self.qout.put((result['result'], result['metadata']))
+            
             # check if done
-            if len(requests) == 0 and stop:
-                break          
+            if len(req.pending) == 0 and stop:
+                break
 
             # sleep
-            time.sleep(0.1)
+            time.sleep(self.rest)
             
         return
+
 
 #function for incrementing the count of input infer/output request position
 def put_pos():
