@@ -85,6 +85,206 @@ class SimulatedProducer(object):
         return output
 
 
+class Requests(object):
+    """A class to manage inference server requests.
+    
+    The class maintains a list of pending requests, ordered by submission time.
+    It can be used to check on the status of pending requests and to insert
+    new requests.
+    """
+     
+    def __init__(self, client, limit):
+        """Construct
+        
+        Parameters
+        ----------
+        client : tritonclient.grpc object
+            A GRPC client used to submit requests. 
+        limit : int
+            The 
+        """
+        
+        self.client = client
+        self.limit = limit
+        self.pending = []
+
+    
+    def _api_types(self, dtype):
+        """Converts numpy dtype to triton API type string.
+        
+        Parameters
+        ----------
+        dtype : numpy.dtype
+            A numpy dtype.
+        
+        Returns
+        -------
+        api_type : str
+            The corresponding type string for the triton client API.
+        """
+        
+        if dtype == np.float32:
+            return "FP32"
+        elif dtype == np.float16:
+            return "FP16"
+        elif dtype == np.float64:
+            return "FLOAT64"
+        elif dtype == np.uint8:
+            return "UINT8"
+        elif dtype == np.uint16:
+            return "UINT16"
+        elif dtype == np.uint32:
+            return "UINT32"
+        elif dtype == np.uint64:
+            return "UINT64"
+        elif dtype == np.int8:
+            return "INT8"
+        elif dtype == np.int16:
+            return "INT16"
+        elif dtype == np.int32:
+            return "INT32"
+        elif dtype == np.int64:
+            return "INT64"
+        elif dtype == np.bool:
+            return "BOOL"
+        else:
+            raise ValueError(f"Unrecognized type '{str(dtype)}'")
+            
+    
+    def _callback(self, capture, result, error):
+        """Callback for async_infer to capture result or error of inference
+        request.
+        
+        Parameters
+        ----------
+        capture : list
+            An empty list of 
+        result : grpcclient.InferResult
+            The result of inference if successful.
+        error : tritonclientutils.InferenceServerException
+            An exception if inference failed. Otherwise None.
+        """
+        if error:
+            capture.append(error)
+        else:
+            capture.append(result)
+        
+    
+    def check(self, block=True, wait=100e-3):
+        """Check for completion of pending requests.
+        
+        Parameters
+        ----------
+        block : bool
+            If True, the function will block until at least one request 
+            completes. Default value is True.
+        wait : float
+            If block is True, this is the interval to wait until checking
+            requests again.
+        
+        Returns
+        -------
+        completed : list of tuple
+            A list containing the results of completed inference requests.
+        """
+        
+        # iterate through list of requests, checking who is finished
+        def request_loop():
+            
+            # initialize completed requests
+            completed = []
+            
+            # initalize list of requests to delete
+            delete = []
+            
+            for i, request in enumerate(requests):
+                if len(request['result']):
+                    
+                    # record elapsed time
+                    request['request_elapsed'] = time.time() - request['request_elapsed']
+                    
+                    # add request to output list
+                    completed.append(request)
+                    
+                    # add request to list for deletion
+                    delete.append(i)
+                    
+            return completed, delete
+                    
+        # if no blocking, iterate through list once and return
+        if not block:   
+            completed, delete = request_loop()
+        else:
+            while True:
+                completed, delete = request_loop()
+                if len(completed):
+                    break
+                time.sleep(wait)
+        
+        # delete completed entries from list
+        self.pending.reverse()
+        for i in delete:
+            _ = self.pending.pop(i)
+        self.pending.reverse()
+        
+        return completed
+    
+    
+    def insert(self, model_name, sample, timeout=None):
+        """Insert an inference request for submission to triton.
+        
+        Parameters
+        ----------
+        model_name : string
+            The name of a served model.
+        sample : list or tuple of list, dict
+            If list, contains a numpy array for each of the model inputs.
+            If tuple, the first element is the list of input arrays, and the
+            second is the sample metadata dictionary that will stay attached
+            to the inference result.
+        timeout : float
+            Timeout for the request in seconds. Default value is None.
+        """
+        
+        # process input sample - if list or tuple
+        if isinstance(sample, tuple):
+            data, metadata = sample
+        elif isinstance(sample, list):
+            data = sample
+            metadata = None
+        
+        # create InputData objects based on data shape
+        inputs = []
+        for i, k in enumerate(data):
+            ii = grpcclient.InferInput(f"INPUT{k}",
+                                       list(i.shape),
+                                       self._api_types(i.dtype))
+            ii.set_data_from_numpy(i)
+            inputs.append(ii)
+
+        # create outputs
+        outputs = [grpcclient.InferRequestedOutput('OUTPUT0')]
+        
+        # create a dict to hold timing information, metadata, and request
+        # completion
+        request = {'metadata': metadata,
+                   'data': data,
+                   'result': [],
+                   'exception': None,
+                   'request_elapsed': time.time()}
+        
+        # submit request
+        self.client.async_infer(model_name=model_name,
+                                inputs=inputs,
+                                callback=partial(self._callback, 
+                                                 request['result']),
+                                outputs=outputs,
+                                client_timeout=timeout)
+        
+        # append request to list
+        self.pending.append(request)
+
+
 class Submitter(Process):
     
     def __init__(self, qin, qout, limit, put, get, pre, post):
