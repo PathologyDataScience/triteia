@@ -510,7 +510,9 @@ if __name__ == '__main__':
     # enqueue tasks
     print("Enqueuing inference jobs")
     for _ in range(N):
-        qin.put(next(producer))
+        data = next(producer)
+        metadata = {'key': 'random stuff'}
+        qin.put((model_name, data, metadata))
     
     # enqueue stop signals
     for i in range(workers):
@@ -523,7 +525,7 @@ if __name__ == '__main__':
         results.append(qout.get())
         N -= 1
     for result in results:
-        print_inference(result)
+        print(result)
 
     # display elapsed time
     print(f"Total elapsed time: {time.time()-start}")
