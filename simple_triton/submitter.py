@@ -4,6 +4,7 @@ import multiprocessing
 from multiprocessing import Process, Queue
 import numpy as np
 import requests
+import sys
 import time
 import tritonclient.grpc as grpcclient
 from tritonclient.utils import InferenceServerException
@@ -73,15 +74,58 @@ class Requests(object):
         client : tritonclient.grpc object
             A GRPC client used to submit requests. 
         limit : int
-            The 
+            The maximum number of pending requests to allow.
         """
         
         self.client = client
         self.limit = limit
+        self.model_dicts = {}
         self.pending = []
 
     
-    def _api_types(self, dtype):
+    def _api_to_np_types(self, api_type):
+        """Converts triton API type string to numpy dtype.
+        
+        Parameters
+        ----------
+        api_type : str
+            The type string for the triton client API.
+        
+        Returns
+        -------
+        dtype : numpy.dtype
+            The corresponding numpy dtype.
+        """
+        
+        if api_type == "FP32":
+            return np.float32
+        elif api_type == "FP16":
+            return np.float16
+        elif api_type == "FLOAT64":
+            return np.float64
+        elif api_type == "UINT8":
+            return np.uint8
+        elif api_type == "UINT16":
+            return np.uint16
+        elif api_type == "UINT32":
+            return np.uint32
+        elif api_type == "UINT64":
+            return np.uint64
+        elif api_type == "INT8":
+            return np.int8
+        elif api_type == "INT16":
+            return np.int16
+        elif api_type == "INT32":
+            return np.int32
+        elif api_type == "INT64":
+            return np.int64
+        elif api_type == "BOOL":
+            return np.bool
+        else:
+            raise ValueError(f"Unrecognized type '{str(api_type)}'")
+
+
+    def _np_to_api_types(self, dtype):
         """Converts numpy dtype to triton API type string.
         
         Parameters
@@ -123,6 +167,174 @@ class Requests(object):
             raise ValueError(f"Unrecognized type '{str(dtype)}'")
             
     
+    def _model_metadata_config(self, model_name):
+        """Queries triton to get model input and output names, shapes, types, 
+        and maximum batch size.
+        
+        Parameters
+        ----------
+        model_name : string
+            The name of the model to query as registered in triton.
+        
+        Returns
+        -------
+        model_dict : dict
+            A dictionary describing the name, shape, and type of inputs and 
+            outputs, as well as maximum batch size.
+        """
+        
+        # get model metadata
+        try:
+            metadata = self.client.get_model_metadata(model_name)
+        except InferenceServerException as e:
+            print("Failed to retrieve the metadata: " + str(e))
+            sys.exit(1)
+        
+        # get model config
+        try:
+            config = self.client.get_model_config(model_name)
+        except InferenceServerException as e:
+            print("failed to retrieve the config: " + str(e))
+            sys.exit(1)
+        
+        # capture input names, shapes, and types
+        model_inputs = []
+        for i in metadata.inputs:
+            if i.shape[0] == -1:
+                shape = [None, *i.shape[1:]]
+            else:
+                shape = i.shape
+            model_inputs.append(
+                {"name": i.name,
+                 "type": i.datatype,
+                 "shape": shape}
+                )
+        
+        # capture output names, shapes, and types
+        model_outputs = []
+        for o in metadata.outputs:
+            if o.shape[0] == -1:
+                shape = [None, *o.shape[1:]]
+            else:
+                shape = o.shape
+            model_outputs.append(
+                {"name": o.name,
+                 "type": o.datatype,
+                 "shape": shape}
+                )
+        
+        # get max batch size
+        max_batch_size = config.config.max_batch_size
+        
+        # capture outputs in dictionary
+        model_dict = {"inputs": model_inputs,
+                      "outputs": model_outputs,
+                      "max_batch_size": max_batch_size,
+                      "name": model_name}
+        
+        return model_dict
+    
+    
+    def _validate_inputs(self, inputs, model_dict):
+        """Validate inputs against model config and metadata.
+        
+        Parameters
+        ----------
+        inputs : list of numpy.ndarray
+            A list of numpy arrays to input for model inference.
+            
+        model_dict : dict
+            A dictionary describing the name, shape, and type of inputs and 
+            outputs, as well as maximum batch size.
+        
+        See also
+        --------
+        _model_metadata_config, _model_inputs
+        """
+        
+        # check number of inputs
+        if len(inputs) != len(model_dict["inputs"]):
+            raise Exception(f"Model {model_dict['name']} expects {len(model_dict['inputs'])} inputs, received {len(inputs)}.")
+
+        # check input shapes
+        for i, (provided, expected) in enumerate(zip(inputs, model_dict["inputs"])):
+            if expected["shape"][0] is None:
+                if not np.array_equal(
+                        np.array(np.shape(provided)[1:], dtype=np.int32),
+                        np.array(expected["shape"][1:], dtype=np.int32)
+                        ):
+                    raise Exception(f"Model {model_dict['name']} {model_dict['inputs'][i]['name']} has shape {expected}.")
+                if provided.shape[0] > model_dict['max_batch_size']:
+                    raise Exception(f"Model {model_dict['name']} has max batch size {model_dict['max_batch_size']}.")
+
+
+    def _client_inputs(self, inputs, model_dict):
+        """Generates tritonclient.grpc.InferInput objects for client.
+        
+        Given inputs and a model configuration and metadata, this function
+        validates the inputs against the model expectations, and generates the
+        InferInput objects used by the client to transmit inputs to triton.
+    
+        Parameters
+        ----------
+        inputs : list of numpy.ndarray
+            A list of numpy arrays to input for model inference.
+        model_dict : dict
+            A dictionary describing the name, shape, and type of inputs and 
+            outputs, as well as maximum batch size.        
+        
+        Outputs
+        -------
+        infer_inputs : list of tritonclient.grpc.InferInput
+            A list of InferInput objects populated with data.
+        """
+        
+        # validate inputs against model expectations
+        self._validate_inputs(inputs, model_dict)
+        
+        # create InferInput objects for each model input
+        infer_inputs = []
+        for (provided, expected) in zip(inputs, model_dict["inputs"]):
+            
+            # create InferInput object
+            iio = grpcclient.InferInput(expected["name"],
+                                        provided.shape,
+                                        expected["type"])
+            
+            # add numpy data to input
+            if self._np_to_api_types(provided.dtype) != expected["type"]:
+                provided = provided.astype(self._api_to_np_types(expected["type"]))
+            iio.set_data_from_numpy(provided)
+            
+            # add to infer_input list
+            infer_inputs.append(iio)
+            
+        return infer_inputs
+
+
+    def _client_outputs(self, model_dict):
+        """Generates tritonclient.grpc.InferRequestedOutput objects for client.
+    
+        Parameters
+        ----------
+        model_dict : dict
+            A dictionary describing the name, shape, and type of inputs and 
+            outputs, as well as maximum batch size.        
+        
+        Outputs
+        -------
+        infer_outputs : list of tritonclient.grpc.InferRequestedOutput
+            A list of InferRequestedOutput objects to capture inference 
+            results.
+        """
+
+        # create InferInput objects for each model input
+        infer_outputs = [grpcclient.InferRequestedOutput(o["name"])
+                         for o in model_dict["outputs"]]
+            
+        return infer_outputs
+    
+
     def _callback(self, capture, result, error):
         """Callback for async_infer to capture result or error of inference
         request.
@@ -169,7 +381,7 @@ class Requests(object):
             # initalize list of requests to delete
             delete = []
             
-            for i, request in enumerate(requests):
+            for i, request in enumerate(self.pending):
                 if len(request['result']):
                     
                     # record elapsed time
@@ -202,40 +414,41 @@ class Requests(object):
         return completed
     
     
-    def insert(self, model_name, sample, timeout=None):
+    def insert(self, sample, timeout=None):
         """Insert an inference request for submission to triton.
         
         Parameters
         ----------
-        model_name : string
-            The name of a served model.
-        sample : list or tuple of list, dict
-            If list, contains a numpy array for each of the model inputs.
-            If tuple, the first element is the list of input arrays, and the
-            second is the sample metadata dictionary that will stay attached
-            to the inference result.
+        sample : tuple
+            A 2-tuple or 3-tuple containing a list of numpy arrays for the
+            model inputs (list of np.ndarray), the model name (str), and
+            an optional dictionary of sample metadata that will stay linked to 
+            the inference request and result.
         timeout : float
             Timeout for the request in seconds. Default value is None.
         """
         
         # process input sample - if list or tuple
-        if isinstance(sample, tuple):
-            data, metadata = sample
-        elif isinstance(sample, list):
-            data = sample
+        if len(sample) == 3:
+            model_name, data, metadata = sample
+        elif len(sample) == 2:
+            model_name, data = sample
             metadata = None
+        else:
+            raise ValueError('Input sample must be a 2- or 3-tuple')
+            
+        # check if model_dict has been previously generated for model_name
+        if model_name not in self.model_dicts.keys():
+            model_dict = self._model_metadata_config(model_name)
+            self.model_dicts[model_name] = model_dict
+        else:
+            model_dict = self.model_dicts[model_name]
         
         # create InputData objects based on data shape
-        inputs = []
-        for i, k in enumerate(data):
-            ii = grpcclient.InferInput(f"INPUT{k}",
-                                       list(i.shape),
-                                       self._api_types(i.dtype))
-            ii.set_data_from_numpy(i)
-            inputs.append(ii)
+        inputs = self._client_inputs(data, model_dict)
 
         # create outputs
-        outputs = [grpcclient.InferRequestedOutput('OUTPUT0')]
+        outputs = self._client_outputs(model_dict)
         
         # create a dict to hold timing information, metadata, and request
         # completion
@@ -309,7 +522,6 @@ class InferenceRunner(Process):
                                                            verbose=verbose)
         except Exception as e:
             print("context creation failed: " + str(e), flush=True)
-            return
         
         # capture input arguments
         self.qin = qin
@@ -387,79 +599,6 @@ class InferenceRunner(Process):
         return
 
 
-#function for incrementing the count of input infer/output request position
-def put_pos():
-	global count
-	count  += 1
-	print(count)
-	return
-# function for submitting request to triton
-# each request holds a "sample" (a unique identifier), a random value that is
-# decremented each time the request is checked, and the time the request was
-# started. When decremented to 0, the request is finished.
-
-def put_dummy(sample):
-     
-    results_data = []   
-    print(count)
-    
-    # Adding the while to handle inference exception in the start
-    # the below condition will tell the loop to stop
-    while True:
-
-    #break the loop when limit has reached.
-     if (count == N-1):
-        break
-
-    # Inference call
-     grpcclient.async_infer(model_name, inputs=[input0[count]],
-                            callback=partial(callback, results_data),
-                            outputs=[output[count]])
-
-    # Wait until the results are available in results_data
-     time_out = 10
-     while ((len(results_data) == 0) and time_out > 0):
-            time_out = time_out - 1
-            time.sleep(0.1)
-
-     try:
-    # Display and validate the available results
-    # To handle InferenceServerException, checking the values in first two
-    # places. This code can be optimized later to reduce the if statements
-
-      if ((len(results_data) == 0)):
-        # Check for the errors
-        if type(results_data[0]) == InferenceServerException:
-            print(results_data[0])
-            # output0_data = 0
-      
-     
-      if len(results_data)>=1:
-        if type(results_data[0]) == InferenceServerException:
-            print(results_data[0])
-            # output0_data = 0
-        else:
-            # Validate the values by matching with already computed expected values.
-            output0_data = results_data[len(results_data)-1].as_numpy('output_0')
-            # print the received values for verification
-            # print(len(output0_data))
-            # for i in range(len(output0_data)):
-            #  print(output0_data[i])
-            request = {"sample": sample,
-                    "served": np.random.randint(low=1, high=10),
-                    "start": time.time(),
-                    "response": output0_data}
-            put_pos()
-            break
-            
-
-     except :
-      print("pass")
-      pass 
-
-    return request
-
-
 if __name__ == '__main__':
     
     # parameters
@@ -467,14 +606,12 @@ if __name__ == '__main__':
     count = 0 # postion of input inference and out request in the list
     limit = 5 # limit on number of pending requests per worker
     workers = 4 # total number of Submitter workers
-    grpc_url = 'localhost:8001' # url for grpc access to tirton server
+    url = 'localhost:8001' # url for grpc access to tirton server
     model_version = '1' # set model version
     verbose = False # set verbos as False
     input_dtype = 'FP16' # set input data type
     model_name = 'simple-trt-model-FP16' # set model name
     model_name_test = 'simple-trt-model-FP16-test' # set model name
-    input_name = 'input_0' # set input name
-    output_name = 'output_0' # set putput name
     model_path_input = 'models/simple-trt-model-FP16-input/1/model.savedmodel' # set model path
     model_path_test = 'models/simple-trt-model-FP16-test/1/model.savedmodel' # set model path
     batch_size = 1024
@@ -498,7 +635,7 @@ if __name__ == '__main__':
       
     # Start consumers
     print(f"Creating {workers} workers")
-    consumers = [InferenceRunner(grpc_url,
+    consumers = [InferenceRunner(url,
                                  qin,
                                  qout,
                                  limit,
