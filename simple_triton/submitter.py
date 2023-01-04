@@ -348,10 +348,11 @@ class Requests(object):
         error : tritonclientutils.InferenceServerException
             An exception if inference failed. Otherwise None.
         """
+        
         if error:
-            capture.append(error)
+            capture.append((error, time.time()))
         else:
-            capture.append(result)
+            capture.append((result, time.time()))
         
     
     def check(self, block=True, wait=100e-3):
@@ -384,8 +385,19 @@ class Requests(object):
             for i, request in enumerate(self.pending):
                 if len(request['result']):
                     
-                    # record elapsed time
-                    request['request_elapsed'] = time.time() - request['request_elapsed']
+                    # unpack request result into output, time
+                    completion_time = max([result[1] for result in request['result']])
+                    results = [result[0] for result in request['result']]
+
+                    # record elapsed time between submission and completion
+                    request['elapsed_completion'] = completion_time - request['elapsed_retrieval']
+                    
+                    # record elapsed time between submission and retrieval
+                    request['elapsed_retrieval'] = time.time() - request['elapsed_retrieval']
+                    
+                    # convert responses to numpy arrays
+                    for i, output in enumerate(self.model_dicts[request['model_name']]['outputs']):
+                        request['result'][i] = results[i].as_numpy(output['name'])
                     
                     # add request to output list
                     completed.append(request)
@@ -455,8 +467,9 @@ class Requests(object):
         request = {'metadata': metadata,
                    'data': data,
                    'result': [],
+                   'model_name': model_name,
                    'exception': None,
-                   'request_elapsed': time.time()}
+                   'elapsed_retrieval': time.time()}
         
         # submit request
         self.client.async_infer(model_name=model_name,
@@ -473,15 +486,15 @@ class Requests(object):
 class InferenceRunner(Process):
     """InferenceRunner """
     
-    def __init__(self, 
-                 url, 
-                 qin, 
+    def __init__(self,
+                 url,
+                 qin,
                  qout,
                  limit=10,
                  rest=1e-2,
                  timeout=None,
-                 pre=None, 
-                 post=None, 
+                 pre=None,
+                 post=None,
                  verbose=False):
         """InferenceRunner constructor.
         
