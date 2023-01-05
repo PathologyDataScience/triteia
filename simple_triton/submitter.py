@@ -6,20 +6,7 @@ import numpy as np
 import requests
 import sys
 import time
-import tritonclient.grpc as grpcclient
 from tritonclient.utils import InferenceServerException
-
-"""
-Todo:
-    -Limit input size queue
-    -Write put/get functions for GRPC and system shared memory
-        -How to pass args to put/get, pre/post function calls
-    -Error checking, timeouts, logging, etc.
-    -Add throughput / performance tracker
-        -Track time spent: preprocessing, waiting for requests, 
-         postprocessing
-    -Dynamically adjust sleep period and request queue length
-"""
 
 
 class SimulatedProducer(object):
@@ -44,7 +31,7 @@ class SimulatedProducer(object):
         
         self.B = B # batch size
         self.D = D # dimension
-        self.dttype = dtype # datatype as float16 or float32
+        self.dtype = dtype # datatype as float16 or float32
         
 
     def __iter__(self):
@@ -66,18 +53,26 @@ class Requests(object):
     """
 
 
-    def __init__(self, client, limit):
+    def __init__(self, url, limit):
         """Construct
         
         Parameters
         ----------
-        client : tritonclient.grpc object
-            A GRPC client used to submit requests. 
+        url : string
+            A url for the triton GRPC port used to submit requests.
         limit : int
             The maximum number of pending requests to allow.
         """
         
-        self.client = client
+        import tritonclient.grpc as grpcclient
+        
+        # create GRPC client
+        try:
+            self.client = grpcclient.InferenceServerClient(url=url,
+                                                           verbose=verbose)
+        except Exception as e:
+            print("context creation failed: " + str(e), flush=True)        
+        
         self.limit = limit
         self.model_dicts = {}
         self.pending = []
@@ -289,6 +284,8 @@ class Requests(object):
             A list of InferInput objects populated with data.
         """
         
+        import tritonclient.grpc as grpcclient
+        
         # validate inputs against model expectations
         self._validate_inputs(inputs, model_dict)
         
@@ -327,6 +324,8 @@ class Requests(object):
             A list of InferRequestedOutput objects to capture inference 
             results.
         """
+        
+        import tritonclient.grpc as grpcclient
 
         # create InferInput objects for each model input
         infer_outputs = [grpcclient.InferRequestedOutput(o["name"])
@@ -529,14 +528,8 @@ class InferenceRunner(Process):
         
         multiprocessing.Process.__init__(self)
         
-        # create GRPC client
-        try:
-            self.client = grpcclient.InferenceServerClient(url=url,
-                                                           verbose=verbose)
-        except Exception as e:
-            print("context creation failed: " + str(e), flush=True)
-        
         # capture input arguments
+        self.url = url
         self.qin = qin
         self.qout = qout
         self.limit = limit
@@ -555,7 +548,7 @@ class InferenceRunner(Process):
         stop = False
                 
         # create requests object
-        req = Requests(self.client, self.limit)
+        req = Requests(self.url, self.limit)
 
         # loop until exit signal received from calling process
         while True:
@@ -618,7 +611,7 @@ if __name__ == '__main__':
     N = 100 # total number of inferences to perform
     count = 0 # postion of input inference and out request in the list
     limit = 5 # limit on number of pending requests per worker
-    workers = 4 # total number of Submitter workers
+    workers = 1 # total number of Submitter workers
     url = 'localhost:8001' # url for grpc access to tirton server
     model_version = '1' # set model version
     verbose = False # set verbos as False
@@ -642,9 +635,6 @@ if __name__ == '__main__':
     # create input, output queues
     qin = Queue()
     qout = Queue()
-    
-    # initialize producer
-    producer = iter(SimulatedProducer(batch_size, dimension, np.float16))
       
     # Start consumers
     print(f"Creating {workers} workers")
@@ -656,6 +646,9 @@ if __name__ == '__main__':
                  for _ in range(workers)]
     for w in consumers:
         w.start()
+        
+    # initialize producer
+    producer = iter(SimulatedProducer(batch_size, dimension, np.float16))
 
     # enqueue tasks
     print("Enqueuing inference jobs")
