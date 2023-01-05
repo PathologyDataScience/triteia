@@ -235,6 +235,17 @@ class Requests(object):
         return model_dict
     
     
+    def print_pending(self):
+        """Prints current state of self.pending for debugging."""
+        
+        # print the process ID
+        print(f"Pending inferences for {os.getpid()}", flush=True)
+        
+        # for each line of the queue, print the request ID and elapsed time
+        for i, request in enumerate(self.pending):
+            print(f"\t{i}\t{time.time()-request['elapsed_retrieval']}", flush=True)
+    
+    
     def _validate_inputs(self, inputs, model_dict):
         """Validate inputs against model config and metadata.
         
@@ -556,6 +567,12 @@ class InferenceRunner(Process):
         # loop until exit signal received from calling process
         while True:
             
+            
+            
+            #
+            req.print_pending()
+            
+            
             # fill input queue with requests up to limit
             if not stop:
                 for i in range(self.limit - len(req.pending)):
@@ -613,7 +630,7 @@ if __name__ == '__main__':
     # parameters
     N = 100 # total number of inferences to perform
     count = 0 # postion of input inference and out request in the list
-    limit = 5 # limit on number of pending requests per worker
+    limit = 10 # limit on number of pending requests per worker
     workers = 2 # total number of Submitter workers
     url = 'localhost:8001' # url for grpc access to tirton server
     model_version = '1' # set model version
