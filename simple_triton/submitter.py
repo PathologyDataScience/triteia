@@ -3,6 +3,7 @@ from functools import partial
 import multiprocessing
 from multiprocessing import Process, Queue
 import numpy as np
+import os
 import requests
 import sys
 import time
@@ -53,7 +54,7 @@ class Requests(object):
     """
 
 
-    def __init__(self, url, limit):
+    def __init__(self, url, limit, verbose=False):
         """Construct
         
         Parameters
@@ -62,6 +63,9 @@ class Requests(object):
             A url for the triton GRPC port used to submit requests.
         limit : int
             The maximum number of pending requests to allow.
+        verbose : bool
+            True updates console with inference progress and exceptions. 
+            Default value is False.
         """
         
         import tritonclient.grpc as grpcclient
@@ -74,6 +78,7 @@ class Requests(object):
             print("context creation failed: " + str(e), flush=True)        
         
         self.limit = limit
+        self.verbose = verbose
         self.model_dicts = {}
         self.pending = []
 
@@ -417,11 +422,9 @@ class Requests(object):
                 time.sleep(wait)
         
         # delete completed entries from list
-        self.pending.reverse()
-        for i in delete:
-            _ = self.pending.pop(i)
-        self.pending.reverse()
-        
+        for i in sorted(delete, reverse=True):
+            del self.pending[i]
+                
         return completed
     
     
@@ -555,7 +558,7 @@ class InferenceRunner(Process):
             
             # fill input queue with requests up to limit
             if not stop:
-                for _ in range(self.limit - len(req.pending)):
+                for i in range(self.limit - len(req.pending)):
                     
                     # pull sample
                     sample = self.qin.get()
@@ -564,7 +567,7 @@ class InferenceRunner(Process):
                     if sample is None:
                         stop = True
                         break
-                    
+
                     # apply preprocessing function
                     # TBD
 
@@ -573,7 +576,7 @@ class InferenceRunner(Process):
 
             # check pending requests
             completed = req.check(block=False)
-            
+
             # put completed post-processed requests into queue
             for result in completed:
                 
@@ -587,7 +590,7 @@ class InferenceRunner(Process):
                 else:
                     
                     # capture performance data
-                    self.time_inference.append(result["request_elapsed"])
+                    #self.time_inference.append(result["request_elapsed"])
                 
                     # apply post processing function
                     # TBD
@@ -611,7 +614,7 @@ if __name__ == '__main__':
     N = 100 # total number of inferences to perform
     count = 0 # postion of input inference and out request in the list
     limit = 5 # limit on number of pending requests per worker
-    workers = 1 # total number of Submitter workers
+    workers = 2 # total number of Submitter workers
     url = 'localhost:8001' # url for grpc access to tirton server
     model_version = '1' # set model version
     verbose = False # set verbos as False
@@ -622,12 +625,6 @@ if __name__ == '__main__':
     model_path_test = 'models/simple-trt-model-FP16-test/1/model.savedmodel' # set model path
     batch_size = 1024
     dimension = 1024
-    
-    # check connectivity with triton server and model
-    res = requests.get('http://localhost:8000/v2/health/ready')
-    print(f"Tirton Server connection status: {res}")
-    res = requests.get('http://localhost:8000/v2/models/simple-trt-model-FP16-test')
-    print(f"Model connection status: {res}")
 
     # start timer
     start = time.time()
@@ -655,7 +652,7 @@ if __name__ == '__main__':
     for _ in range(N):
         data = next(producer)
         metadata = {'key': 'random stuff'}
-        qin.put((model_name, data, metadata))
+        qin.put((model_name, [data], metadata))
     
     # enqueue stop signals
     for i in range(workers):
@@ -667,6 +664,7 @@ if __name__ == '__main__':
     while N:
         results.append(qout.get())
         N -= 1
+        print(N)
     for result in results:
         print(result)
 
