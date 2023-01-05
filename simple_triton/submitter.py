@@ -4,7 +4,6 @@ import multiprocessing
 from multiprocessing import Process, Queue
 import numpy as np
 import os
-import requests
 import sys
 import time
 from tritonclient.utils import InferenceServerException
@@ -411,8 +410,8 @@ class Requests(object):
                     request['elapsed_retrieval'] = time.time() - request['elapsed_retrieval']
                     
                     # convert responses to numpy arrays
-                    for i, output in enumerate(self.model_dicts[request['model_name']]['outputs']):
-                        request['result'][i] = results[i].as_numpy(output['name'])
+                    for j, output in enumerate(self.model_dicts[request['model_name']]['outputs']):
+                        request['result'][j] = results[j].as_numpy(output['name'])
                     
                     # add request to output list
                     completed.append(request)
@@ -566,13 +565,7 @@ class InferenceRunner(Process):
 
         # loop until exit signal received from calling process
         while True:
-            
-            
-            
-            #
-            req.print_pending()
-            
-            
+
             # fill input queue with requests up to limit
             if not stop:
                 for i in range(self.limit - len(req.pending)):
@@ -631,7 +624,7 @@ if __name__ == '__main__':
     N = 100 # total number of inferences to perform
     count = 0 # postion of input inference and out request in the list
     limit = 10 # limit on number of pending requests per worker
-    workers = 2 # total number of Submitter workers
+    workers = 10 # total number of Submitter workers
     url = 'localhost:8001' # url for grpc access to tirton server
     model_version = '1' # set model version
     verbose = False # set verbos as False
@@ -682,8 +675,8 @@ if __name__ == '__main__':
         results.append(qout.get())
         N -= 1
         print(N)
-    for result in results:
-        print(result)
+    # for result in results:
+    #     print(result)
 
     # display elapsed time
     print(f"Total elapsed time: {time.time()-start}")
