@@ -1,194 +1,668 @@
+from builtins import range
+from functools import partial
 import multiprocessing
 from multiprocessing import Process, Queue
 import numpy as np
+import os
+import sys
 import time
+from tritonclient.utils import InferenceServerException
 
 
-"""The submitter maintains a list of inference requests. It pulls samples from
-the queue 'qin' and tracks these in 'requests'. A random number from [1-10]
-is generated for each request that is decremented each time the request is 
-checked. The inference result is served when this value reaches 0. On
-completion the input data (a unique int) and time elapsed is printed. The
-completed request is then placed in the output queue 'qout'.
-
-The producer kills the running processes by inserting None values into 
-'qin'.
-
-Relevance to HistomicsML: the producer will read feature files (.tfr or 
-.npy) from disk and insert these into qin. The consumer will make inference
-requests to triton and collect and return the results to the producer
-process.
-
-Why I picked this design: 
-1. If we have significant pre- or post-processing work, or if submitting 
-requests has significant overhead, we can parallelize with multiple submitters. 
-2. The template functions give a lot of flexibility for different inference 
-server protocols or preprocessing tasks. 
-3. We can use this approach to solve a lot of problems besides HistomicsML and
-doing inference with .tfr files. For example, extracting features from images
-to generate .tfr files can be done with this method. Here, the producer
-would read tiles from an image and use triton to infer features for each tile.
-4. We can also stack these submitters if we have sequential inference tasks. 
-For example, say we have 2 models, one for cell detection and the other for 
-cell classification. We can have a submitter to the cell detection model and 
-then feed its output/inferences to the classifier model input queue.
-
-Todo:
-    -Write put/get functions for GRPC and system shared memory
-        -How to pass args to put/get, pre/post function calls
-    -Error checking, timeouts, logging, etc.
-    -Integrate with class
-    -Add throughput / performance tracker
-        -Track time spent: preprocessing, waiting for requests, 
-         postprocessing
-    -Dynamically adjust sleep period and request queue length
-"""
-
-
-class Submitter(Process):
+class SimulatedProducer(object):
+    """A simulated producer that emits numpy arrays with specified batch size
+    and feature dimensions.
     
-    def __init__(self, qin, qout, limit, put, get, pre, post):
-        multiprocessing.Process.__init__(self)
-        self.qin = qin # the input queue that holds data to do inference on
-        self.qout = qout # the output queue that holds inference results
-        self.limit = limit # the limit on number of outstanding inference requests 
-        self.put = put # the function to make an inference request
-        self.get = get # the function to retrieve an inference request
-        self.pre = pre # an optional preprocessing function to apply to data before inference - e.g. color normalization
-        self.post = post # an optional postprocessing function to apply to completed inference results
+    Data is uniformly distributed and so compression ratio will be low.
+    """
+    
+    def __init__(self, B=1024, D=1024, dtype=np.float16):
+        """Constructor.
         
+        Parameters
+        ----------
+        B : int
+            Batch size. Default value is 1024.
+        D : int
+            Feature dimension. Default value is 1024.
+        dtype : numpy.dtype
+            A numpy dtype for the emited data. Default value is float16.
+        """
+        
+        self.B = B # batch size
+        self.D = D # dimension
+        self.dtype = dtype # datatype as float16 or float32
+        
+
+    def __iter__(self):
+        self.i = 0
+        return self
+
+
+    def __next__(self):
+        output = self.dtype(np.random.uniform(size=(self.B, self.D)))
+        return output
+
+
+class Requests(object):
+    """A class to manage inference server requests.
+    
+    The class maintains a list of pending requests, ordered by submission time.
+    It can be used to check on the status of pending requests and to insert
+    new requests.
+    """
+
+
+    def __init__(self, url, limit, verbose=False):
+        """Construct
+        
+        Parameters
+        ----------
+        url : string
+            A url for the triton GRPC port used to submit requests.
+        limit : int
+            The maximum number of pending requests to allow.
+        verbose : bool
+            True updates console with inference progress and exceptions. 
+            Default value is False.
+        """
+        
+        import tritonclient.grpc as grpcclient
+        
+        # create GRPC client
+        try:
+            self.client = grpcclient.InferenceServerClient(url=url,
+                                                           verbose=verbose)
+        except Exception as e:
+            print("context creation failed: " + str(e), flush=True)        
+        
+        self.limit = limit
+        self.verbose = verbose
+        self.model_dicts = {}
+        self.pending = []
+
+    
+    def _api_to_np_types(self, api_type):
+        """Converts triton API type string to numpy dtype.
+        
+        Parameters
+        ----------
+        api_type : str
+            The type string for the triton client API.
+        
+        Returns
+        -------
+        dtype : numpy.dtype
+            The corresponding numpy dtype.
+        """
+        
+        if api_type == "FP32":
+            return np.float32
+        elif api_type == "FP16":
+            return np.float16
+        elif api_type == "FLOAT64":
+            return np.float64
+        elif api_type == "UINT8":
+            return np.uint8
+        elif api_type == "UINT16":
+            return np.uint16
+        elif api_type == "UINT32":
+            return np.uint32
+        elif api_type == "UINT64":
+            return np.uint64
+        elif api_type == "INT8":
+            return np.int8
+        elif api_type == "INT16":
+            return np.int16
+        elif api_type == "INT32":
+            return np.int32
+        elif api_type == "INT64":
+            return np.int64
+        elif api_type == "BOOL":
+            return np.bool
+        else:
+            raise ValueError(f"Unrecognized type '{str(api_type)}'")
+
+
+    def _np_to_api_types(self, dtype):
+        """Converts numpy dtype to triton API type string.
+        
+        Parameters
+        ----------
+        dtype : numpy.dtype
+            A numpy dtype.
+        
+        Returns
+        -------
+        api_type : str
+            The corresponding type string for the triton client API.
+        """
+        
+        if dtype == np.float32:
+            return "FP32"
+        elif dtype == np.float16:
+            return "FP16"
+        elif dtype == np.float64:
+            return "FLOAT64"
+        elif dtype == np.uint8:
+            return "UINT8"
+        elif dtype == np.uint16:
+            return "UINT16"
+        elif dtype == np.uint32:
+            return "UINT32"
+        elif dtype == np.uint64:
+            return "UINT64"
+        elif dtype == np.int8:
+            return "INT8"
+        elif dtype == np.int16:
+            return "INT16"
+        elif dtype == np.int32:
+            return "INT32"
+        elif dtype == np.int64:
+            return "INT64"
+        elif dtype == np.bool:
+            return "BOOL"
+        else:
+            raise ValueError(f"Unrecognized type '{str(dtype)}'")
+            
+    
+    def _model_metadata_config(self, model_name):
+        """Queries triton to get model input and output names, shapes, types, 
+        and maximum batch size.
+        
+        Parameters
+        ----------
+        model_name : string
+            The name of the model to query as registered in triton.
+        
+        Returns
+        -------
+        model_dict : dict
+            A dictionary describing the name, shape, and type of inputs and 
+            outputs, as well as maximum batch size.
+        """
+        
+        # get model metadata
+        try:
+            metadata = self.client.get_model_metadata(model_name)
+        except InferenceServerException as e:
+            print("Failed to retrieve the metadata: " + str(e))
+            sys.exit(1)
+        
+        # get model config
+        try:
+            config = self.client.get_model_config(model_name)
+        except InferenceServerException as e:
+            print("failed to retrieve the config: " + str(e))
+            sys.exit(1)
+        
+        # capture input names, shapes, and types
+        model_inputs = []
+        for i in metadata.inputs:
+            if i.shape[0] == -1:
+                shape = [None, *i.shape[1:]]
+            else:
+                shape = i.shape
+            model_inputs.append(
+                {"name": i.name,
+                 "type": i.datatype,
+                 "shape": shape}
+                )
+        
+        # capture output names, shapes, and types
+        model_outputs = []
+        for o in metadata.outputs:
+            if o.shape[0] == -1:
+                shape = [None, *o.shape[1:]]
+            else:
+                shape = o.shape
+            model_outputs.append(
+                {"name": o.name,
+                 "type": o.datatype,
+                 "shape": shape}
+                )
+        
+        # get max batch size
+        max_batch_size = config.config.max_batch_size
+        
+        # capture outputs in dictionary
+        model_dict = {"inputs": model_inputs,
+                      "outputs": model_outputs,
+                      "max_batch_size": max_batch_size,
+                      "name": model_name}
+        
+        return model_dict
+    
+    
+    def print_pending(self):
+        """Prints current state of self.pending for debugging."""
+        
+        # print the process ID
+        print(f"Pending inferences for {os.getpid()}", flush=True)
+        
+        # for each line of the queue, print the request ID and elapsed time
+        for i, request in enumerate(self.pending):
+            print(f"\t{i}\t{time.time()-request['elapsed_retrieval']}", flush=True)
+    
+    
+    def _validate_inputs(self, inputs, model_dict):
+        """Validate inputs against model config and metadata.
+        
+        Parameters
+        ----------
+        inputs : list of numpy.ndarray
+            A list of numpy arrays to input for model inference.
+            
+        model_dict : dict
+            A dictionary describing the name, shape, and type of inputs and 
+            outputs, as well as maximum batch size.
+        
+        See also
+        --------
+        _model_metadata_config, _model_inputs
+        """
+        
+        # check number of inputs
+        if len(inputs) != len(model_dict["inputs"]):
+            raise Exception(f"Model {model_dict['name']} expects {len(model_dict['inputs'])} inputs, received {len(inputs)}.")
+
+        # check input shapes
+        for i, (provided, expected) in enumerate(zip(inputs, model_dict["inputs"])):
+            if expected["shape"][0] is None:
+                if not np.array_equal(
+                        np.array(np.shape(provided)[1:], dtype=np.int32),
+                        np.array(expected["shape"][1:], dtype=np.int32)
+                        ):
+                    raise Exception(f"Model {model_dict['name']} {model_dict['inputs'][i]['name']} has shape {expected}.")
+                if provided.shape[0] > model_dict['max_batch_size']:
+                    raise Exception(f"Model {model_dict['name']} has max batch size {model_dict['max_batch_size']}.")
+
+
+    def _client_inputs(self, inputs, model_dict):
+        """Generates tritonclient.grpc.InferInput objects for client.
+        
+        Given inputs and a model configuration and metadata, this function
+        validates the inputs against the model expectations, and generates the
+        InferInput objects used by the client to transmit inputs to triton.
+    
+        Parameters
+        ----------
+        inputs : list of numpy.ndarray
+            A list of numpy arrays to input for model inference.
+        model_dict : dict
+            A dictionary describing the name, shape, and type of inputs and 
+            outputs, as well as maximum batch size.        
+        
+        Outputs
+        -------
+        infer_inputs : list of tritonclient.grpc.InferInput
+            A list of InferInput objects populated with data.
+        """
+        
+        import tritonclient.grpc as grpcclient
+        
+        # validate inputs against model expectations
+        self._validate_inputs(inputs, model_dict)
+        
+        # create InferInput objects for each model input
+        infer_inputs = []
+        for (provided, expected) in zip(inputs, model_dict["inputs"]):
+            
+            # create InferInput object
+            iio = grpcclient.InferInput(expected["name"],
+                                        provided.shape,
+                                        expected["type"])
+            
+            # add numpy data to input
+            if self._np_to_api_types(provided.dtype) != expected["type"]:
+                provided = provided.astype(self._api_to_np_types(expected["type"]))
+            iio.set_data_from_numpy(provided)
+            
+            # add to infer_input list
+            infer_inputs.append(iio)
+            
+        return infer_inputs
+
+
+    def _client_outputs(self, model_dict):
+        """Generates tritonclient.grpc.InferRequestedOutput objects for client.
+    
+        Parameters
+        ----------
+        model_dict : dict
+            A dictionary describing the name, shape, and type of inputs and 
+            outputs, as well as maximum batch size.        
+        
+        Outputs
+        -------
+        infer_outputs : list of tritonclient.grpc.InferRequestedOutput
+            A list of InferRequestedOutput objects to capture inference 
+            results.
+        """
+        
+        import tritonclient.grpc as grpcclient
+
+        # create InferInput objects for each model input
+        infer_outputs = [grpcclient.InferRequestedOutput(o["name"])
+                         for o in model_dict["outputs"]]
+            
+        return infer_outputs
+    
+
+    def _callback(self, capture, result, error):
+        """Callback for async_infer to capture result or error of inference
+        request.
+        
+        Parameters
+        ----------
+        capture : list
+            An empty list of 
+        result : grpcclient.InferResult
+            The result of inference if successful.
+        error : tritonclientutils.InferenceServerException
+            An exception if inference failed. Otherwise None.
+        """
+        
+        if error:
+            capture.append((error, time.time()))
+        else:
+            capture.append((result, time.time()))
+        
+    
+    def check(self, block=True, wait=100e-3):
+        """Check for completion of pending requests.
+        
+        Parameters
+        ----------
+        block : bool
+            If True, the function will block until at least one request 
+            completes. Default value is True.
+        wait : float
+            If block is True, this is the interval to wait until checking
+            requests again.
+        
+        Returns
+        -------
+        completed : list of tuple
+            A list containing the results of completed inference requests.
+        """
+        
+        # iterate through list of requests, checking who is finished
+        def request_loop():
+            
+            # initialize completed requests
+            completed = []
+            
+            # initalize list of requests to delete
+            delete = []
+            
+            for i, request in enumerate(self.pending):
+                if len(request['result']):
+                    
+                    # unpack request result into output, time
+                    completion_time = max([result[1] for result in request['result']])
+                    results = [result[0] for result in request['result']]
+
+                    # record elapsed time between submission and completion
+                    request['elapsed_completion'] = completion_time - request['elapsed_retrieval']
+                    
+                    # record elapsed time between submission and retrieval
+                    request['elapsed_retrieval'] = time.time() - request['elapsed_retrieval']
+                    
+                    # convert responses to numpy arrays
+                    for j, output in enumerate(self.model_dicts[request['model_name']]['outputs']):
+                        request['result'][j] = results[j].as_numpy(output['name'])
+                    
+                    # add request to output list
+                    completed.append(request)
+                    
+                    # add request to list for deletion
+                    delete.append(i)
+                    
+            return completed, delete
+                    
+        # if no blocking, iterate through list once and return
+        if not block:   
+            completed, delete = request_loop()
+        else:
+            while True:
+                completed, delete = request_loop()
+                if len(completed):
+                    break
+                time.sleep(wait)
+        
+        # delete completed entries from list
+        for i in sorted(delete, reverse=True):
+            del self.pending[i]
+                
+        return completed
+    
+    
+    def insert(self, sample, timeout=None):
+        """Insert an inference request for submission to triton.
+        
+        Parameters
+        ----------
+        sample : tuple
+            A 2-tuple or 3-tuple containing a list of numpy arrays for the
+            model inputs (list of np.ndarray), the model name (str), and
+            an optional dictionary of sample metadata that will stay linked to 
+            the inference request and result.
+        timeout : float
+            Timeout for the request in seconds. Default value is None.
+        """
+        
+        # process input sample - if list or tuple
+        if len(sample) == 3:
+            model_name, data, metadata = sample
+        elif len(sample) == 2:
+            model_name, data = sample
+            metadata = None
+        else:
+            raise ValueError('Input sample must be a 2- or 3-tuple')
+            
+        # check if model_dict has been previously generated for model_name
+        if model_name not in self.model_dicts.keys():
+            model_dict = self._model_metadata_config(model_name)
+            self.model_dicts[model_name] = model_dict
+        else:
+            model_dict = self.model_dicts[model_name]
+        
+        # create InputData objects based on data shape
+        inputs = self._client_inputs(data, model_dict)
+
+        # create outputs
+        outputs = self._client_outputs(model_dict)
+        
+        # create a dict to hold timing information, metadata, and request
+        # completion
+        request = {'metadata': metadata,
+                   'data': data,
+                   'result': [],
+                   'model_name': model_name,
+                   'exception': None,
+                   'elapsed_retrieval': time.time()}
+        
+        # submit request
+        self.client.async_infer(model_name=model_name,
+                                inputs=inputs,
+                                callback=partial(self._callback, 
+                                                 request['result']),
+                                outputs=outputs,
+                                client_timeout=timeout)
+        
+        # append request to list
+        self.pending.append(request)
+
+
+class InferenceRunner(Process):
+    """InferenceRunner """
+    
+    def __init__(self,
+                 url,
+                 qin,
+                 qout,
+                 limit=10,
+                 rest=1e-2,
+                 timeout=None,
+                 pre=None,
+                 post=None,
+                 verbose=False):
+        """InferenceRunner constructor.
+        
+        Parameters
+        ----------
+        url : string
+            The inference server url.
+        qin : multiprocessing.Queue
+            Input queue containing samples for inference.
+        qout : multiprocessing.Queue
+            Output queue receiving completed inference requests and process
+            summary information on process completion.
+        limit : int
+            The maximum allowable pending requests. Default value is 10.
+        rest : float
+            The resting period for the InferenceRunner process. The process
+            will rest for this period (seconds) after submitting and checking
+            inference requests. Default value is 10 milliseconds.
+        timeout : float
+            The request timeout limit (seconds). This is an input argument
+            to the triton GRPC client async_infer inferface.
+        pre : function
+            A preprocessing function to apply to samples prior to inference.
+            Default value is None.
+        post : function
+            A postprocessing function to apply to inference results. Default
+            value is None.
+        verbose : bool
+            True updates console with inference progress and exceptions. 
+            Default value is False.
+        """
+        
+        multiprocessing.Process.__init__(self)
+        
+        # capture input arguments
+        self.url = url
+        self.qin = qin
+        self.qout = qout
+        self.limit = limit
+        self.timeout = timeout
+        self.rest = rest
+        self.pre = pre
+        self.post = post
+        
+        # initialize list to hold performance data
+        self.time_inference = []
+    
+
     def run(self):
 
-        # initialize list of pending inference requests 
-        requests = []
-        
-        # set flag indicating qin stop signal receipt
+        # set flag indicating qin stop signal received
         stop = False
-        
+                
+        # create requests object
+        req = Requests(self.url, self.limit)
+
         # loop until exit signal received from calling process
         while True:
-            
-            print(f"{self.name} - {len(requests)} requests")
-            
-            # if pending requests < limit, pull sample from input queue
-            if(len(requests) < self.limit) and not stop:
-                
-                # pull sample from producer
-                sample = self.qin.get()
-            
-                # check stop signal
-                if sample is None:
-                    stop = True
-                    continue
-                
-                # apply preprocessing function
-                sample = self.pre(sample)
-            
-                # append request to list
-                requests.append(self.put(sample))
-                
-            # check pending requests
-            delete = []
-            for i in range(len(requests)):
-                result = self.get(requests[i])
-                if result is not None:
-                    result = self.post(result)
-                    self.qout.put(result)
-                    delete.append(i)
-    
-            # delete completed requests
-            delete.reverse()
-            for i in delete:
-                _ = requests.pop(i)
-                
-            # check if done
-            if len(requests) == 0 and stop:
-                break
+
+            # fill input queue with requests up to limit
+            if not stop:
+                for i in range(self.limit - len(req.pending)):
                     
+                    # pull sample
+                    sample = self.qin.get()
+                    
+                    # check if stop signal
+                    if sample is None:
+                        stop = True
+                        break
+
+                    # apply preprocessing function
+                    # TBD
+
+                    # fill requests if stop signal not received
+                    req.insert(sample, self.timeout)
+
+            # check pending requests
+            completed = req.check(block=False)
+
+            # put completed post-processed requests into queue
+            for result in completed:
+                
+                # check if 
+                if type(result) == InferenceServerException:
+                
+                    # add sample to retry
+                    # TBD
+                    print(result, flush=True)
+                
+                else:
+                    
+                    # capture performance data
+                    #self.time_inference.append(result["request_elapsed"])
+                
+                    # apply post processing function
+                    # TBD
+                    
+                    # place in queue
+                    self.qout.put((result['result'], result['metadata']))
+            
+            # check if done
+            if len(req.pending) == 0 and stop:
+                break
+
             # sleep
-            time.sleep(0.1)
+            time.sleep(self.rest)
             
         return
-
-
-# function for submitting request to triton
-# each request holds a "sample" (a unique identifier), a random value that is
-# decremented each time the request is checked, and the time the request was
-# started. When decremented to 0, the request is finished.
-def put_dummy(sample):
-    request = {"sample": sample,
-               "served": np.random.randint(low=1, high=10),
-               "start": time.time()}
-    return request
-    
-
-# function for checking if request is completed - should be non-blocking 
-# so that other requests can be checked if one is not ready
-def get_dummy(request):
-    
-    # decrement dummy request value
-    request["served"] = request["served"]-1
-    
-    # check if inference resullt is served
-    if request["served"] == 0:
-        request["elapsed"] = time.time() - request["start"]
-        return request
-    else:
-        return None
-
-
-# preprocessing function - applied to data prior to inference
-# ex. color normalization
-def pre_dummy(sample):
-    return sample
-
-
-# postprocessing function - applied to inference result prior to returning
-# here we just print the "inference" result
-def post_dummy(inference):
-    print_inference(inference)
-    return inference
-
-
-# print request
-def print_inference(inference):
-    print("Sample {}: {:0.3} seconds".format(inference["sample"],
-                                             inference["elapsed"]),
-          flush=True)
 
 
 if __name__ == '__main__':
     
     # parameters
     N = 100 # total number of inferences to perform
-    tasks = list(range(N)) # the input sample to each "inference" is just an int
-    limit = 5 # limit on number of pending requests per worker
-    workers = 4 # total number of Submitter workers
-    
+    count = 0 # postion of input inference and out request in the list
+    limit = 10 # limit on number of pending requests per worker
+    workers = 10 # total number of Submitter workers
+    url = 'localhost:8001' # url for grpc access to tirton server
+    model_version = '1' # set model version
+    verbose = False # set verbos as False
+    input_dtype = 'FP16' # set input data type
+    model_name = 'simple-trt-model-FP16' # set model name
+    model_name_test = 'simple-trt-model-FP16-test' # set model name
+    model_path_input = 'models/simple-trt-model-FP16-input/1/model.savedmodel' # set model path
+    model_path_test = 'models/simple-trt-model-FP16-test/1/model.savedmodel' # set model path
+    batch_size = 1024
+    dimension = 1024
+
     # start timer
     start = time.time()
     
     # create input, output queues
     qin = Queue()
     qout = Queue()
-    
+      
     # Start consumers
     print(f"Creating {workers} workers")
-    consumers = [Submitter(qin,
-                           qout,
-                           limit,
-                           put_dummy,
-                           get_dummy,
-                           pre_dummy,
-                           post_dummy)
-                 for i in range(workers)]
+    consumers = [InferenceRunner(url,
+                                 qin,
+                                 qout,
+                                 limit,
+                                 verbose=verbose)
+                 for _ in range(workers)]
     for w in consumers:
         w.start()
+        
+    # initialize producer
+    producer = iter(SimulatedProducer(batch_size, dimension, np.float16))
 
     # enqueue tasks
     print("Enqueuing inference jobs")
-    for i in tasks:
-        qin.put(i)
+    for _ in range(N):
+        data = next(producer)
+        metadata = {'key': 'random stuff'}
+        qin.put((model_name, [data], metadata))
     
     # enqueue stop signals
     for i in range(workers):
@@ -200,8 +674,9 @@ if __name__ == '__main__':
     while N:
         results.append(qout.get())
         N -= 1
-    for result in results:
-        print_inference(result)
+        print(N)
+    # for result in results:
+    #     print(result)
 
     # display elapsed time
     print(f"Total elapsed time: {time.time()-start}")
