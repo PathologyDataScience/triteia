@@ -436,23 +436,21 @@ class Requests(object):
 
         Parameters
         ----------
-        sample : tuple
-            A 2-tuple or 3-tuple containing a list of numpy arrays for the
-            model inputs (list of np.ndarray), the model name (str), and
-            an optional dictionary of sample metadata that will stay linked to
-            the inference request and result.
+        sample : dict
+
         timeout : float
             Timeout for the request in seconds. Default value is None.
         """
 
         # process input sample - if list or tuple
-        if len(sample) == 3:
-            model_name, data, metadata = sample
-        elif len(sample) == 2:
-            model_name, data = sample
-            metadata = None
-        else:
-            raise ValueError("Input sample must be a 2- or 3-tuple")
+        if not isinstance(sample, dict):
+            raise ValueError(
+                "Input 'sample' is a dict with required keys 'model_name' and 'inputs'."
+            )
+        if "model_name" not in sample.keys():
+            raise ValueError("Input 'sample' must have key 'model_name'.")
+        if "inputs" not in sample.keys():
+            raise ValueError("Input 'sample' must have key 'inputs'.")
 
         # check if model_dict has been previously generated for model_name
         if model_name not in self.model_dicts.keys():
@@ -462,33 +460,28 @@ class Requests(object):
             model_dict = self.model_dicts[model_name]
 
         # create InputData objects based on data shape
-        inputs = self._client_inputs(data, model_dict)
+        inputs = self._client_inputs(sample["inputs"], model_dict)
 
         # create outputs
         outputs = self._client_outputs(model_dict)
 
-        # create a dict to hold timing information, metadata, and request
-        # completion
-        request = {
-            "metadata": metadata,
-            "data": data,
-            "result": [],
-            "model_name": model_name,
-            "exception": None,
-            "elapsed_retrieval": time.time(),
-        }
+        # initialize output
+        sample["result"] = []
+
+        # add submission time to request
+        sample["times"]["submitted"] = time.time()
 
         # submit request
         self.client.async_infer(
             model_name=model_name,
             inputs=inputs,
-            callback=partial(self._callback, request["result"]),
+            callback=partial(self._callback, sample["result"]),
             outputs=outputs,
             client_timeout=timeout,
         )
 
         # append request to list
-        self.pending.append(request)
+        self.pending.append(sample)
 
 
 class TimedQueue(multiprocessing.queues.Queue):
@@ -536,7 +529,11 @@ class InferenceRunner(Process):
         url : string
             The inference server url.
         qin : multiprocessing.Queue
-            Input queue containing samples for inference.
+            Input queue containing samples for inference. Each sample is a
+            2-tuple or 3-tuple containing the model name (str), a list of numpy
+            arrays for the model inputs (list of np.ndarray), and an optional
+            dictionary of sample metadata that will stay linked to the
+            inference request and result.
         qout : multiprocessing.Queue
             Output queue receiving completed inference requests and process
             summary information on process completion.
@@ -591,12 +588,22 @@ class InferenceRunner(Process):
                 for i in range(self.limit - len(req.pending)):
 
                     # pull sample
-                    sample, start = self.qin.get()
+                    sample, t_put, t_get = self.qin.get()
 
-                    # check if stop signal
+                    # check if stop signal, otherwise pack dictionary
                     if sample is None:
                         stop = True
                         break
+                    else:
+                        sample = {
+                            "model_name": sample[0],
+                            "inputs": sample[1],
+                            "times": {"qin_put": t_put, "qin_get": t_get},
+                        }
+
+                    # add metadata if present
+                    if len(sample) == 3:
+                        sample["metadata"] = sample[2]
 
                     # apply preprocessing function
                     # TBD
