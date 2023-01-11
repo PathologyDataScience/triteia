@@ -1,6 +1,7 @@
 from builtins import range
 from functools import partial
 import multiprocessing
+import multiprocessing.queues
 from multiprocessing import Process
 import numpy as np
 import os
@@ -449,11 +450,11 @@ class Requests(object):
             raise ValueError("Input 'sample' must have key 'inputs'.")
 
         # check if model_dict has been previously generated for model_name
-        if model_name not in self.model_dicts.keys():
-            model_dict = self._model_metadata_config(model_name)
+        if sample["model_name"] not in self.model_dicts.keys():
+            model_dict = self._model_metadata_config(sample["model_name"])
             self.model_dicts[model_name] = model_dict
         else:
-            model_dict = self.model_dicts[model_name]
+            model_dict = self.model_dicts[sample["model_name"]]
 
         # create InputData objects based on data shape
         inputs = self._client_inputs(sample["inputs"], model_dict)
@@ -591,34 +592,34 @@ class InferenceRunner(Process):
                         stop = True
                         break
                     else:
-                        sample = {
+                        request = {
                             "model_name": sample[0],
                             "inputs": sample[1],
                             "times": {"qin_put": t_put, "qin_get": t_get},
                         }
 
                     # add metadata if present
-                    if len(sample) == 3:
-                        sample["metadata"] = sample[2]
+                    if len(request) == 3:
+                        request["metadata"] = sample[2]
 
                     # apply preprocessing function
                     # TBD
 
                     # fill requests if stop signal not received
-                    req.insert(sample, self.timeout)
+                    req.insert(request, self.timeout)
 
             # check pending requests
             completed = req.check(block=False)
 
             # put completed post-processed requests into queue
-            for result in completed:
+            for inference in completed:
 
                 # check if
-                if type(result) == InferenceServerException:
+                if type(inference["result"]) == InferenceServerException:
 
                     # add sample to retry
                     # TBD
-                    print(result, flush=True)
+                    print(inference, flush=True)
 
                 else:
 
@@ -629,7 +630,7 @@ class InferenceRunner(Process):
                     # TBD
 
                     # place in queue
-                    self.qout.put((result["result"], result["metadata"]))
+                    self.qout.put(inference)
 
             # check if done
             if len(req.pending) == 0 and stop:
@@ -686,7 +687,7 @@ if __name__ == "__main__":
     for _ in range(N):
         data = next(producer)
         metadata = {"key": "random stuff"}
-        qin.put((model_name, [data], metadata, time.time()))
+        qin.put((model_name, [data], metadata))
 
     # enqueue stop signals
     for i in range(workers):
@@ -696,7 +697,10 @@ if __name__ == "__main__":
     print("Collecting results")
     results = []
     while N:
-        results.append(qout.get())
+        output, t_put, t_get = qout.get()
+        output["times"]["qout_put"] = t_put
+        output["times"]["qout_get"] = t_get
+        results.append(output)
         N -= 1
         print(N)
     # for result in results:
