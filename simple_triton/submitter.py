@@ -491,6 +491,24 @@ class Requests(object):
         self.pending.append(request)
 
 
+class TimedQueue(Queue):
+    """A multiprocessing.Queue that records insertion and removal times."""
+
+    def put(self, obj, block=True, timeout=None):
+        super(TimedQueue, self).put((obj, time.time()), block, timeout)
+
+    def put_nowait(self, obj):
+        super(TimedQueue, self).put_nowait((obj, time.time))
+
+    def get(self, block=True, timeout=None):
+        output = super(TimedQueue, self).get(block, timeout)
+        return output, time.time()
+
+    def get_nowait(self):
+        output = super(TimedQueue, self).get_nowait()
+        return output, time.time()
+
+
 class InferenceRunner(Process):
     """InferenceRunner"""
 
@@ -660,7 +678,7 @@ if __name__ == "__main__":
     for _ in range(N):
         data = next(producer)
         metadata = {"key": "random stuff"}
-        qin.put((model_name, [data], metadata))
+        qin.put((model_name, [data], metadata, time.time()))
 
     # enqueue stop signals
     for i in range(workers):
