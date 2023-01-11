@@ -449,12 +449,15 @@ class Requests(object):
         if "inputs" not in sample.keys():
             raise ValueError("Input 'sample' must have key 'inputs'.")
 
+        # get model name
+        model_name = sample["model_name"]
+
         # check if model_dict has been previously generated for model_name
-        if sample["model_name"] not in self.model_dicts.keys():
-            model_dict = self._model_metadata_config(sample["model_name"])
+        if model_name not in self.model_dicts.keys():
+            model_dict = self._model_metadata_config(model_name)
             self.model_dicts[model_name] = model_dict
         else:
-            model_dict = self.model_dicts[sample["model_name"]]
+            model_dict = self.model_dicts[model_name]
 
         # create InputData objects based on data shape
         inputs = self._client_inputs(sample["inputs"], model_dict)
