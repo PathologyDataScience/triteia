@@ -1,10 +1,12 @@
 from builtins import range
 from functools import partial
 import multiprocessing
-from multiprocessing import Process, Queue
+import multiprocessing.queues
+from multiprocessing import Process
 import numpy as np
 import os
 import sys
+from tabulate import tabulate
 import time
 from tritonclient.utils import InferenceServerException
 
@@ -392,14 +394,10 @@ class Requests(object):
                     results = [result[0] for result in request["result"]]
 
                     # record elapsed time between submission and completion
-                    request["elapsed_completion"] = (
-                        completion_time - request["elapsed_retrieval"]
-                    )
+                    request["times"]["completed"] = completion_time
 
                     # record elapsed time between submission and retrieval
-                    request["elapsed_retrieval"] = (
-                        time.time() - request["elapsed_retrieval"]
-                    )
+                    request["times"]["retrieved"] = time.time()
 
                     # convert responses to numpy arrays
                     for j, output in enumerate(
@@ -436,23 +434,24 @@ class Requests(object):
 
         Parameters
         ----------
-        sample : tuple
-            A 2-tuple or 3-tuple containing a list of numpy arrays for the
-            model inputs (list of np.ndarray), the model name (str), and
-            an optional dictionary of sample metadata that will stay linked to
-            the inference request and result.
+        sample : dict
+
         timeout : float
             Timeout for the request in seconds. Default value is None.
         """
 
         # process input sample - if list or tuple
-        if len(sample) == 3:
-            model_name, data, metadata = sample
-        elif len(sample) == 2:
-            model_name, data = sample
-            metadata = None
-        else:
-            raise ValueError("Input sample must be a 2- or 3-tuple")
+        if not isinstance(sample, dict):
+            raise ValueError(
+                "Input 'sample' is a dict with required keys 'model_name' and 'inputs'."
+            )
+        if "model_name" not in sample.keys():
+            raise ValueError("Input 'sample' must have key 'model_name'.")
+        if "inputs" not in sample.keys():
+            raise ValueError("Input 'sample' must have key 'inputs'.")
+
+        # get model name
+        model_name = sample["model_name"]
 
         # check if model_dict has been previously generated for model_name
         if model_name not in self.model_dicts.keys():
@@ -462,33 +461,51 @@ class Requests(object):
             model_dict = self.model_dicts[model_name]
 
         # create InputData objects based on data shape
-        inputs = self._client_inputs(data, model_dict)
+        inputs = self._client_inputs(sample["inputs"], model_dict)
 
         # create outputs
         outputs = self._client_outputs(model_dict)
 
-        # create a dict to hold timing information, metadata, and request
-        # completion
-        request = {
-            "metadata": metadata,
-            "data": data,
-            "result": [],
-            "model_name": model_name,
-            "exception": None,
-            "elapsed_retrieval": time.time(),
-        }
+        # initialize output
+        sample["result"] = []
+
+        # add submission time to request
+        sample["times"]["submitted"] = time.time()
 
         # submit request
         self.client.async_infer(
             model_name=model_name,
             inputs=inputs,
-            callback=partial(self._callback, request["result"]),
+            callback=partial(self._callback, sample["result"]),
             outputs=outputs,
             client_timeout=timeout,
         )
 
         # append request to list
-        self.pending.append(request)
+        self.pending.append(sample)
+
+
+class TimedQueue(multiprocessing.queues.Queue):
+    """A queue that records element insertion and removal times."""
+
+    def __init__(self, *args, **kwargs):
+        super(TimedQueue, self).__init__(
+            *args, **kwargs, ctx=multiprocessing.get_context()
+        )
+
+    def put(self, obj, block=True, timeout=None):
+        super(TimedQueue, self).put((obj, time.time()), block, timeout)
+
+    def put_nowait(self, obj):
+        super(TimedQueue, self).put_nowait((obj, time.time()))
+
+    def get(self, block=True, timeout=None):
+        output, insertion = super(TimedQueue, self).get(block, timeout)
+        return output, insertion, time.time()
+
+    def get_nowait(self):
+        output, insertion = super(TimedQueue, self).get_nowait()
+        return output, insertion, time.time()
 
 
 class InferenceRunner(Process):
@@ -513,7 +530,11 @@ class InferenceRunner(Process):
         url : string
             The inference server url.
         qin : multiprocessing.Queue
-            Input queue containing samples for inference.
+            Input queue containing samples for inference. Each sample is a
+            2-tuple or 3-tuple containing the model name (str), a list of numpy
+            arrays for the model inputs (list of np.ndarray), and an optional
+            dictionary of sample metadata that will stay linked to the
+            inference request and result.
         qout : multiprocessing.Queue
             Output queue receiving completed inference requests and process
             summary information on process completion.
@@ -568,31 +589,41 @@ class InferenceRunner(Process):
                 for i in range(self.limit - len(req.pending)):
 
                     # pull sample
-                    sample = self.qin.get()
+                    sample, t_put, t_get = self.qin.get()
 
-                    # check if stop signal
+                    # check if stop signal, otherwise pack dictionary
                     if sample is None:
                         stop = True
                         break
+                    else:
+                        request = {
+                            "model_name": sample[0],
+                            "inputs": sample[1],
+                            "times": {"qin_put": t_put, "qin_get": t_get},
+                        }
+
+                    # add metadata if present
+                    if len(request) == 3:
+                        request["metadata"] = sample[2]
 
                     # apply preprocessing function
                     # TBD
 
                     # fill requests if stop signal not received
-                    req.insert(sample, self.timeout)
+                    req.insert(request, self.timeout)
 
             # check pending requests
             completed = req.check(block=False)
 
             # put completed post-processed requests into queue
-            for result in completed:
+            for inference in completed:
 
                 # check if
-                if type(result) == InferenceServerException:
+                if type(inference["result"]) == InferenceServerException:
 
                     # add sample to retry
                     # TBD
-                    print(result, flush=True)
+                    print(inference, flush=True)
 
                 else:
 
@@ -603,7 +634,7 @@ class InferenceRunner(Process):
                     # TBD
 
                     # place in queue
-                    self.qout.put((result["result"], result["metadata"]))
+                    self.qout.put(inference)
 
             # check if done
             if len(req.pending) == 0 and stop:
@@ -641,8 +672,8 @@ if __name__ == "__main__":
     start = time.time()
 
     # create input, output queues
-    qin = Queue()
-    qout = Queue()
+    qin = TimedQueue()
+    qout = TimedQueue()
 
     # Start consumers
     print(f"Creating {workers} workers")
@@ -670,11 +701,69 @@ if __name__ == "__main__":
     print("Collecting results")
     results = []
     while N:
-        results.append(qout.get())
+        output, t_put, t_get = qout.get()
+        output["times"]["qout_put"] = t_put
+        output["times"]["qout_get"] = t_get
+        results.append(output)
         N -= 1
         print(N)
-    # for result in results:
-    #     print(result)
+
+    # analyze and display time performance
+    def analyze(results, floatfmt=".4f"):
+
+        # define lists to capture important timings
+        total = [r["times"]["qout_get"] - r["times"]["qin_put"] for r in results]
+        qin_time = [
+            100.0 * (r["times"]["qin_get"] - r["times"]["qin_put"]) / t
+            for (r, t) in zip(results, total)
+        ]
+        qout_time = [
+            100.0 * (r["times"]["qout_get"] - r["times"]["qout_put"]) / t
+            for (r, t) in zip(results, total)
+        ]
+        completion = [
+            100.0 * (r["times"]["completed"] - r["times"]["submitted"]) / t
+            for (r, t) in zip(results, total)
+        ]
+        retrieval = [
+            100.0 * (r["times"]["retrieved"] - r["times"]["completed"]) / t
+            for (r, t) in zip(results, total)
+        ]
+        other = [
+            100.0 * (t - t * (qi + qo + c + w) / 100.0) / t
+            for (t, qi, qo, c, w) in zip(
+                total, qin_time, qout_time, completion, retrieval
+            )
+        ]
+
+        # form table
+        table = [
+            ["total (sec)", np.median(np.array(total)), min(total), max(total)],
+            ["qin (%)", np.median(np.array(qin_time)), min(qin_time), max(qin_time)],
+            [
+                "qout (%)",
+                np.median(np.array(qout_time)),
+                min(qout_time),
+                max(qout_time),
+            ],
+            [
+                "completion (%)",
+                np.median(np.array(completion)),
+                min(completion),
+                max(completion),
+            ],
+            [
+                "retrieval (%)",
+                np.median(np.array(retrieval)),
+                min(retrieval),
+                max(retrieval),
+            ],
+            ["other (%)", np.median(np.array(other)), min(other), max(other)],
+        ]
+
+        # display results
+        print(tabulate(table, headers=["", "median", "min", "max"], floatfmt=floatfmt))
 
     # display elapsed time
     print(f"Total elapsed time: {time.time()-start}")
+    analyze(results)
