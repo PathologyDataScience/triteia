@@ -1,7 +1,7 @@
 from builtins import range
 from functools import partial
 import multiprocessing
-from multiprocessing import Process, Queue
+from multiprocessing import Process
 import numpy as np
 import os
 import sys
@@ -491,22 +491,27 @@ class Requests(object):
         self.pending.append(request)
 
 
-class TimedQueue(Queue):
-    """A multiprocessing.Queue that records insertion and removal times."""
+class TimedQueue(multiprocessing.queues.Queue):
+    """A queue that records element insertion and removal times."""
+
+    def __init__(self, *args, **kwargs):
+        super(TimedQueue, self).__init__(
+            *args, **kwargs, ctx=multiprocessing.get_context()
+        )
 
     def put(self, obj, block=True, timeout=None):
         super(TimedQueue, self).put((obj, time.time()), block, timeout)
 
     def put_nowait(self, obj):
-        super(TimedQueue, self).put_nowait((obj, time.time))
+        super(TimedQueue, self).put_nowait((obj, time.time()))
 
     def get(self, block=True, timeout=None):
-        output = super(TimedQueue, self).get(block, timeout)
-        return output, time.time()
+        output, insertion = super(TimedQueue, self).get(block, timeout)
+        return output, insertion, time.time()
 
     def get_nowait(self):
-        output = super(TimedQueue, self).get_nowait()
-        return output, time.time()
+        output, insertion = super(TimedQueue, self).get_nowait()
+        return output, insertion, time.time()
 
 
 class InferenceRunner(Process):
@@ -586,7 +591,7 @@ class InferenceRunner(Process):
                 for i in range(self.limit - len(req.pending)):
 
                     # pull sample
-                    sample = self.qin.get()
+                    sample, start = self.qin.get()
 
                     # check if stop signal
                     if sample is None:
@@ -659,8 +664,8 @@ if __name__ == "__main__":
     start = time.time()
 
     # create input, output queues
-    qin = Queue()
-    qout = Queue()
+    qin = TimedQueue()
+    qout = TimedQueue()
 
     # Start consumers
     print(f"Creating {workers} workers")
