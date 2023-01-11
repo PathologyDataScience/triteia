@@ -6,6 +6,7 @@ from multiprocessing import Process
 import numpy as np
 import os
 import sys
+from tabulate import tabulate
 import time
 from tritonclient.utils import InferenceServerException
 
@@ -706,8 +707,63 @@ if __name__ == "__main__":
         results.append(output)
         N -= 1
         print(N)
-    # for result in results:
-    #     print(result)
+
+    # analyze and display time performance
+    def analyze(results, floatfmt=".4f"):
+
+        # define lists to capture important timings
+        total = [r["times"]["qout_get"] - r["times"]["qin_put"] for r in results]
+        qin_time = [
+            100.0 * (r["times"]["qin_get"] - r["times"]["qin_put"]) / t
+            for (r, t) in zip(results, total)
+        ]
+        qout_time = [
+            100.0 * (r["times"]["qout_get"] - r["times"]["qout_put"]) / t
+            for (r, t) in zip(results, total)
+        ]
+        completion = [
+            100.0 * (r["times"]["completed"] - r["times"]["submitted"]) / t
+            for (r, t) in zip(results, total)
+        ]
+        retrieval = [
+            100.0 * (r["times"]["retrieved"] - r["times"]["completed"]) / t
+            for (r, t) in zip(results, total)
+        ]
+        other = [
+            100.0 * (t - t * (qi + qo + c + w) / 100.0) / t
+            for (t, qi, qo, c, w) in zip(
+                total, qin_time, qout_time, completion, retrieval
+            )
+        ]
+
+        # form table
+        table = [
+            ["total (sec)", np.median(np.array(total)), min(total), max(total)],
+            ["qin (%)", np.median(np.array(qin_time)), min(qin_time), max(qin_time)],
+            [
+                "qout (%)",
+                np.median(np.array(qout_time)),
+                min(qout_time),
+                max(qout_time),
+            ],
+            [
+                "completion (%)",
+                np.median(np.array(completion)),
+                min(completion),
+                max(completion),
+            ],
+            [
+                "retrieval (%)",
+                np.median(np.array(retrieval)),
+                min(retrieval),
+                max(retrieval),
+            ],
+            ["other (%)", np.median(np.array(other)), min(other), max(other)],
+        ]
+
+        # display results
+        print(tabulate(table, headers=["", "median", "min", "max"], floatfmt=floatfmt))
 
     # display elapsed time
     print(f"Total elapsed time: {time.time()-start}")
+    analyze(results)
