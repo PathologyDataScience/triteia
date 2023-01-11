@@ -392,14 +392,10 @@ class Requests(object):
                     results = [result[0] for result in request["result"]]
 
                     # record elapsed time between submission and completion
-                    request["elapsed_completion"] = (
-                        completion_time - request["elapsed_retrieval"]
-                    )
+                    request["times"]["completed"] = completion_time
 
                     # record elapsed time between submission and retrieval
-                    request["elapsed_retrieval"] = (
-                        time.time() - request["elapsed_retrieval"]
-                    )
+                    request["times"]["retrieved"] = time.time()
 
                     # convert responses to numpy arrays
                     for j, output in enumerate(
