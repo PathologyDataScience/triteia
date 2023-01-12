@@ -414,13 +414,18 @@ class Requests(object):
                         # capture error in request
                         if request["attempts"] == 1:
                             request["errors"] = []
-                        request["errors"].append(results)
+                        request["errors"].append(results.message())
 
                         # make another attempt if retry limit has not been reached
-                        if request["attempts"] < request["retry"]:
+                        if request["attempts"] < self.retries:
 
                             # add request to list of retries to be processed
                             retry.append(request)
+
+                        else:
+
+                            # add request to output list
+                            completed.append(request)
 
                     # inference generated a result
                     else:
@@ -429,10 +434,10 @@ class Requests(object):
                         for j, output in enumerate(
                             self.model_dicts[request["model_name"]]["outputs"]
                         ):
-                            request["result"][j] = results[j].as_numpy(output["name"])
+                            request["result"][j] = results.as_numpy(output["name"])
 
-                    # add request to output list
-                    completed.append(request)
+                        # add request to output list
+                        completed.append(request)
 
             return completed, delete, retry
 
@@ -650,23 +655,12 @@ class InferenceRunner(Process):
             # put completed post-processed requests into queue
             for inference in completed:
 
-                # check if
-                if type(inference["result"]) == InferenceServerException:
+                # # apply postprocessing function
+                # if len(inference["result"]):
+                # TBD
 
-                    # add sample to retry
-                    # TBD
-                    print(inference, flush=True)
-
-                else:
-
-                    # capture performance data
-                    # self.time_inference.append(result["request_elapsed"])
-
-                    # apply post processing function
-                    # TBD
-
-                    # place in queue
-                    self.qout.put(inference)
+                # place in queue
+                self.qout.put(inference)
 
             # check if done
             if len(req.pending) == 0 and stop:
@@ -681,10 +675,10 @@ class InferenceRunner(Process):
 if __name__ == "__main__":
 
     # parameters
-    N = 100  # total number of inferences to perform
+    N = 10  # total number of inferences to perform
     count = 0  # postion of input inference and out request in the list
     limit = 10  # limit on number of pending requests per worker
-    workers = 10  # total number of Submitter workers
+    workers = 1  # total number of Submitter workers
     url = "localhost:8001"  # url for grpc access to tirton server
     model_version = "1"  # set model version
     verbose = False  # set verbos as False
@@ -697,7 +691,7 @@ if __name__ == "__main__":
     model_path_test = (
         "models/simple-trt-model-FP16-test/1/model.savedmodel"  # set model path
     )
-    batch_size = 2049
+    batch_size = 1024
     dimension = 1024
 
     # start timer
