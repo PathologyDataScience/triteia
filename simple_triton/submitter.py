@@ -52,7 +52,7 @@ class Requests(object):
     new requests.
     """
 
-    def __init__(self, url, limit, verbose=False):
+    def __init__(self, url, limit, retries=5, verbose=False):
         """Construct
 
         Parameters
@@ -60,7 +60,9 @@ class Requests(object):
         url : string
             A url for the triton GRPC port used to submit requests.
         limit : int
-            The maximum number of pending requests to allow.
+            The maximum number of concurrent pending requests to allow.
+        retries : int
+            The maximum number of attempts for each request.
         verbose : bool
             True updates console with inference progress and exceptions.
             Default value is False.
@@ -75,6 +77,7 @@ class Requests(object):
             print("context creation failed: " + str(e), flush=True)
 
         self.limit = limit
+        self.retries = retries
         self.verbose = verbose
         self.model_dicts = {}
         self.pending = []
@@ -416,9 +419,6 @@ class Requests(object):
                         # make another attempt if retry limit has not been reached
                         if request["attempts"] < request["retry"]:
 
-                            # increment attempts
-                            request["attempts"] = request["attempts"] + 1
-
                             # add request to list of retries to be processed
                             retry.append(request)
 
@@ -498,6 +498,11 @@ class Requests(object):
 
         # add submission time to request
         sample["times"]["submitted"] = time.time()
+
+        # increment attempts
+        if "attempts" not in sample.keys():
+            sample["attempts"] = 0
+        sample["attempts"] = sample["attempts"] + 1
 
         # submit request
         self.client.async_infer(
