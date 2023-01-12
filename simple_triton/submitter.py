@@ -52,7 +52,7 @@ class Requests(object):
     new requests.
     """
 
-    def __init__(self, url, limit, verbose=False):
+    def __init__(self, url, limit, retries=5, verbose=False):
         """Construct
 
         Parameters
@@ -60,7 +60,9 @@ class Requests(object):
         url : string
             A url for the triton GRPC port used to submit requests.
         limit : int
-            The maximum number of pending requests to allow.
+            The maximum number of concurrent pending requests to allow.
+        retries : int
+            The maximum number of attempts for each request.
         verbose : bool
             True updates console with inference progress and exceptions.
             Default value is False.
@@ -75,6 +77,7 @@ class Requests(object):
             print("context creation failed: " + str(e), flush=True)
 
         self.limit = limit
+        self.retries = retries
         self.verbose = verbose
         self.model_dicts = {}
         self.pending = []
@@ -265,10 +268,10 @@ class Requests(object):
                     raise Exception(
                         f"Model {model_dict['name']} {model_dict['inputs'][i]['name']} has shape {expected}."
                     )
-                if provided.shape[0] > model_dict["max_batch_size"]:
-                    raise Exception(
-                        f"Model {model_dict['name']} has max batch size {model_dict['max_batch_size']}."
-                    )
+                # if provided.shape[0] > model_dict["max_batch_size"]:
+                #     raise Exception(
+                #         f"Model {model_dict['name']} has max batch size {model_dict['max_batch_size']}."
+                #     )
 
     def _client_inputs(self, inputs, model_dict):
         """Generates tritonclient.grpc.InferInput objects for client.
@@ -380,52 +383,81 @@ class Requests(object):
         # iterate through list of requests, checking who is finished
         def request_loop():
 
-            # initialize completed requests
+            # initialize lists of completed requests, requests to delete, requests to retry
             completed = []
-
-            # initalize list of requests to delete
             delete = []
+            retry = []
 
+            # check each pending result for completion
             for i, request in enumerate(self.pending):
+
+                # request is complete if value
                 if len(request["result"]):
-
-                    # unpack request result into output, time
-                    completion_time = max([result[1] for result in request["result"]])
-                    results = [result[0] for result in request["result"]]
-
-                    # record elapsed time between submission and completion
-                    request["times"]["completed"] = completion_time
-
-                    # record elapsed time between submission and retrieval
-                    request["times"]["retrieved"] = time.time()
-
-                    # convert responses to numpy arrays
-                    for j, output in enumerate(
-                        self.model_dicts[request["model_name"]]["outputs"]
-                    ):
-                        request["result"][j] = results[j].as_numpy(output["name"])
-
-                    # add request to output list
-                    completed.append(request)
 
                     # add request to list for deletion
                     delete.append(i)
 
-            return completed, delete
+                    # unpack request result into output, time
+                    completion_time = request["result"][0][1]
+                    results = request["result"][0][0]
+
+                    # record inference and retrieval times
+                    request["times"]["completed"] = completion_time
+                    request["times"]["retrieved"] = time.time()
+
+                    # inference generated an exception
+                    if type(results) == InferenceServerException:
+
+                        # clear result
+                        request["result"] = []
+
+                        # capture error in request
+                        if request["attempts"] == 1:
+                            request["errors"] = []
+                        request["errors"].append(results.message())
+
+                        # make another attempt if retry limit has not been reached
+                        if request["attempts"] < self.retries:
+
+                            # add request to list of retries to be processed
+                            retry.append(request)
+
+                        else:
+
+                            # add request to output list
+                            completed.append(request)
+
+                    # inference generated a result
+                    else:
+
+                        # convert responses to numpy arrays
+                        for j, output in enumerate(
+                            self.model_dicts[request["model_name"]]["outputs"]
+                        ):
+                            request["result"][j] = results.as_numpy(output["name"])
+
+                        # add request to output list
+                        completed.append(request)
+
+            return completed, delete, retry
 
         # if no blocking, iterate through list once and return
         if not block:
-            completed, delete = request_loop()
+            completed, delete, retry = request_loop()
         else:
             while True:
-                completed, delete = request_loop()
-                if len(completed):
+                completed, delete, retry = request_loop()
+                if len(delete):
                     break
                 time.sleep(wait)
 
         # delete completed entries from list
         for i in sorted(delete, reverse=True):
             del self.pending[i]
+
+        # retry errors
+        for request in retry:
+            self.insert(request)
 
         return completed
 
@@ -471,6 +503,11 @@ class Requests(object):
 
         # add submission time to request
         sample["times"]["submitted"] = time.time()
+
+        # increment attempts
+        if "attempts" not in sample.keys():
+            sample["attempts"] = 0
+        sample["attempts"] = sample["attempts"] + 1
 
         # submit request
         self.client.async_infer(
@@ -618,23 +655,12 @@ class InferenceRunner(Process):
             # put completed post-processed requests into queue
             for inference in completed:
 
-                # check if
-                if type(inference["result"]) == InferenceServerException:
+                # # apply postprocessing function
+                # if len(inference["result"]):
+                # TBD
 
-                    # add sample to retry
-                    # TBD
-                    print(inference, flush=True)
-
-                else:
-
-                    # capture performance data
-                    # self.time_inference.append(result["request_elapsed"])
-
-                    # apply post processing function
-                    # TBD
-
-                    # place in queue
-                    self.qout.put(inference)
+                # place in queue
+                self.qout.put(inference)
 
             # check if done
             if len(req.pending) == 0 and stop:
@@ -649,10 +675,10 @@ class InferenceRunner(Process):
 if __name__ == "__main__":
 
     # parameters
-    N = 100  # total number of inferences to perform
+    N = 10  # total number of inferences to perform
     count = 0  # postion of input inference and out request in the list
     limit = 10  # limit on number of pending requests per worker
-    workers = 10  # total number of Submitter workers
+    workers = 1  # total number of Submitter workers
     url = "localhost:8001"  # url for grpc access to tirton server
     model_version = "1"  # set model version
     verbose = False  # set verbos as False
