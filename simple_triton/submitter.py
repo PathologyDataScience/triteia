@@ -268,10 +268,10 @@ class Requests(object):
                     raise Exception(
                         f"Model {model_dict['name']} {model_dict['inputs'][i]['name']} has shape {expected}."
                     )
-                # if provided.shape[0] > model_dict["max_batch_size"]:
-                #     raise Exception(
-                #         f"Model {model_dict['name']} has max batch size {model_dict['max_batch_size']}."
-                #     )
+                if provided.shape[0] > model_dict["max_batch_size"]:
+                    raise Exception(
+                        f"Model {model_dict['name']} has max batch size {model_dict['max_batch_size']}."
+                    )
 
     def _client_inputs(self, inputs, model_dict):
         """Generates tritonclient.grpc.InferInput objects for client.
@@ -522,26 +522,24 @@ class Requests(object):
         self.pending.append(sample)
 
 
-class TimedQueue(multiprocessing.queues.Queue):
+class TimedQueue(object):
     """A queue that records element insertion and removal times."""
 
-    def __init__(self, *args, **kwargs):
-        super(TimedQueue, self).__init__(
-            *args, **kwargs, ctx=multiprocessing.get_context()
-        )
+    def __init__(self):
+        self.queue = multiprocessing.Manager().Queue()
 
     def put(self, obj, block=True, timeout=None):
-        super(TimedQueue, self).put((obj, time.time()), block, timeout)
+        self.queue.put((obj, time.time()), block, timeout)
 
     def put_nowait(self, obj):
-        super(TimedQueue, self).put_nowait((obj, time.time()))
+        self.queue.put_nowait((obj, time.time()))
 
     def get(self, block=True, timeout=None):
-        output, insertion = super(TimedQueue, self).get(block, timeout)
+        output, insertion = self.queue.get(block, timeout)
         return output, insertion, time.time()
 
     def get_nowait(self):
-        output, insertion = super(TimedQueue, self).get_nowait()
+        output, insertion = self.queue.get_nowait()
         return output, insertion, time.time()
 
 
