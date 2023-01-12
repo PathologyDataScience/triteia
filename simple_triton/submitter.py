@@ -776,7 +776,7 @@ if __name__ == "__main__":
                 max(in_process),
             ],
             [
-                "completion (% in-process)",
+                "inference (% in-process)",
                 np.median(np.array(completion)),
                 min(completion),
                 max(completion),
