@@ -265,10 +265,10 @@ class Requests(object):
                     raise Exception(
                         f"Model {model_dict['name']} {model_dict['inputs'][i]['name']} has shape {expected}."
                     )
-                if provided.shape[0] > model_dict["max_batch_size"]:
-                    raise Exception(
-                        f"Model {model_dict['name']} has max batch size {model_dict['max_batch_size']}."
-                    )
+                # if provided.shape[0] > model_dict["max_batch_size"]:
+                #     raise Exception(
+                #         f"Model {model_dict['name']} has max batch size {model_dict['max_batch_size']}."
+                #     )
 
     def _client_inputs(self, inputs, model_dict):
         """Generates tritonclient.grpc.InferInput objects for client.
@@ -380,52 +380,79 @@ class Requests(object):
         # iterate through list of requests, checking who is finished
         def request_loop():
 
-            # initialize completed requests
+            # initialize lists of completed requests, requests to delete, requests to retry
             completed = []
-
-            # initalize list of requests to delete
             delete = []
+            retry = []
 
+            # check each pending result for completion
             for i, request in enumerate(self.pending):
+
+                # request is complete if value
                 if len(request["result"]):
-
-                    # unpack request result into output, time
-                    completion_time = max([result[1] for result in request["result"]])
-                    results = [result[0] for result in request["result"]]
-
-                    # record elapsed time between submission and completion
-                    request["times"]["completed"] = completion_time
-
-                    # record elapsed time between submission and retrieval
-                    request["times"]["retrieved"] = time.time()
-
-                    # convert responses to numpy arrays
-                    for j, output in enumerate(
-                        self.model_dicts[request["model_name"]]["outputs"]
-                    ):
-                        request["result"][j] = results[j].as_numpy(output["name"])
-
-                    # add request to output list
-                    completed.append(request)
 
                     # add request to list for deletion
                     delete.append(i)
 
-            return completed, delete
+                    # unpack request result into output, time
+                    completion_time = request["result"][0][1]
+                    results = request["result"][0][0]
+
+                    # record inference and retrieval times
+                    request["times"]["completed"] = completion_time
+                    request["times"]["retrieved"] = time.time()
+
+                    # inference generated an exception
+                    if type(results) == InferenceServerException:
+
+                        # clear result
+                        request["result"] = []
+
+                        # capture error in request
+                        if request["attempts"] == 1:
+                            request["errors"] = []
+                        request["errors"].append(results)
+
+                        # make another attempt if retry limit has not been reached
+                        if request["attempts"] < request["retry"]:
+
+                            # increment attempts
+                            request["attempts"] = request["attempts"] + 1
+
+                            # add request to list of retries to be processed
+                            retry.append(request)
+
+                    # inference generated a result
+                    else:
+
+                        # convert responses to numpy arrays
+                        for j, output in enumerate(
+                            self.model_dicts[request["model_name"]]["outputs"]
+                        ):
+                            request["result"][j] = results[j].as_numpy(output["name"])
+
+                    # add request to output list
+                    completed.append(request)
+
+            return completed, delete, retry
 
         # if no blocking, iterate through list once and return
         if not block:
-            completed, delete = request_loop()
+            completed, delete, retry = request_loop()
         else:
             while True:
-                completed, delete = request_loop()
-                if len(completed):
+                completed, delete, retry = request_loop()
+                if len(delete):
                     break
                 time.sleep(wait)
 
         # delete completed entries from list
         for i in sorted(delete, reverse=True):
             del self.pending[i]
+
+        # retry errors
+        for request in retry:
+            self.insert(request)
 
         return completed
 
@@ -665,7 +692,7 @@ if __name__ == "__main__":
     model_path_test = (
         "models/simple-trt-model-FP16-test/1/model.savedmodel"  # set model path
     )
-    batch_size = 1024
+    batch_size = 2049
     dimension = 1024
 
     # start timer
