@@ -675,7 +675,7 @@ class InferenceRunner(Process):
 if __name__ == "__main__":
 
     # parameters
-    N = 10  # total number of inferences to perform
+    N = 100  # total number of inferences to perform
     count = 0  # postion of input inference and out request in the list
     limit = 10  # limit on number of pending requests per worker
     workers = 1  # total number of Submitter workers
@@ -735,56 +735,66 @@ if __name__ == "__main__":
         print(N)
 
     # analyze and display time performance
-    def analyze(results, floatfmt=".4f"):
+    def analyze(results, floatfmt=".2f"):
 
-        # define lists to capture important timings
+        # calculate times
         total = [r["times"]["qout_get"] - r["times"]["qin_put"] for r in results]
-        qin_time = [
-            100.0 * (r["times"]["qin_get"] - r["times"]["qin_put"]) / t
-            for (r, t) in zip(results, total)
-        ]
-        qout_time = [
-            100.0 * (r["times"]["qout_get"] - r["times"]["qout_put"]) / t
-            for (r, t) in zip(results, total)
-        ]
+        in_process = [r["times"]["qout_put"] - r["times"]["qin_get"] for r in results]
+        qin_time = [r["times"]["qin_get"] - r["times"]["qin_put"] for r in results]
+        qout_time = [r["times"]["qout_get"] - r["times"]["qout_put"] for r in results]
         completion = [
-            100.0 * (r["times"]["completed"] - r["times"]["submitted"]) / t
-            for (r, t) in zip(results, total)
+            r["times"]["completed"] - r["times"]["submitted"] for r in results
         ]
-        retrieval = [
-            100.0 * (r["times"]["retrieved"] - r["times"]["completed"]) / t
-            for (r, t) in zip(results, total)
-        ]
-        other = [
-            100.0 * (t - t * (qi + qo + c + w) / 100.0) / t
-            for (t, qi, qo, c, w) in zip(
-                total, qin_time, qout_time, completion, retrieval
-            )
-        ]
+        retrieval = [r["times"]["retrieved"] - r["times"]["completed"] for r in results]
+        other = [i - (c + r) for (i, c, r) in zip(in_process, completion, retrieval)]
+
+        # convert to percentages
+        other = [100.0 * o / i for (i, o) in zip(in_process, other)]
+        retrieval = [100.0 * r / i for (i, r) in zip(in_process, retrieval)]
+        completion = [100.0 * c / i for (i, c) in zip(in_process, completion)]
+        in_process = [100.0 * i / t for (t, i) in zip(total, in_process)]
+        qin_time = [100.0 * qi / t for (t, qi) in zip(total, qin_time)]
+        qout_time = [100.0 * qo / t for (t, qo) in zip(total, qout_time)]
 
         # form table
         table = [
             ["total (sec)", np.median(np.array(total)), min(total), max(total)],
-            ["qin (%)", np.median(np.array(qin_time)), min(qin_time), max(qin_time)],
             [
-                "qout (%)",
+                "qin (% total)",
+                np.median(np.array(qin_time)),
+                min(qin_time),
+                max(qin_time),
+            ],
+            [
+                "qout (% total)",
                 np.median(np.array(qout_time)),
                 min(qout_time),
                 max(qout_time),
             ],
             [
-                "completion (%)",
+                "in-process (% total)",
+                np.median(np.array(in_process)),
+                min(in_process),
+                max(in_process),
+            ],
+            [
+                "completion (% in-process)",
                 np.median(np.array(completion)),
                 min(completion),
                 max(completion),
             ],
             [
-                "retrieval (%)",
+                "retrieval (% in-process)",
                 np.median(np.array(retrieval)),
                 min(retrieval),
                 max(retrieval),
             ],
-            ["other (%)", np.median(np.array(other)), min(other), max(other)],
+            [
+                "other (% in-process)",
+                np.median(np.array(other)),
+                min(other),
+                max(other),
+            ],
         ]
 
         # display results
