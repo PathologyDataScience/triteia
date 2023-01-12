@@ -164,7 +164,67 @@ class Requests(object):
             return "BOOL"
         else:
             raise ValueError(f"Unrecognized type '{str(dtype)}'")
+
+    def _model_config(self,model_name,max_batch_size,input_dtype,output_dtype):
+        """Generates a valid configuration protobuf given arguments for
+        basic configuration parameters
+
+        Parameters
+        ---------
+        model_name : string  "simple-trt-model-FP16"
+            The name of the model to query as registered in triton
+        max_batch_size : integer  1024
+            maximum batch size 
+        input_dtype : integer "TYPE_FP16"
+            input data type "TYPE_FP32"
+        input_dtype : integer
+            output data type
+       
+        """  
+        # set configuration    
+        configuration = """
+        name: f"{model_name}"
+        platform: "tensorflow_savedmodel"
+        max_batch_size: f{max_batch_size}
+
+        input [
+        {
+            name: "input_0"
+            data_type: f{input_dtype}
+            dims: [ 1024 ]
+        }
+        ]
+        output {
+            name: "output_0"
+            data_type: f{output_dtype}
+            dims: [ 1 ]
+        }
+        instance_group [
+            {
+            count: 8
+            kind: KIND_GPU
+            gpus: [ 0, 1 ]
+            },
+            {
+            count: 8
+            kind: KIND_GPU
+            gpus: [ 2, 3 ]
+            },
+            {
+            count: 4
+            kind: KIND_CPU
+            }
+        ]
+        dynamic_batching {
             
+            max_queue_delay_microseconds: 200
+        }
+
+        """
+
+        with open(f'/model/{model_name}/config.pbtxt', 'w') as file:
+            file.write(configuration)
+
     
     def _model_metadata_config(self, model_name):
         """Queries triton to get model input and output names, shapes, types, 
