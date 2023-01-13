@@ -431,10 +431,12 @@ class Requests(object):
                     else:
 
                         # convert responses to numpy arrays
-                        for j, output in enumerate(
-                            self.model_dicts[request["model_name"]]["outputs"]
-                        ):
-                            request["result"][j] = results.as_numpy(output["name"])
+                        request["result"] = [
+                            results.as_numpy(output["name"])
+                            for output in self.model_dicts[request["model_name"]][
+                                "outputs"
+                            ]
+                        ]
 
                         # add request to output list
                         completed.append(request)
@@ -442,14 +444,14 @@ class Requests(object):
             return completed, delete, retry
 
         # if no blocking, iterate through list once and return
-        if not block:
-            completed, delete, retry = request_loop()
-        else:
+        if block:
             while True:
                 completed, delete, retry = request_loop()
                 if len(delete):
                     break
                 time.sleep(wait)
+        else:
+            completed, delete, retry = request_loop()
 
         # delete completed entries from list
         for i in sorted(delete, reverse=True):
@@ -721,7 +723,7 @@ if __name__ == "__main__":
     for i in range(workers):
         qin.put(None)
 
-    # collecct results
+    # collect results
     print("Collecting results")
     results = []
     while N:
