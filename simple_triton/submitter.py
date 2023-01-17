@@ -45,12 +45,22 @@ class SimulatedProducer(object):
         output = self.dtype(np.random.uniform(size=(self.B, self.D)))
         return output
 
+
 class Update(object):
     """A class to load model in inference server .
 
     The class update configuration parameters, unload model, reload the model.
     """
-    def __init__(self, model_name_test, max_batch_size,input_dtype,output_dtype, client, verbose=False):
+
+    def __init__(
+        self,
+        model_name_test,
+        max_batch_size,
+        input_dtype,
+        output_dtype,
+        client,
+        verbose=False,
+    ):
         """Construct
         Parameters
         ---------
@@ -58,30 +68,31 @@ class Update(object):
             The name of the model to query as registered in triton
         max_batch_size : integer  1024
             maximum batch size
-        input_dtype : integer 
+        input_dtype : integer
             input data type "TYPE_FP16"
-        output_dtype : integer 
+        output_dtype : integer
             output data type "TYPE_FP32"
-        """       
+        """
         import tritonclient.grpc as grpcclient
+
         # create GRPC client
         try:
             self.client = grpcclient.InferenceServerClient(url=url, verbose=verbose)
         except Exception as e:
-            print("context creation failed: " + str(e), flush=True)    
-        
+            print("context creation failed: " + str(e), flush=True)
+
         self.model_name_test = model_name_test
         self.max_batch_size = max_batch_size
         self.input_dtype = input_dtype
         self.output_dtype = output_dtype
 
     def load_model(self, block=True, timeout=None):
-        #unload model
+        # unload model
         self.client.unload_model(model_name_test)
-        while (True):          
+        while True:
             # check if model is ready
             if self.client.is_model_ready(self.model_name_test):
-                print('Model: {} is loaded',model_name_test)
+                print("Model: {} is loaded", model_name_test)
                 break
             else:
                 try:
@@ -91,24 +102,26 @@ class Update(object):
                     updated_model_config = self.client.get_model_config(model_name_test)
                     # get batch size from configuration
                     max_batch_size_get = updated_model_config.config.max_batch_size
-                    # check if model configuration is changed already, 
+                    # check if model configuration is changed already,
                     # matches the expected batch size with actual one
                     if max_batch_size_get != self.max_batch_size:
-                        print("Expected max_batch_size ={} ,".format(self.max_batch_size),"got: {}".format(max_batch_size_get))
+                        print(
+                            "Expected max_batch_size ={} ,".format(self.max_batch_size),
+                            "got: {}".format(max_batch_size_get),
+                        )
                     break
                 except InferenceServerException as e:
                     if "failed to load" in e.message():
-                        print('Could not load Model: {}',model_name_test)
-                            # sleep
+                        print("Could not load Model: {}", model_name_test)
+                        # sleep
             time.sleep(self.rest)
- 
-   
+
     def update_config(self):
-            """Generates a valid configuration protobuf given arguments for
-            basic configuration parameters
-            """
-            # set configuration
-            configuration = '''
+        """Generates a valid configuration protobuf given arguments for
+        basic configuration parameters
+        """
+        # set configuration
+        configuration = """
             name: "{}"
             platform: "tensorflow_savedmodel"
             max_batch_size: {}
@@ -143,10 +156,17 @@ class Update(object):
             dynamic_batching {{
                 max_queue_delay_microseconds: 200
             }}
-            '''.format(
-                self.model_name_test, self.max_batch_size, self.input_dtype, self.output_dtype)
-            with open(f'/tf/notebooks/tritonClient/models/{model_name_test}/config.pbtxt', 'w') as file:
-                file.write(configuration)
+            """.format(
+            self.model_name_test,
+            self.max_batch_size,
+            self.input_dtype,
+            self.output_dtype,
+        )
+        with open(
+            f"/tf/notebooks/tritonClient/models/{model_name_test}/config.pbtxt", "w"
+        ) as file:
+            file.write(configuration)
+
 
 class Requests(object):
     """A class to manage inference server requests.
@@ -267,7 +287,7 @@ class Requests(object):
             return "BOOL"
         else:
             raise ValueError(f"Unrecognized type '{str(dtype)}'")
-  
+
     def _model_metadata_config(self, model_name):
         """Queries triton to get model input and output names, shapes, types,
         and maximum batch size.
@@ -283,7 +303,7 @@ class Requests(object):
             A dictionary describing the name, shape, and type of inputs and
             outputs, as well as maximum batch size.
         """
-    
+
         # get model metadata
         try:
             metadata = self.client.get_model_metadata(model_name)
@@ -586,8 +606,6 @@ class Requests(object):
         if "inputs" not in sample.keys():
             raise ValueError("Input 'sample' must have key 'inputs'.")
 
-
-
         # check if model_dict has been previously generated for model_name
         if model_name not in self.model_dicts.keys():
             model_dict = self._model_metadata_config(model_name)
@@ -809,7 +827,7 @@ if __name__ == "__main__":
     # Start consumers
     print(f"Creating {workers} workers")
     # What is consumer getting back?
-    #how qin gets  samples for inference
+    # how qin gets  samples for inference
     consumers = [
         InferenceRunner(url, qin, qout, limit, verbose=verbose) for _ in range(workers)
     ]
@@ -819,12 +837,10 @@ if __name__ == "__main__":
     # initialize producer
     producer = iter(SimulatedProducer(batch_size, dimension, np.float16))
 
-
-    load_model = Update( model_name_test, batch_size,input_dtype,output_dtype, client)
+    load_model = Update(model_name_test, batch_size, input_dtype, output_dtype, client)
     load_model.update_config()
     load_model.load_model()
-    
-    
+
     # enqueue tasks
     print("Enqueuing inference jobs")
     for _ in range(N):
