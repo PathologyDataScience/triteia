@@ -50,7 +50,7 @@ class Update(object):
 
     The class update configuration parameters, unload model, reload the model.
     """
-    def __init__(self, model_name_test, max_batch_size,input_dtype,output_dtype, client, verbose=False, block=True):
+    def __init__(self, model_name_test, max_batch_size,input_dtype,output_dtype, client, verbose=False):
         """Construct
         Parameters
         ---------
@@ -75,27 +75,33 @@ class Update(object):
         self.input_dtype = input_dtype
         self.output_dtype = output_dtype
 
-    def load_model(self):
+    def load_model(self, block=True, timeout=None):
         #unload model
         self.client.unload_model(model_name_test)
-        # check if model is ready
-        if self.client.is_model_ready(self.model_name_test):
-            print('Model: {} is loaded',model_name_test)
-        else:
-            try:
-                # load model
-                self.client.load_model(model_name_test)
-            except InferenceServerException as e:
-                if "failed to load" in e.message():
-                    print('Could not load Model: {}',model_name_test)
-            # get model configuration
-            updated_model_config = self.client.get_model_config(model_name_test)
-            # get batch size from configuration
-            max_batch_size_get = updated_model_config.config.max_batch_size
-            # check if model configuration is changed already, 
-            # matches the expected batch size with actual one
-            if max_batch_size_get != self.max_batch_size:
-                print("Expected max_batch_size ={} ,".format(self.max_batch_size),"got: {}".format(max_batch_size_get)) 
+        while (True):          
+            # check if model is ready
+            if self.client.is_model_ready(self.model_name_test):
+                print('Model: {} is loaded',model_name_test)
+                break
+            else:
+                try:
+                    # load model
+                    self.client.load_model(model_name_test)
+                    # get model configuration
+                    updated_model_config = self.client.get_model_config(model_name_test)
+                    # get batch size from configuration
+                    max_batch_size_get = updated_model_config.config.max_batch_size
+                    # check if model configuration is changed already, 
+                    # matches the expected batch size with actual one
+                    if max_batch_size_get != self.max_batch_size:
+                        print("Expected max_batch_size ={} ,".format(self.max_batch_size),"got: {}".format(max_batch_size_get))
+                    break
+                except InferenceServerException as e:
+                    if "failed to load" in e.message():
+                        print('Could not load Model: {}',model_name_test)
+                            # sleep
+            time.sleep(self.rest)
+ 
    
     def update_config(self):
             """Generates a valid configuration protobuf given arguments for
