@@ -789,7 +789,7 @@ if __name__ == "__main__":
     model_path_test = (
         "models/simple-trt-model-FP16-test/1/model.savedmodel"  # set model path
     )
-    batch_size = 512
+    batch_size = 1024
     dimension = 1024
     client = ""
 
