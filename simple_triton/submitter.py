@@ -93,6 +93,7 @@ class Update(object):
                 try:
                     if not block:
                         self.client.load_model(model_name_test)
+                        break
                     else:
                         self.client.unload_model(model_name_test)
                         if self.client.is_model_ready(self.model_name_test):
