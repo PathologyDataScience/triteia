@@ -86,16 +86,16 @@ class Update(object):
         self.input_dtype = input_dtype
         self.output_dtype = output_dtype
 
-    def load_model(self, block=True, timeout=None):
+    def load_model(self, block=True, wait=100e-3):
         # unload model
-        self.client.unload_model(model_name_test)
         while True:
             # check if model is ready
-            if self.client.is_model_ready(self.model_name_test):
-                print("Model: {} is loaded", model_name_test)
-                break
-            else:
-                try:
+            try:
+                self.client.unload_model(model_name_test)
+                if self.client.is_model_ready(self.model_name_test):
+                    print("Model: {} is loaded", model_name_test)
+                    break
+                else:
                     # load model
                     self.client.load_model(model_name_test)
                     # get model configuration
@@ -110,11 +110,12 @@ class Update(object):
                             "got: {}".format(max_batch_size_get),
                         )
                     break
-                except InferenceServerException as e:
+            except InferenceServerException as e:
                     if "failed to load" in e.message():
                         print("Could not load Model: {}", model_name_test)
+                    if 
                         # sleep
-            time.sleep(self.rest)
+            time.sleep(wait)
 
     def update_config(self):
         """Generates a valid configuration protobuf given arguments for
