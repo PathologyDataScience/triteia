@@ -11,7 +11,7 @@ import time
 from tritonclient.utils import InferenceServerException
 import argparse
 import tritonclient.grpc as grpcclient
-
+import json
 
 class SimulatedProducer(object):
     """A simulated producer that emits numpy arrays with specified batch size
@@ -45,134 +45,6 @@ class SimulatedProducer(object):
         output = self.dtype(np.random.uniform(size=(self.B, self.D)))
         return output
 
-
-class Update(object):
-    """A class to load model in inference server .
-
-    The class update configuration parameters, unload model, reload the model.
-    """
-
-    def __init__(
-        self,
-        model_name_test,
-        max_batch_size,
-        input_dtype,
-        output_dtype,
-        client,
-        verbose=False,
-    ):
-        """Construct
-        Parameters
-        ---------
-        model_name_test : string  "simple-trt-model-FP16-test"
-            The name of the model to query as registered in triton
-        max_batch_size : integer  1024
-            maximum batch size
-        input_dtype : integer
-            input data type "TYPE_FP16"
-        output_dtype : integer
-            output data type "TYPE_FP32"
-        """
-        import tritonclient.grpc as grpcclient
-
-        # create GRPC client
-        try:
-            self.client = grpcclient.InferenceServerClient(url=url, verbose=verbose)
-        except Exception as e:
-            print("context creation failed: " + str(e), flush=True)
-
-        self.model_name_test = model_name_test
-        self.max_batch_size = max_batch_size
-        self.input_dtype = input_dtype
-        self.output_dtype = output_dtype
-
-    def load_model(self, block=True, wait=100e-3):
-        # unload model
-            while True:
-                # check if model is ready
-                try:
-                    if not block:
-                        self.client.load_model(model_name_test)
-                        break
-                    else:
-                        self.client.unload_model(model_name_test)
-                        if self.client.is_model_ready(self.model_name_test):
-                            print("Model: {} is loaded", model_name_test)
-                            break
-                        else:
-                            # load model
-                            self.client.load_model(model_name_test)
-                            # get model configuration
-                            updated_model_config = self.client.get_model_config(model_name_test)
-                            # get batch size from configuration
-                            max_batch_size_get = updated_model_config.config.max_batch_size
-                            # check if model configuration is changed already,
-                            # matches the expected batch size with actual one
-                            if max_batch_size_get != self.max_batch_size:
-                                print(
-                                    "Expected max_batch_size ={} ,".format(self.max_batch_size),
-                                    "got: {}".format(max_batch_size_get),
-                                )
-                            break
-                except InferenceServerException as e:
-                        if "failed to load" in e.message():
-                            print("Could not load Model: {}", model_name_test)
-                            block=False
-                            # sleep
-                time.sleep(wait)
-
-    def update_config(self):
-        """Generates a valid configuration protobuf given arguments for
-        basic configuration parameters
-        """
-        # set configuration
-        configuration = """
-            name: "{}"
-            platform: "tensorflow_savedmodel"
-            max_batch_size: {}
-            input [
-            {{
-                name: "input_0"
-                data_type: {}
-                dims: [ 1024 ]
-            }}
-            ]
-            output {{
-                name: "output_0"
-                data_type: {}
-                dims: [ 1 ]
-            }}
-            instance_group [
-                {{
-                count: 8
-                kind: KIND_GPU
-                gpus: [ 0, 1 ]
-                }},
-                {{
-                count: 8
-                kind: KIND_GPU
-                gpus: [ 2, 3 ]
-                }},
-                {{
-                count: 4
-                kind: KIND_CPU
-                }}
-            ]
-            dynamic_batching {{
-                max_queue_delay_microseconds: 200
-            }}
-            """.format(
-            self.model_name_test,
-            self.max_batch_size,
-            self.input_dtype,
-            self.output_dtype,
-        )
-        with open(
-            f"/tf/notebooks/tritonClient/models/{model_name_test}/config.pbtxt", "w"
-        ) as file:
-            file.write(configuration)
-
-
 class Requests(object):
     """A class to manage inference server requests.
 
@@ -196,15 +68,6 @@ class Requests(object):
             True updates console with inference progress and exceptions.
             Default value is False.
         """
-
-        import tritonclient.grpc as grpcclient
-
-        # create GRPC client
-        try:
-            self.client = grpcclient.InferenceServerClient(url=url, verbose=verbose)
-        except Exception as e:
-            print("context creation failed: " + str(e), flush=True)
-
         self.limit = limit
         self.retries = retries
         self.verbose = verbose
@@ -821,6 +684,13 @@ if __name__ == "__main__":
     batch_size = 1024
     dimension = 1024
     client = ""
+    import tritonclient.grpc as grpcclient
+
+    # create GRPC client
+    try:
+        client = grpcclient.InferenceServerClient(url=url, verbose=verbose)
+    except Exception as e:
+        print("context creation failed: " + str(e), flush=True)
 
     # start timer
     start = time.time()
@@ -831,8 +701,6 @@ if __name__ == "__main__":
 
     # Start consumers
     print(f"Creating {workers} workers")
-    # What is consumer getting back?
-    # how qin gets  samples for inference
     consumers = [
         InferenceRunner(url, qin, qout, limit, verbose=verbose) for _ in range(workers)
     ]
@@ -842,9 +710,124 @@ if __name__ == "__main__":
     # initialize producer
     producer = iter(SimulatedProducer(batch_size, dimension, np.float16))
 
-    load_model = Update(model_name_test, batch_size, input_dtype, output_dtype, client)
-    load_model.update_config()
-    load_model.load_model()
+
+    def update_config():
+        """Generates a valid configuration protobuf given arguments for
+        basic configuration parameters
+        """
+        # set configuration
+        configuration = """
+            name: "{}"
+            platform: "tensorflow_savedmodel"
+            max_batch_size: {}
+            input [
+            {{
+                name: "input_0"
+                data_type: {}
+                dims: [ 1024 ]
+            }}
+            ]
+            output {{
+                name: "output_0"
+                data_type: {}
+                dims: [ 1 ]
+            }}
+            instance_group [
+                {{
+                count: 8
+                kind: KIND_GPU
+                gpus: [ 0, 1 ]
+                }},
+                {{
+                count: 8
+                kind: KIND_GPU
+                gpus: [ 2, 3 ]
+                }},
+                {{
+                count: 4
+                kind: KIND_CPU
+                }}
+            ]
+            dynamic_batching {{
+                max_queue_delay_microseconds: 200
+            }}
+            """.format(
+            model_name_test,
+            batch_size,
+            input_dtype,
+            output_dtype,
+        )
+        with open(
+            f"/tf/notebooks/tritonClient/models/{model_name_test}/config.pbtxt", "w"
+        ) as file:
+            file.write(configuration)
+        return configuration
+    
+    def load_model(model_name_test, max_batch_size, client, configuration=None, block=True, wait=100e-3):
+
+        import requests
+        # Get status of Server connection, configuration and model.
+        res_server = requests.get(f'http://localhost:8000/v2/health/ready')
+        res_model = requests.get(f'http://localhost:8000/v2/models/{model_name_test}')
+        res_config = requests.get(f'http://localhost:8000/v2/models/{model_name_test}/config')
+        print("res_config = , res_model = , res_config_server =", 
+        res_config.status_code,res_model.status_code,res_server.status_code," OK")
+        
+        while True:
+            try:
+                    # if Model or server connection does not exist then give error
+                if res_server.status_code !=200:
+                    print("Error: Server not ready")
+                    block = False
+                    # break
+                    # If model exist but configuration does not exist, generate configurations
+                if client.is_model_ready(model_name_test) and res_config.status_code != 200:
+                    update_config()
+                    # If the model is loaded and the configuration argument is None, do nothing.
+                if client.is_model_ready(model_name_test) and configuration == None:
+                    print("Model: {} is loaded", model_name_test)  
+                    break
+                # If the model is loaded and the configuration argument is not None, 
+                # unload the model, and reload with the provided configuration.
+                elif client.is_model_ready(model_name_test) and configuration != None:
+                    client.unload_model(model_name_test)
+                    client.load_model(model_name_test,configuration)
+                    model_config = client.get_model_config(model_name_test)
+                    batch_size_get = model_config.config.max_batch_size
+                    # check if model configuration is changed already,
+                    # matches the expected batch size with actual one
+                    if batch_size_get != batch_size:
+                        print(
+                            "Expected batch_size ={} ,".format(max_batch_size),
+                            "got: {}".format(batch_size_get),
+                        )
+                    break
+                # If the model is not loaded, and configuration is None
+                # then load the model.
+                elif  not client.is_model_ready(model_name_test) and configuration == None:
+                    client.load_model(model_name_test)
+                    break
+                # If the model is not loaded,and configuration exist
+                # then update config and load the model with current configuration.
+                elif  not client.is_model_ready(model_name_test) and configuration != None:
+                    update_config()
+                    client.load_model(model_name_test,configuration) 
+                    break         
+                if not block:
+                    client.load_model(model_name_test)
+                    break
+
+            except InferenceServerException as e:
+                    if "failed to load" in e.message():
+                        print("Could not load Model: {}", model_name_test)
+                        block=False
+                        # sleep
+            time.sleep(wait)
+    # pass model configuration parameter and parse it.
+    #TBD: Pass parameters as variable
+    configuration = "{\"max_batch_size\":\"1024\"}"
+    parsed_config = json.loads(configuration)
+    load_model(model_name_test, batch_size, client, parsed_config)
 
     # enqueue tasks
     print("Enqueuing inference jobs")
@@ -937,3 +920,4 @@ if __name__ == "__main__":
     # display elapsed time
     print(f"Total elapsed time: {time.time()-start}")
     analyze(results)
+    
