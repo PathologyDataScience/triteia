@@ -13,6 +13,7 @@ import argparse
 import tritonclient.grpc as grpcclient
 import json
 
+
 class SimulatedProducer(object):
     """A simulated producer that emits numpy arrays with specified batch size
     and feature dimensions.
@@ -44,6 +45,7 @@ class SimulatedProducer(object):
     def __next__(self):
         output = self.dtype(np.random.uniform(size=(self.B, self.D)))
         return output
+
 
 class Requests(object):
     """A class to manage inference server requests.
@@ -710,7 +712,6 @@ if __name__ == "__main__":
     # initialize producer
     producer = iter(SimulatedProducer(batch_size, dimension, np.float16))
 
-
     def update_config():
         """Generates a valid configuration protobuf given arguments for
         basic configuration parameters
@@ -762,36 +763,78 @@ if __name__ == "__main__":
         ) as file:
             file.write(configuration)
         return configuration
-    
-    def load_model(model_name_test, max_batch_size, client, configuration=None, block=True, wait=100e-3):
+
+    def load_model(
+        model_name_test,
+        max_batch_size,
+        client,
+        configuration=None,
+        block=True,
+        wait=100e-3,
+    ):
 
         import requests
+
         # Get status of Server connection, configuration and model.
-        res_server = requests.get(f'http://localhost:8000/v2/health/ready')
-        res_model = requests.get(f'http://localhost:8000/v2/models/{model_name_test}')
-        res_config = requests.get(f'http://localhost:8000/v2/models/{model_name_test}/config')
-        print("res_config = , res_model = , res_config_server =", 
-        res_config.status_code,res_model.status_code,res_server.status_code," OK")
-        
+        res_server = requests.get(f"http://localhost:8000/v2/health/ready")
+        res_model = requests.get(f"http://localhost:8000/v2/models/{model_name_test}")
+        res_config = requests.get(
+            f"http://localhost:8000/v2/models/{model_name_test}/config"
+        )
+        res_stats = requests.get(
+            f"http://localhost:8000/v2/models/{model_name_test}/stats"
+        )
+        MODEL_VERSION = "v2"
+
+        import requests
+
+        # api-endpoint
+        URL = f"http://localhost:8000/v2/models/{model_name_test}/stats"
+        # defining a params dict for the parameters to be sent to the API
+        PARAMS = {}
+        # sending get request and saving the response as response object
+        r = requests.get(url=URL, params=PARAMS)
+
+        # extracting data in json format
+        data = r.json()
+        # extracting data from params dict
+        inference_queue = data["model_stats"][0]["inference_stats"]["queue"]["count"]
+        inference_success = data["model_stats"][0]["inference_stats"]["success"][
+            "count"
+        ]
+        inference_fail = data["model_stats"][0]["inference_stats"]["fail"]["count"]
+        last_inference = data["model_stats"][0]["last_inference"]
+        inference_count = data["model_stats"][0]["inference_count"]
+        print(
+            f"inference_queu = {inference_queue}, inference_success = {inference_success}, inference_fail - {inference_fail}, last_inference = {last_inference} inference_count = {inference_count}"
+        )
+
+        print(
+            f"config status = {res_config.status_code}, model status = {res_model.status_code}, server status ={res_server.status_code}"
+        )
+
         while True:
             try:
-                    # if Model or server connection does not exist then give error
-                if res_server.status_code !=200:
+                # if Model or server connection does not exist then give error
+                if res_server.status_code != 200:
                     print("Error: Server not ready")
                     block = False
                     # break
                     # If model exist but configuration does not exist, generate configurations
-                if client.is_model_ready(model_name_test) and res_config.status_code != 200:
+                if (
+                    client.is_model_ready(model_name_test)
+                    and res_config.status_code != 200
+                ):
                     update_config()
                     # If the model is loaded and the configuration argument is None, do nothing.
                 if client.is_model_ready(model_name_test) and configuration == None:
-                    print("Model: {} is loaded", model_name_test)  
+                    print("Model: {} is loaded", model_name_test)
                     break
-                # If the model is loaded and the configuration argument is not None, 
+                # If the model is loaded and the configuration argument is not None,
                 # unload the model, and reload with the provided configuration.
                 elif client.is_model_ready(model_name_test) and configuration != None:
                     client.unload_model(model_name_test)
-                    client.load_model(model_name_test,configuration)
+                    client.load_model(model_name_test, configuration)
                     model_config = client.get_model_config(model_name_test)
                     batch_size_get = model_config.config.max_batch_size
                     # check if model configuration is changed already,
@@ -804,29 +847,35 @@ if __name__ == "__main__":
                     break
                 # If the model is not loaded, and configuration is None
                 # then load the model.
-                elif  not client.is_model_ready(model_name_test) and configuration == None:
+                elif (
+                    not client.is_model_ready(model_name_test) and configuration == None
+                ):
                     client.load_model(model_name_test)
                     break
                 # If the model is not loaded,and configuration exist
                 # then update config and load the model with current configuration.
-                elif  not client.is_model_ready(model_name_test) and configuration != None:
+                elif (
+                    not client.is_model_ready(model_name_test) and configuration != None
+                ):
                     update_config()
-                    client.load_model(model_name_test,configuration) 
-                    break         
+                    client.load_model(model_name_test, configuration)
+                    break
                 if not block:
                     client.load_model(model_name_test)
                     break
 
             except InferenceServerException as e:
-                    if "failed to load" in e.message():
-                        print("Could not load Model: {}", model_name_test)
-                        block=False
-                        # sleep
+                if "failed to load" in e.message():
+                    print("Could not load Model: {}", model_name_test)
+                    block = False
+                    # sleep
             time.sleep(wait)
+
     # pass model configuration parameter and parse it.
-    #TBD: Pass parameters as variable
-    configuration = "{\"max_batch_size\":\"1024\"}"
+    # TBD: Pass parameters as variable
+    configuration = '{"max_batch_size":"1024"}'
     parsed_config = json.loads(configuration)
+
     load_model(model_name_test, batch_size, client, parsed_config)
 
     # enqueue tasks
@@ -920,4 +969,3 @@ if __name__ == "__main__":
     # display elapsed time
     print(f"Total elapsed time: {time.time()-start}")
     analyze(results)
-    
