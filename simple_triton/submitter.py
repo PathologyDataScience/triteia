@@ -268,10 +268,10 @@ class Requests(object):
                     raise Exception(
                         f"Model {model_dict['name']} {model_dict['inputs'][i]['name']} has shape {expected}."
                     )
-                # if provided.shape[0] > model_dict["max_batch_size"]:
-                #     raise Exception(
-                #         f"Model {model_dict['name']} has max batch size {model_dict['max_batch_size']}."
-                #     )
+                if provided.shape[0] > model_dict["max_batch_size"]:
+                    raise Exception(
+                        f"Model {model_dict['name']} has max batch size {model_dict['max_batch_size']}."
+                    )
 
     def _client_inputs(self, inputs, model_dict):
         """Generates tritonclient.grpc.InferInput objects for client.
@@ -431,10 +431,12 @@ class Requests(object):
                     else:
 
                         # convert responses to numpy arrays
-                        for j, output in enumerate(
-                            self.model_dicts[request["model_name"]]["outputs"]
-                        ):
-                            request["result"][j] = results.as_numpy(output["name"])
+                        request["result"] = [
+                            results.as_numpy(output["name"])
+                            for output in self.model_dicts[request["model_name"]][
+                                "outputs"
+                            ]
+                        ]
 
                         # add request to output list
                         completed.append(request)
@@ -442,14 +444,14 @@ class Requests(object):
             return completed, delete, retry
 
         # if no blocking, iterate through list once and return
-        if not block:
-            completed, delete, retry = request_loop()
-        else:
+        if block:
             while True:
                 completed, delete, retry = request_loop()
                 if len(delete):
                     break
                 time.sleep(wait)
+        else:
+            completed, delete, retry = request_loop()
 
         # delete completed entries from list
         for i in sorted(delete, reverse=True):
@@ -522,26 +524,24 @@ class Requests(object):
         self.pending.append(sample)
 
 
-class TimedQueue(multiprocessing.queues.Queue):
+class TimedQueue(object):
     """A queue that records element insertion and removal times."""
 
-    def __init__(self, *args, **kwargs):
-        super(TimedQueue, self).__init__(
-            *args, **kwargs, ctx=multiprocessing.get_context()
-        )
+    def __init__(self):
+        self.queue = multiprocessing.Manager().Queue()
 
     def put(self, obj, block=True, timeout=None):
-        super(TimedQueue, self).put((obj, time.time()), block, timeout)
+        self.queue.put((obj, time.time()), block, timeout)
 
     def put_nowait(self, obj):
-        super(TimedQueue, self).put_nowait((obj, time.time()))
+        self.queue.put_nowait((obj, time.time()))
 
     def get(self, block=True, timeout=None):
-        output, insertion = super(TimedQueue, self).get(block, timeout)
+        output, insertion = self.queue.get(block, timeout)
         return output, insertion, time.time()
 
     def get_nowait(self):
-        output, insertion = super(TimedQueue, self).get_nowait()
+        output, insertion = self.queue.get_nowait()
         return output, insertion, time.time()
 
 
@@ -723,7 +723,7 @@ if __name__ == "__main__":
     for i in range(workers):
         qin.put(None)
 
-    # collecct results
+    # collect results
     print("Collecting results")
     results = []
     while N:
@@ -778,7 +778,7 @@ if __name__ == "__main__":
                 max(in_process),
             ],
             [
-                "completion (% in-process)",
+                "inference (% in-process)",
                 np.median(np.array(completion)),
                 min(completion),
                 max(completion),
