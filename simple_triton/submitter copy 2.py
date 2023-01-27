@@ -9,11 +9,10 @@ import sys
 from tabulate import tabulate
 import time
 from tritonclient.utils import InferenceServerException
+import argparse
+import tritonclient.grpc as grpcclient
 import json
 import requests
-from tensorflow.python.framework import test_util as tu
-import unittest
-
 
 class SimulatedProducer(object):
     """A simulated producer that emits numpy arrays with specified batch size
@@ -47,8 +46,7 @@ class SimulatedProducer(object):
         output = self.dtype(np.random.uniform(size=(self.B, self.D)))
         return output
 
-
-class Requests():
+class Requests(object):
     """A class to manage inference server requests.
 
     The class maintains a list of pending requests, ordered by submission time.
@@ -71,18 +69,6 @@ class Requests():
             True updates console with inference progress and exceptions.
             Default value is False.
         """
-
-        import tritonclient.grpc as grpcclient
-
-        # create GRPC client
-        try:
-            self.client = grpcclient.InferenceServerClient(url=url, verbose=verbose)
-        except Exception as e:
-            print("context creation failed: " + str(e), flush=True)
-
-        if  not self.client.is_model_ready(model_name):
-                        self.client.load_model(model_name)
-
         self.limit = limit
         self.retries = retries
         self.verbose = verbose
@@ -489,9 +475,6 @@ class Requests():
         if "inputs" not in sample.keys():
             raise ValueError("Input 'sample' must have key 'inputs'.")
 
-        # get model name
-        model_name = sample["model_name"]
-
         # check if model_dict has been previously generated for model_name
         if model_name not in self.model_dicts.keys():
             model_dict = self._model_metadata_config(model_name)
@@ -524,23 +507,6 @@ class Requests():
             outputs=outputs,
             client_timeout=timeout,
         )
-                # defining a params dict for the parameters to be sent to the API
-        PARAMS = {}
-        URL = (f'http://localhost:8000/v2/models/{model_name}/stats')
-        # sending get request and saving the response as response object
-        r = requests.get(url = URL, params = PARAMS) 
-        # extracting data in json format
-        data = r.json()
-        # extracting data from params dict
-        inference_queue = data['model_stats'][0]['inference_stats']['queue']['count']
-        inference_success = data['model_stats'][0]['inference_stats']['success']['count']
-        compute_input = data['model_stats'][0]['inference_stats']['compute_input']['count']
-        compute_output = data['model_stats'][0]['inference_stats']['compute_output']['count']
-        inference_fail = data['model_stats'][0]['inference_stats']['fail']['count']
-        last_inference = data['model_stats'][0]['last_inference']
-        inference_count = data['model_stats'][0]['inference_count']  
-        print(f"inference_queu = {inference_queue}, inference_success = {inference_success}, compute_input = {compute_input}, compute_output = {compute_output}, inference_fail - {inference_fail}, last_inference = {last_inference} inference_count = {inference_count}")
-    
 
         # append request to list
         self.pending.append(sample)
@@ -717,10 +683,8 @@ if __name__ == "__main__":
         "models/simple-trt-model-FP16-test/1/model.savedmodel"  # set model path
     )
     batch_size = 1024
-    dimension_input = 1024
-    dimension_output = 1
-
-
+    dimension = 1024
+    client = ""
     import tritonclient.grpc as grpcclient
 
     # create GRPC client
@@ -743,13 +707,13 @@ if __name__ == "__main__":
             {{
                 name: "input_0"
                 data_type: {}
-                dims: [ {} ]
+                dims: [ 1024 ]
             }}
             ]
             output {{
                 name: "output_0"
                 data_type: {}
-                dims: [ {} ]
+                dims: [ 1 ]
             }}
             instance_group [
                 {{
@@ -774,129 +738,131 @@ if __name__ == "__main__":
             model_name_test,
             batch_size,
             input_dtype,
-            dimension_input,
             output_dtype,
-            dimension_output
         )
         with open(
             f"/tf/notebooks/tritonClient/models/{model_name_test}/config.pbtxt", "w"
         ) as file:
             file.write(configuration)
         return configuration
-    def model_stats(url):
-        # defining a params dict for the parameters to be sent to the API
-        PARAMS = {}
-        # sending get request and saving the response as response object
-        r = requests.get(url , params = PARAMS) 
-        # extracting data in json format
-        data = r.json()
-        return data['model_stats'][0]['inference_stats']['queue']['count']
-    def check_stats():
+    
+    def load_model(model_name_test, max_batch_size, client, configuration=None, block=True, wait=100e-3):
 
-        stats = client.get_inference_statistics(model_name, "1")
-        print(len(stats.model_stats), 1, "expect 1 model stats")
-        print(stats.model_stats[0].name, model_name,
-                "expect model stats for model {}".format(model_name))
-        print(
-        stats.model_stats[0].version, "1",
-        "expect model stats for model {} version 1".format(model_name))
-
-        if batch_size is not None:
-            batch_stats = stats.model_stats[0].batch_stats
-            print(batch_stats)
-            print(
-                len(batch_stats), (batch_size),
-                "expected {} different batch-sizes, got {}".format(
-                    (batch_size), len(batch_stats)))
-                
-    def load_model(model_name_test, max_batch_size, client, configuration=None, limit=0, block=True, wait=100e-3):
-        """load model in the server.
-
-        Parameters
-        ----------
-        model_name_test : string
-
-        max_batch_size : int
-        
-        configuration : prameter string
-
-        limit : int
-            Set limit for retry
-        """
+        import requests
         # Get status of Server connection, configuration and model.
         res_server = requests.get(f'http://localhost:8000/v2/health/ready')
         res_model = requests.get(f'http://localhost:8000/v2/models/{model_name_test}')
         res_config = requests.get(f'http://localhost:8000/v2/models/{model_name_test}/config')
-        res_stats = (f'http://localhost:8000/v2/models/{model_name_test}/stats')
-        inference_queue = model_stats(res_stats)
         MODEL_VERSION = "v2" 
+        # api-endpoint
+        URL = (f'http://localhost:8000/v2/models/{model_name_test}/stats')
+        
+
         print(f"config status = {res_config.status_code}, model status = {res_model.status_code}, server status ={res_server.status_code}")
-        check_stats ()
+        
         while True:
             try:
+                    # if Model or server connection does not exist then give error
                 if res_server.status_code !=200:
-                    if 0 < limit >= attempt: 
-                        attempt += 1
-                    else:
-                        print("Error: Server not ready")
-                        return False      
-                elif client.is_model_ready(model_name_test) and configuration == None:
-                    print("Model: {} is loaded", model_name_test)
-                    batch_size_get = model_config.config.max_batch_size  
-                    return True
-                elif client.is_model_ready(model_name_test) and configuration != None:
-                    if inference_queue == 0:
+                    print("Error: Server not ready")
+                    # TBD: Wait for server to be ready before raising an error
+                else:
+                    # If model exist but configuration does not exist, generate configurations
+                    # if client.is_model_ready(model_name_test) and res_config.status_code != 200:
+                    #     update_config()
+                    #TBD: This condition is impossible since model loads from configuration.
+
+                        # If the model is loaded and the configuration argument is None, do nothing.
+                    if client.is_model_ready(model_name_test) and configuration == None:
+                        print("Model: {} is loaded", model_name_test)  
+                        return True
+                        # TBD: Return a value when the function completes
+
+                    # If the model is loaded and the configuration argument is not None, 
+                    # unload the model, and reload with the provided configuration.
+                    elif client.is_model_ready(model_name_test) and configuration != None:
+                    # TBD: The first step is to check if we can unload the model (if possible, checking if requests are enqueue for this model).
+                    #  Then we need to check if the model was unloaded correctly. 
+                    # Finally, we need to check if the model was loaded correctly 
+                    # (you do this somewhat - but we probably need to compare more model parameters than just max_batch_size to confirm the update).
+
+
                         client.unload_model(model_name_test)
-                    if not client.is_model_ready(model_name_test):
+
+
+
                         client.load_model(model_name_test,configuration)
-                    if client.is_model_ready(model_name_test):
+
+                        # defining a params dict for the parameters to be sent to the API
+                        PARAMS = {}
+                        # sending get request and saving the response as response object
+                        r = requests.get(url = URL, params = PARAMS) 
+                        # extracting data in json format
+                        data = r.json()
+                        # extracting data from params dict
+                        inference_queue = data['model_stats'][0]['inference_stats']['queue']['count']
+                        inference_success = data['model_stats'][0]['inference_stats']['success']['count']
+                        inference_fail = data['model_stats'][0]['inference_stats']['fail']['count']
+                        last_inference = data['model_stats'][0]['last_inference']
+                        inference_count = data['model_stats'][0]['inference_count']  
+                        print(f"inference_queu = {inference_queue}, inference_success = {inference_success}, inference_fail - {inference_fail}, last_inference = {last_inference} inference_count = {inference_count}")
+                    
+
+
+
                         model_config = client.get_model_config(model_name_test)
                         batch_size_get = model_config.config.max_batch_size
                         # check if model configuration is changed already,
-                        # matches the expected batch size,  with actual one
-                        if batch_size_get == batch_size:
-                            return True                      
-                    elif 0 < limit >= attempt: 
-                        attempt += 1
-                    else:
-                        print("Error: Model not ready")
-                        return False                              
-                elif not client.is_model_ready(model_name_test) and configuration == None: 
-                        if inference_queue == 0:
-                            client.load_model(model_name_test)    
-                        if client.is_model_ready(model_name_test):
-                            return True  
-                        elif 0 < limit >= attempt: 
-                            attempt += 1
-                        else:
-                            print("Error: Model not ready")
-                            return False 
-                # If the model is not loaded,and configuration exist
-                # then update config and load the model with current configuration.
-                elif not client.is_model_ready(model_name_test) and configuration != None:
-                        client.load_model(model_name_test,configuration)
-                        if inference_queue == 0:    
-                            if client.is_model_ready(model_name_test):
-                                return True  
-                        elif 0 < limit >= attempt: 
-                            attempt += 1
-                        else:
-                            print("Error: Model not ready")
-                            return False                         
+                        # matches the expected batch size with actual one
+                        if batch_size_get != batch_size:
+                            print(
+                                "Expected batch_size ={} ,".format(max_batch_size),
+                                "got: {}".format(batch_size_get),
+                            )
+                        break
+                    # If the model is not loaded, and configuration is None
+                    # then load the model.
+                    elif  not client.is_model_ready(model_name_test) and configuration == None:
+                        client.load_model(model_name_test)
+                        break
+                    # If the model is not loaded,and configuration exist
+                    # then update config and load the model with current configuration.
+                    elif  not client.is_model_ready(model_name_test) and configuration != None:
+                        update_config()
+                        client.load_model(model_name_test,configuration) 
+                        break         
+                    if not block:
+                        client.load_model(model_name_test)
+                        break
+
             except InferenceServerException as e:
-                if "failed to load" in e.message():
-                    print("Could not load Model: {}", model_name_test)
-                continue
+                    if "failed to load" in e.message():
+                        print("Could not load Model: {}", model_name_test)
+                        block=False
+                        # sleep
             time.sleep(wait)
+    # pass model configuration parameter and parse it.
+    #TBD: Pass parameters as variable
+    configuration = "{\"max_batch_size\":\"1024\"}"
 
+    # configuration= "{\"max_batch_size\":\"1024\",\"input\":{\"dims\":[\"1024\"]}}"
+    # configuration = r'{"max_batch_size": 1024, "input": [{"dims": [1024]}]}'
 
-    configuration= "{\"max_batch_size\":\"{1024}\",\"dims\":\"1024\"}"
+    # configuration= "{\"max_batch_size\":\"1024\",\"input\":[{\"dims\":[\"1024\"]}]}"
+    configuration= "{\"max_batch_size\":\"1024\",\"dims\":\"1024\"}"
+    # configuration = '{"max_batch_size":1024 , "input":[{"dims":[1024]}]}'
+    # configuration = """{
+    # "max_batch_size" : 1024 ,
+    # "input" : [ { "dims" : 1024 } ]
+    # }"""
+
     parsed_config = json.loads(configuration)
-    # parsed_config = json.dumps(configuration)
-    try:
-        load_model(model_name_test, batch_size, client, parsed_config,limit=5)
-    except Exception as e:
-        raise f"Triton client 'function' error: {e.msg}"
+
+
+    load_model(model_name_test, batch_size, client, parsed_config)
+
+
+
     # start timer
     start = time.time()
 
@@ -913,7 +879,10 @@ if __name__ == "__main__":
         w.start()
 
     # initialize producer
-    producer = iter(SimulatedProducer(batch_size, dimension_input, np.float16))
+    producer = iter(SimulatedProducer(batch_size, dimension, np.float16))
+
+
+
 
     # enqueue tasks
     print("Enqueuing inference jobs")
