@@ -870,7 +870,8 @@ if __name__ == "__main__":
                 elif client.is_model_ready(model_name_test) and configuration == None:
                     print("Model: {} is loaded", model_name_test)
                     batch_size_get = model_config.config.max_batch_size
-                    return True
+                    if batch_size_get == batch_size:
+                        return True
                 elif client.is_model_ready(model_name_test) and configuration != None:
                     if inference_queue == 0:
                         client.unload_model(model_name_test)
