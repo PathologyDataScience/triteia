@@ -48,7 +48,7 @@ class SimulatedProducer(object):
         return output
 
 
-class Requests:
+class Requests(object):
     """A class to manage inference server requests.
 
     The class maintains a list of pending requests, ordered by submission time.
