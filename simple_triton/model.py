@@ -28,6 +28,40 @@ def check_stats(client, model_name, batch_size):
                 (batch_size), len(batch_stats)
             ),
         )
+        
+def instance_group(count, kind="KIND_GPU", gpus=None):
+    """Generates an instance count dictionary for use in a model config.
+    
+    A Triton configuration allows specification of resources used to serve a
+    model. The instance group specifies the number of concurrent instances of
+    a model to serve for a given set of resources. Resources can specify cpu
+    or gpu hosting, or specific gpus. See Triton documentation for more 
+    details.
+    
+    Parameters
+    ----------
+    count : int
+        The number of model instances to run concurrently.
+    kind : str
+        One of "KIND_GPU" for gpu serving, or "KIND_CPU" for cpu serving. 
+        Default value of "KIND_GPU" specifies that `count` models be hosted
+        on each available gpu.
+    gpus : list of int
+        If specified, `count` instances will be hosted on each of the listed
+        gpus. For example, [0, 1] would specify serving on gpus zero and one. 
+        Default value of `None` means that `count` instances will be served on
+        each available gpu.
+    """
+    
+    # gpus must be None if KIND_GPU
+    if kind == "KIND_CPU":
+        gpus = None
+    if gpus is None:
+        instance = {"count": count, "kind": kind}
+    else:
+        instance = {"count": count, "kind": kind, "gpus": gpus}
+        
+    return instance
 
 
 def model_config(client, model_name):
