@@ -1,10 +1,10 @@
 from functools import partial
+from model import model_config, model_metadata
 import multiprocessing
 import multiprocessing.queues
 from multiprocessing import Process
 import numpy as np
 import os
-import sys
 import time
 from tritonclient.utils import InferenceServerException
 
@@ -129,67 +129,6 @@ class Requests(object):
         else:
             raise ValueError(f"Unrecognized type '{str(dtype)}'")
 
-    def _model_metadata_config(self, model_name):
-        """Queries triton to get model input and output names, shapes, types,
-        and maximum batch size.
-
-        Parameters
-        ----------
-        model_name : string
-            The name of the model to query as registered in triton.
-
-        Returns
-        -------
-        model_dict : dict
-            A dictionary describing the name, shape, and type of inputs and
-            outputs, as well as maximum batch size.
-        """
-
-        # get model metadata
-        try:
-            metadata = self.client.get_model_metadata(model_name)
-        except InferenceServerException as e:
-            print("Failed to retrieve the metadata: " + str(e))
-            sys.exit(1)
-
-        # get model config
-        try:
-            config = self.client.get_model_config(model_name)
-        except InferenceServerException as e:
-            print("failed to retrieve the config: " + str(e))
-            sys.exit(1)
-
-        # capture input names, shapes, and types
-        model_inputs = []
-        for i in metadata.inputs:
-            if i.shape[0] == -1:
-                shape = [None, *i.shape[1:]]
-            else:
-                shape = i.shape
-            model_inputs.append({"name": i.name, "type": i.datatype, "shape": shape})
-
-        # capture output names, shapes, and types
-        model_outputs = []
-        for o in metadata.outputs:
-            if o.shape[0] == -1:
-                shape = [None, *o.shape[1:]]
-            else:
-                shape = o.shape
-            model_outputs.append({"name": o.name, "type": o.datatype, "shape": shape})
-
-        # get max batch size
-        max_batch_size = config.config.max_batch_size
-
-        # capture outputs in dictionary
-        model_dict = {
-            "inputs": model_inputs,
-            "outputs": model_outputs,
-            "max_batch_size": max_batch_size,
-            "name": model_name,
-        }
-
-        return model_dict
-
     def print_pending(self):
         """Prints current state of self.pending for debugging."""
 
@@ -214,7 +153,7 @@ class Requests(object):
 
         See also
         --------
-        _model_metadata_config, _model_inputs
+        model_metadata
         """
 
         # check number of inputs
@@ -270,12 +209,12 @@ class Requests(object):
 
             # create InferInput object
             iio = grpcclient.InferInput(
-                expected["name"], provided.shape, expected["type"]
+                expected["name"], provided.shape, expected["datatype"]
             )
 
             # add numpy data to input
-            if self._np_to_api_types(provided.dtype) != expected["type"]:
-                provided = provided.astype(self._api_to_np_types(expected["type"]))
+            if self._np_to_api_types(provided.dtype) != expected["datatype"]:
+                provided = provided.astype(self._api_to_np_types(expected["datatype"]))
             iio.set_data_from_numpy(provided)
 
             # add to infer_input list
@@ -452,7 +391,10 @@ class Requests(object):
 
         # check if model_dict has been previously generated for model_name
         if model_name not in self.model_dicts.keys():
-            model_dict = self._model_metadata_config(model_name)
+            model_dict = {
+                **model_metadata(self.client, model_name),
+                "max_batch_size": model_config(self.client, model_name)["maxBatchSize"],
+            }
             self.model_dicts[model_name] = model_dict
         else:
             model_dict = self.model_dicts[model_name]
