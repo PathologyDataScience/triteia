@@ -3,6 +3,60 @@ import time
 from tritonclient.utils import InferenceServerException
 
 
+def check_stats(client, model_name, batch_size):
+
+    stats = client.get_inference_statistics(model_name, "1")
+    print(len(stats.model_stats), 1, "expect 1 model stats")
+    print(
+        stats.model_stats[0].name,
+        model_name,
+        "expect model stats for model {}".format(model_name),
+    )
+    print(
+        stats.model_stats[0].version,
+        "1",
+        "expect model stats for model {} version 1".format(model_name),
+    )
+
+    if batch_size is not None:
+        batch_stats = stats.model_stats[0].batch_stats
+        print(batch_stats)
+        print(
+            len(batch_stats),
+            (batch_size),
+            "expected {} different batch-sizes, got {}".format(
+                (batch_size), len(batch_stats)
+            ),
+        )
+
+
+def model_config(client, model_name):
+    """Queries model config to retrieve triton model configuration.
+
+    The model configuration defines serving parameters like maximum batch size,
+    dynamic batching, maximum queue delay, and maps instances to system cpu and
+    gpu resources.
+
+    Parameters
+    ----------
+    client : tritonclient.grpc.InferenceServerClient
+        A remote-procedure call client for the triton server.
+    model_name : string
+        The name of the model to query as registered in triton.
+
+    Returns
+    -------
+    config : dict
+        A dictionary describing the model configuration. See Triton
+        documentation for more details.
+    """
+
+    # get model config
+    config = MessageToDict(client.get_model_config(model_name))
+
+    return config["config"]
+
+
 def model_idle(client, model_name, idle=1000.0):
     """Determines if a model is idle based on time of last inference.
 
@@ -40,31 +94,27 @@ def model_idle(client, model_name, idle=1000.0):
     return delta > idle
 
 
-def check_stats(client, model_name, batch_size):
+def model_metadata(client, model_name):
+    """Queries model metadata to retrieve model input/output signature.
 
-    stats = client.get_inference_statistics(model_name, "1")
-    print(len(stats.model_stats), 1, "expect 1 model stats")
-    print(
-        stats.model_stats[0].name,
-        model_name,
-        "expect model stats for model {}".format(model_name),
-    )
-    print(
-        stats.model_stats[0].version,
-        "1",
-        "expect model stats for model {} version 1".format(model_name),
-    )
+    Parameters
+    ----------
+    client : tritonclient.grpc.InferenceServerClient
+        A remote-procedure call client for the triton server.
+    model_name : string
+        The name of the model to query as registered in triton.
 
-    if batch_size is not None:
-        batch_stats = stats.model_stats[0].batch_stats
-        print(batch_stats)
-        print(
-            len(batch_stats),
-            (batch_size),
-            "expected {} different batch-sizes, got {}".format(
-                (batch_size), len(batch_stats)
-            ),
-        )
+    Returns
+    -------
+    metadata : dict
+        A dictionary describing the name, shape, and type of inputs and
+        outputs, as well as maximum batch size.
+    """
+
+    # get model metadata
+    metadata = MessageToDict(client.get_model_metadata(model_name))
+
+    return metadata
 
 
 def load_model(
