@@ -13,21 +13,21 @@ class SimulatedProducer(object):
     Data is uniformly distributed and so compression ratio will be low.
     """
 
-    def __init__(self, B=1024, D=1024, dtype=np.float16):
+    def __init__(self, B=1024, D=[1024], dtype=np.float16):
         """Constructor.
 
         Parameters
         ----------
         B : int
             Batch size. Default value is 1024.
-        D : int
-            Feature dimension. Default value is 1024.
+        D : list of int
+            Feature dimensions. Default value is [1024].
         dtype : numpy.dtype
             A numpy dtype for the emited data. Default value is float16.
         """
 
         self.B = B  # batch size
-        self.D = D  # dimension
+        self.D = D  # dimensions
         self.dtype = dtype  # datatype as float16 or float32
 
     def __iter__(self):
@@ -35,7 +35,7 @@ class SimulatedProducer(object):
         return self
 
     def __next__(self):
-        output = self.dtype(np.random.uniform(size=(self.B, self.D)))
+        output = self.dtype(np.random.uniform(size=(self.B, *self.D)))
         return output
 
 
