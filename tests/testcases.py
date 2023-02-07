@@ -463,7 +463,8 @@ class ModelTestsCases(object):
 
         model_check(
             config
-        )  # 4: model is not loaded - attempt to load with provided config
+        )  
+        # 4: model is not loaded - attempt to load with provided config
         # start inference to check model idle condition
 
         f(model_name, batch_size, dimension_input, 1)
@@ -471,18 +472,11 @@ class ModelTestsCases(object):
 
         # 5. model is loaded and idle - reload model and with provided config
         # spawn inference process make model not idle
-        # f(model_name, batch_size, dimension_input, N)
         p = multiprocessing.Process(
             target=f, args=(model_name, batch_size, dimension_input, N)
         )
         print("Start model inference")
-        # p.start()
-        # p.join()
-        # model_check(config)
-        # 6. model is loaded and not idle - either increment attempts or check timeout
         print("Start model check")
         for n in range(10):
             model_check(config)
-            time.sleep(0.1)
-        
-        # p.terminate()
+
