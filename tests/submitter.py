@@ -179,8 +179,8 @@ if __name__ == "__main__":
                 json.loads(configuration), idle_check=True)
 
     def foo():
-        # loadmodel(client,client_close,model_name_test,
-        #                 json.loads(configuration), idle_check=True)
+        loadmodel(client,client_close,model_name_test,
+                        json.loads(configuration), idle_check=True)
         return
   # start timer
     start = time.time()
