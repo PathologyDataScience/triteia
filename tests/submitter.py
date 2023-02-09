@@ -135,7 +135,7 @@ def analyze(results, floatfmt=".2f"):
 if __name__ == "__main__":
 
     # parameters
-    N = 20  # total number of inferences to perform
+    N = 50  # total number of inferences to perform
     count = 0  # postion of input inference and out request in the list
     limit = 10  # limit on number of pending requests per worker
     workers = 1  # total number of Submitter workers
@@ -175,37 +175,14 @@ if __name__ == "__main__":
     except Exception as e:
         print("context creation failed: " + str(e), flush=True)
     
+    loadmodel(client,client_close,model_name_test,
+                json.loads(configuration), idle_check=True)
 
-    # loadmodel(client,client_close,model_name_test,
-    #                     json.loads(configuration), idle_check=False)
     def foo():
         # loadmodel(client,client_close,model_name_test,
         #                 json.loads(configuration), idle_check=True)
         return
-
-    # loadmodel(client,client_close,model_name_test,
-    #                 json.loads(configuration))
-
-
-
-
-    # object = testcases.ModelTestsCases()
-    # object.model_tests(client,client_close,model_name_test,
-    #                    batch_size, dimension_input,N,
-    #                    json.loads(configuration))
-
-    # p = multiprocessing.Process(
-    # target=inference, args=(model_name, batch_size, dimension_input, N)
-    # )
-    # p.start
-    # p.join
-
-
-
-
-
-
-    # start timer
+  # start timer
     start = time.time()
 
     # create input, output queues
@@ -220,17 +197,14 @@ if __name__ == "__main__":
     for w in consumers:
         w.start()
 
-
-
     
     # initialize producer
     producer = iter(SimulatedProducer(batch_size, dimension_input, np.float16))
 
-
+    # Start process for Model not idle check
 
     # loadmodel(client,client_close,model_name_test,
-    #                     json.loads(configuration))
-
+    #                 json.loads(configuration), idle_check=True)
 
     Process_jobs = []
     p = multiprocessing.Process(target=foo, args=())

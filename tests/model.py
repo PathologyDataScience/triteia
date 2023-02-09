@@ -85,13 +85,6 @@ def model_idle(client, model_name, idle=1000.0):
     # convert from protobuffer to dict
     model_stats = MessageToDict(model_stats)
 
-    # print (model_stats["modelStats"][0])
-    # # calculate time elapsed since last inference (milliseconds)
-    # delta = 1000.0 * time.time() - 1674859869617
-
-    # # return idle status
-    # return delta > idle
-
     try:
         print(
             model_stats["modelStats"][0]["lastInference"]
@@ -237,8 +230,8 @@ def loadmodel(
                             f"load_model(): {model_name} is loaded. Re-loading with provided config."
                         )
                     if model_idle(client, model_name):
-                        client.unload_model(model_name)
-                        client.load_model(model_name, config)
+                        # client.unload_model(model_name)
+                        # client.load_model(model_name, config)
                         return
                 # 6 ; if not idle, either increment attempts or check timeout
                     if not block:
@@ -288,4 +281,4 @@ def loadmodel(
         for i in range (20):
             if (idle_check == True):
                 model_check(config) # 6. model is loaded and not idle - either increment attempts or check timeout
-                time.sleep(.05)
+                time.sleep(1)
