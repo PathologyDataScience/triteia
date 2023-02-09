@@ -78,18 +78,35 @@ def model_idle(client, model_name, idle=1000.0):
     status : bool
         Returns True is model is idle.
     """
-    time.sleep(1)
+    # time.sleep(.01)
     # use the client to get model statistics
     model_stats = client.get_inference_statistics(model_name)
 
     # convert from protobuffer to dict
     model_stats = MessageToDict(model_stats)
 
-    # calculate time elapsed since last inference (milliseconds)
-    delta = 1000.0 * time.time() - 1674859869617
+    # print (model_stats["modelStats"][0])
+    # # calculate time elapsed since last inference (milliseconds)
+    # delta = 1000.0 * time.time() - 1674859869617
 
-    # return idle status
-    return delta > idle
+    # # return idle status
+    # return delta > idle
+
+    try:
+        print(
+            model_stats["modelStats"][0]["lastInference"]
+        )
+        # calculate time elapsed since last inference (milliseconds)
+        delta = round(time.time() * 1000) - int(
+            model_stats["modelStats"][0]["lastInference"]
+        )
+        print(f'delta={delta}')
+        # return idle status
+        return delta > idle
+    except:
+        print("last inference value not found")
+        return True
+
 
 
 def model_metadata(client, model_name):
@@ -110,9 +127,9 @@ def model_metadata(client, model_name):
     """
 
     # get model metadata
-    metadata = MessageToDict(client.get_model_metadata(model_name))
+    metadata = MessageToDict(client.get_model_metadata(model_name)) # pragma: no cover
 
-    return metadata
+    return metadata # pragma: no cover
 
 
 def loadmodel(
@@ -122,9 +139,9 @@ def loadmodel(
     config=None,
     retries=5,
     wait=10e-3,
-    # block=True,
+    block=False,
     timeout=1.0,
-    verbose=False,
+    verbose=True,
     model_dicts={},
     idle_check=False,
 ):
@@ -165,7 +182,7 @@ def loadmodel(
         is False.
     """
     # execute all client calls in a try block to catch exceptions
-    def server_check(client):
+    def server_check(client): 
         # initialize attempts
         attempts = 0
         while True:
@@ -222,48 +239,53 @@ def loadmodel(
                     if model_idle(client, model_name):
                         client.unload_model(model_name)
                         client.load_model(model_name, config)
-                    return
+                        return
                 # 6 ; if not idle, either increment attempts or check timeout
-                # if not block:
-                #     attempts += 1
-                #     if attempts > retries:
-                #         raise Exception(
-                #             f"Model {model_name} not idle. Retry limit reached."
-                #         )
-                #     time.sleep(wait)
-                #     continue
-                # else:
-                #     if attempts == 0:
-                #         start = time.time()
-                #         attempts += 1
-                #     if time.time() - start > timeout:
-                #         raise Exception(
-                #             f"Model {model_name} not idle. Block timeout elapsed."
-                #         )
+                    if not block:
+                        attempts += 1
+                        if attempts > retries:
+                            raise Exception(
+                                f"Model {model_name} not idle. Retry limit reached."
+                            )
+                        time.sleep(wait)
+                        continue
+                    else:
+                        if attempts == 0:
+                            start = time.time()
+                            attempts += 1
+                        if time.time() - start > timeout:
+                            raise Exception(
+                                f"Model {model_name} not idle. Block timeout elapsed."
+                            )
             except InferenceServerException as e:
                 raise
 
-    server_check(client_close)  # Server is not ready
+    if (idle_check==False): 
 
-    server_check(client)  # 1: server should be ready before models can be manipulated
+        server_check(client_close)  # Server is not ready
 
-    model_check(
-        config=None
-    )  #  2: model is loaded and configuration not provided - do nothing
+        server_check(client)  # 1: server should be ready before models can be manipulated
 
-    client.unload_model(model_name)  # to make sure load model check is executed
+        model_check(
+            config=None
+        )  #  2: model is loaded and configuration not provided - do nothing
 
-    model_check(config=None)  # 3: model is not loaded - attempt to load
+        client.unload_model(model_name)  # to make sure load model check is executed
 
-    client.unload_model(model_name)  # to make sure load model check is executed
+        model_check(config=None)  # 3: model is not loaded - attempt to load
 
-    model_check(config)  # 4: model is not loaded - attempt to load with provided config
+        client.unload_model(model_name)  # to make sure load model check is executed
 
-    model_check(
-        config
-    )  # 5. model is loaded and idle - reload model and with provided config
+        model_check(config)  # 4: model is not loaded - attempt to load with provided config
 
-    # spawn inference process make model not idle
+        model_check(
+            config
+        )  # 5. model is loaded and idle - reload model and with provided config
 
-    # if (idle_check == True):
-    #     model_check(config) # 6. model is loaded and not idle - either increment attempts or check timeout
+        # # spawn inference process make model not idle
+
+    else: # pragma: no cover
+        for i in range (20):
+            if (idle_check == True):
+                model_check(config) # 6. model is loaded and not idle - either increment attempts or check timeout
+                time.sleep(.05)

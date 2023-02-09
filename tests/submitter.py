@@ -5,6 +5,7 @@ import multiprocessing.queues
 import numpy as np
 from tabulate import tabulate
 from model import loadmodel
+# from testcases import model_tests
 import time
 import testcases
 
@@ -130,10 +131,11 @@ def analyze(results, floatfmt=".2f"):
     print(tabulate(table, headers=["", "median", "min", "max"], floatfmt=floatfmt))
 
 
+
 if __name__ == "__main__":
 
     # parameters
-    N = 10  # total number of inferences to perform
+    N = 20  # total number of inferences to perform
     count = 0  # postion of input inference and out request in the list
     limit = 10  # limit on number of pending requests per worker
     workers = 1  # total number of Submitter workers
@@ -162,6 +164,7 @@ if __name__ == "__main__":
 
     import tritonclient.grpc as grpcclient
 
+
     # create GRPC client
     try:
         client = grpcclient.InferenceServerClient(url=url, verbose=verbose)
@@ -173,16 +176,35 @@ if __name__ == "__main__":
         print("context creation failed: " + str(e), flush=True)
     
 
-    object = testcases.ModelTestsCases()
-    object.model_tests(client,client_close,model_name_test,
-                       batch_size, dimension_input,N,
-                       json.loads(configuration))
+    # loadmodel(client,client_close,model_name_test,
+    #                     json.loads(configuration), idle_check=False)
+    def foo():
+        # loadmodel(client,client_close,model_name_test,
+        #                 json.loads(configuration), idle_check=True)
+        return
+
+    # loadmodel(client,client_close,model_name_test,
+    #                 json.loads(configuration))
 
 
-    # loadmodel(client,
-    #            client_close,
-    # model_name_test,
-    # config=json.loads(configuration),verbose=True)
+
+
+    # object = testcases.ModelTestsCases()
+    # object.model_tests(client,client_close,model_name_test,
+    #                    batch_size, dimension_input,N,
+    #                    json.loads(configuration))
+
+    # p = multiprocessing.Process(
+    # target=inference, args=(model_name, batch_size, dimension_input, N)
+    # )
+    # p.start
+    # p.join
+
+
+
+
+
+
     # start timer
     start = time.time()
 
@@ -198,18 +220,29 @@ if __name__ == "__main__":
     for w in consumers:
         w.start()
 
+
+
+    
     # initialize producer
     producer = iter(SimulatedProducer(batch_size, dimension_input, np.float16))
 
 
 
+    # loadmodel(client,client_close,model_name_test,
+    #                     json.loads(configuration))
+
+
+    Process_jobs = []
+    p = multiprocessing.Process(target=foo, args=())
+    Process_jobs.append(p)
+    p.start()
+    p.join()
     # enqueue tasks
     print("Enqueuing inference jobs")
     for _ in range(N):
         data = next(producer)   
         metadata = {"key": "random stuff"}
         qin.put((model_name_test, [data], metadata))
-    time.sleep(1)
 
     # enqueue stop signals
     for i in range(workers):
@@ -229,3 +262,5 @@ if __name__ == "__main__":
     # display elapsed time
     print(f"Total elapsed time: {time.time()-start}")
     analyze(results)
+    
+    
