@@ -4,7 +4,7 @@ import multiprocessing
 import multiprocessing.queues
 import numpy as np
 from tabulate import tabulate
-from model import loadmodel
+from model import load_model
 # from testcases import model_tests
 import time
 import testcases
@@ -175,11 +175,10 @@ if __name__ == "__main__":
     except Exception as e:
         print("context creation failed: " + str(e), flush=True)
     
-    loadmodel(client,client_close,model_name_test,
-                json.loads(configuration), idle_check=True)
 
+    #  function for process spawn for test cases
     def foo():
-        loadmodel(client,client_close,model_name_test,
+        load_model(client,client_close,model_name_test,
                         json.loads(configuration), idle_check=True)
         return
   # start timer
@@ -201,22 +200,21 @@ if __name__ == "__main__":
     # initialize producer
     producer = iter(SimulatedProducer(batch_size, dimension_input, np.float16))
 
-    # Start process for Model not idle check
-
-    # loadmodel(client,client_close,model_name_test,
-    #                 json.loads(configuration), idle_check=True)
-
     Process_jobs = []
-    p = multiprocessing.Process(target=foo, args=())
-    Process_jobs.append(p)
-    p.start()
-    p.join()
+
+
     # enqueue tasks
     print("Enqueuing inference jobs")
     for _ in range(N):
         data = next(producer)   
         metadata = {"key": "random stuff"}
         qin.put((model_name_test, [data], metadata))
+
+    #  function for process spawn for test cases
+    p = multiprocessing.Process(target=foo, args=())
+    Process_jobs.append(p)
+    p.start()
+    p.join()
 
     # enqueue stop signals
     for i in range(workers):

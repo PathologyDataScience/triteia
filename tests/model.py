@@ -87,13 +87,13 @@ def model_idle(client, model_name, idle=1000.0):
 
     try:
         print(
-            model_stats["modelStats"][0]["lastInference"]
+            f'lastInference={model_stats["modelStats"][0]["lastInference"]}'
         )
         # calculate time elapsed since last inference (milliseconds)
         delta = round(time.time() * 1000) - int(
             model_stats["modelStats"][0]["lastInference"]
         )
-        print(f'delta={delta}')
+        print(f'delta={delta}, idle={idle}')
         # return idle status
         return delta > idle
     except:
@@ -125,7 +125,7 @@ def model_metadata(client, model_name):
     return metadata # pragma: no cover
 
 
-def loadmodel(
+def load_model(
     client,
     client_close,
     model_name,
@@ -230,11 +230,12 @@ def loadmodel(
                             f"load_model(): {model_name} is loaded. Re-loading with provided config."
                         )
                     if model_idle(client, model_name):
-                        # client.unload_model(model_name)
-                        # client.load_model(model_name, config)
+                        client.unload_model(model_name)
+                        client.load_model(model_name, config)
                         return
                 # 6 ; if not idle, either increment attempts or check timeout
                     if not block:
+                        print("***Block Secton***")
                         attempts += 1
                         if attempts > retries:
                             raise Exception(
@@ -278,7 +279,8 @@ def loadmodel(
         # # spawn inference process make model not idle
 
     else: # pragma: no cover
-        for i in range (20):
+        for i in range (1):
             if (idle_check == True):
+                print("idle check = True")
                 model_check(config) # 6. model is loaded and not idle - either increment attempts or check timeout
                 time.sleep(1)
