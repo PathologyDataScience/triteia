@@ -6,7 +6,7 @@ A simple python client for efficient inference with the NVIDIA Triton inference 
 
 This package can be installed using `pip install`. The build and dependencies are defined in pyproject.toml.
 
-Testing and code formatting is automated using tox and pytest and can be run using `python -m tox run`. The testing configuration is defined in tox.ini.
+Testing and code formatting is automated using tox and pytest and can be run using `python -m tox run`. Running this will evaluate the tests in the environments defined in `tox.ini` and will format the source using Black.
 
 ### Repository organization
 
