@@ -205,8 +205,7 @@ class Requests(object):
 
         # create InferInput objects for each model input
         infer_inputs = []
-        for (provided, expected) in zip(inputs, model_dict["inputs"]):
-
+        for provided, expected in zip(inputs, model_dict["inputs"]):
             # create InferInput object
             iio = grpcclient.InferInput(
                 expected["name"], provided.shape, expected["datatype"]
@@ -286,7 +285,6 @@ class Requests(object):
 
         # iterate through list of requests, checking who is finished
         def request_loop():
-
             # initialize lists of completed requests, requests to delete, requests to retry
             completed = []
             delete = []
@@ -294,10 +292,8 @@ class Requests(object):
 
             # check each pending result for completion
             for i, request in enumerate(self.pending):
-
                 # request is complete if value
                 if len(request["result"]):
-
                     # add request to list for deletion
                     delete.append(i)
 
@@ -311,7 +307,6 @@ class Requests(object):
 
                     # inference generated an exception
                     if type(results) == InferenceServerException:
-
                         # clear result
                         request["result"] = []
 
@@ -322,18 +317,15 @@ class Requests(object):
 
                         # make another attempt if retry limit has not been reached
                         if request["attempts"] < self.retries:
-
                             # add request to list of retries to be processed
                             retry.append(request)
 
                         else:
-
                             # add request to output list
                             completed.append(request)
 
                     # inference generated a result
                     else:
-
                         # convert responses to numpy arrays
                         for j, output in enumerate(
                             self.model_dicts[request["model_name"]]["outputs"]
@@ -495,7 +487,6 @@ class InferenceRunner(Process):
         self.time_inference = []
 
     def run(self):
-
         # set flag indicating qin stop signal received
         stop = False
 
@@ -504,11 +495,9 @@ class InferenceRunner(Process):
 
         # loop until exit signal received from calling process
         while True:
-
             # fill input queue with requests up to limit
             if not stop:
                 for i in range(self.limit - len(req.pending)):
-
                     # pull sample
                     sample, t_put, t_get = self.qin.get()
 
@@ -538,7 +527,6 @@ class InferenceRunner(Process):
 
             # put completed post-processed requests into queue
             for inference in completed:
-
                 # # apply postprocessing function
                 # if len(inference["result"]):
                 # TBD

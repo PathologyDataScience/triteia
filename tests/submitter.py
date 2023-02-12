@@ -5,6 +5,7 @@ import multiprocessing.queues
 import numpy as np
 from tabulate import tabulate
 from model import load_model
+
 # from testcases import model_tests
 import time
 import testcases
@@ -68,7 +69,6 @@ class TimedQueue(multiprocessing.queues.Queue):
 
 # analyze and display time performance
 def analyze(results, floatfmt=".2f"):
-
     # calculate times
     total = [r["times"]["qout_get"] - r["times"]["qin_put"] for r in results]
     in_process = [r["times"]["qout_put"] - r["times"]["qin_get"] for r in results]
@@ -131,16 +131,14 @@ def analyze(results, floatfmt=".2f"):
     print(tabulate(table, headers=["", "median", "min", "max"], floatfmt=floatfmt))
 
 
-
 if __name__ == "__main__":
-
     # parameters
     N = 50  # total number of inferences to perform
     count = 0  # postion of input inference and out request in the list
     limit = 10  # limit on number of pending requests per worker
     workers = 1  # total number of Submitter workers
     url = "localhost:8001"  # url for grpc access to tirton server
-    url_health = "http://localhost:8000/v2/health/ready" # url to check server health
+    url_health = "http://localhost:8000/v2/health/ready"  # url to check server health
     model_version = "1"  # set model version
     verbose = False  # set verbos as False
     input_dtype = "TYPE_FP16"  # set input data type
@@ -164,24 +162,30 @@ if __name__ == "__main__":
 
     import tritonclient.grpc as grpcclient
 
-
     # create GRPC client
     try:
         client = grpcclient.InferenceServerClient(url=url, verbose=verbose)
     except Exception as e:
         print("context creation failed: " + str(e), flush=True)
     try:
-        client_close = grpcclient.InferenceServerClient(url="localhost:8004", verbose=verbose)
+        client_close = grpcclient.InferenceServerClient(
+            url="localhost:8004", verbose=verbose
+        )
     except Exception as e:
         print("context creation failed: " + str(e), flush=True)
-    
 
     #  function for process spawn for test cases
     def foo():
-        load_model(client,client_close,model_name_test,
-                        json.loads(configuration), idle_check=True)
+        load_model(
+            client,
+            client_close,
+            model_name_test,
+            json.loads(configuration),
+            idle_check=True,
+        )
         return
-  # start timer
+
+    # start timer
     start = time.time()
 
     # create input, output queues
@@ -196,17 +200,15 @@ if __name__ == "__main__":
     for w in consumers:
         w.start()
 
-    
     # initialize producer
     producer = iter(SimulatedProducer(batch_size, dimension_input, np.float16))
 
     Process_jobs = []
 
-
     # enqueue tasks
     print("Enqueuing inference jobs")
     for _ in range(N):
-        data = next(producer)   
+        data = next(producer)
         metadata = {"key": "random stuff"}
         qin.put((model_name_test, [data], metadata))
 
@@ -234,5 +236,3 @@ if __name__ == "__main__":
     # display elapsed time
     print(f"Total elapsed time: {time.time()-start}")
     analyze(results)
-    
-    
