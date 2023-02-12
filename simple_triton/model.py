@@ -91,7 +91,7 @@ def model_config(client, model_name):
     return config["config"]
 
 
-def model_idle(client, model_name, idle=1000.0):
+def model_idle(client, model_name, idle=1.):
     """Determines if a model is idle based on time of last inference.
 
     Since we cannot query the model queue size of pending requests, we
@@ -105,9 +105,9 @@ def model_idle(client, model_name, idle=1000.0):
     model_name : string
         The name of the model to query as registered in triton.
     idle : float
-        The time window (milliseconds) after the last inference when a model
-        is considered idle. The default value is a model is idle after 1000
-        milisecodns have elapsed since the last inference.
+        The time window (seconds) after the last inference when a model
+        is considered idle. The default value is a model is idle after 1.
+        second has elapsed since the last inference.
 
     Returns
     -------
@@ -120,9 +120,12 @@ def model_idle(client, model_name, idle=1000.0):
 
     # convert from protobuffer to dict
     model_stats = MessageToDict(model_stats)
-
-    # calculate time elapsed since last inference (milliseconds)
-    delta = 1000.0 * time.time() - 1674859869617
+    
+    # get last inference time as float in seconds
+    last_inference = float(model_stats["modelStats"][0]["lastInference"])/1000
+    
+    # calculate time elapsed since last inference seconds
+    delta = time.time() - last_inference
 
     # return idle status
     return delta > idle
