@@ -126,11 +126,10 @@ def analyze(results, floatfmt=".2f"):
     # display results
     print(tabulate(table, headers=["", "median", "min", "max"], floatfmt=floatfmt))
 
-
 if __name__ == "__main__":
 
     # parameters
-    N = 20  # total number of inferences to perform
+    N = 100  # total number of inferences to perform
     count = 0  # postion of input inference and out request in the list
     limit = 10  # limit on number of pending requests per worker
     workers = 1  # total number of Submitter workers
@@ -188,7 +187,7 @@ if __name__ == "__main__":
     for i in range(workers):
         qin.put(None)
 
-    # collecct results
+    # collect results
     print("Collecting results")
     results = []
     while N:
