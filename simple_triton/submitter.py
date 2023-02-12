@@ -64,7 +64,6 @@ class TimedQueue(multiprocessing.queues.Queue):
 
 # analyze and display time performance
 def analyze(results, floatfmt=".2f"):
-
     # calculate times
     total = [r["times"]["qout_get"] - r["times"]["qin_put"] for r in results]
     in_process = [r["times"]["qout_put"] - r["times"]["qin_get"] for r in results]
@@ -126,8 +125,8 @@ def analyze(results, floatfmt=".2f"):
     # display results
     print(tabulate(table, headers=["", "median", "min", "max"], floatfmt=floatfmt))
 
-if __name__ == "__main__":
 
+if __name__ == "__main__":
     # parameters
     N = 100  # total number of inferences to perform
     count = 0  # postion of input inference and out request in the list
