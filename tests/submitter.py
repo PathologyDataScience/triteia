@@ -1,9 +1,13 @@
+import json
 from inference import InferenceRunner
 import multiprocessing
 import multiprocessing.queues
 import numpy as np
 from tabulate import tabulate
+from model import load_model
+# from testcases import model_tests
 import time
+import testcases
 
 
 class SimulatedProducer(object):
@@ -35,7 +39,7 @@ class SimulatedProducer(object):
         return self
 
     def __next__(self):
-        output = self.dtype(np.random.uniform(size=(self.B, *self.D)))
+        output = self.dtype(np.random.uniform(size=(self.B, self.D)))
         return output
 
 
@@ -126,20 +130,23 @@ def analyze(results, floatfmt=".2f"):
     # display results
     print(tabulate(table, headers=["", "median", "min", "max"], floatfmt=floatfmt))
 
+
+
 if __name__ == "__main__":
 
     # parameters
-    N = 100  # total number of inferences to perform
+    N = 50  # total number of inferences to perform
     count = 0  # postion of input inference and out request in the list
     limit = 10  # limit on number of pending requests per worker
     workers = 1  # total number of Submitter workers
     url = "localhost:8001"  # url for grpc access to tirton server
+    url_health = "http://localhost:8000/v2/health/ready" # url to check server health
     model_version = "1"  # set model version
     verbose = False  # set verbos as False
     input_dtype = "TYPE_FP16"  # set input data type
     output_dtype = "TYPE_FP32"  # set input data type
     model_name = "simple-trt-model-FP16"  # set model name
-    model_name_test = "simple-trt-model-FP16-test"  # set model name
+    model_name_test = "simple-trt-model-FP16"  # set model name
     model_path_input = (
         "models/simple-trt-model-FP16-input/1/model.savedmodel"  # set model path
     )
@@ -149,16 +156,32 @@ if __name__ == "__main__":
     batch_size = 1024
     dimension_input = 1024
     dimension_output = 1
+    # updated = {'platform': 'tensorflow_savedmodel',
+    # 'input': [{'name': 'input_0', 'dataType': 'TYPE_FP16', 'dims': ['1024']}],
+    # 'output': [{'name': 'output_0', 'dataType': 'TYPE_FP32', 'dims': ['1']}],
+    # 'maxBatchSize': 2048}
+    configuration = '{"platform": "tensorflow_savedmodel","max_batch_size":"1024"}'
 
     import tritonclient.grpc as grpcclient
+
 
     # create GRPC client
     try:
         client = grpcclient.InferenceServerClient(url=url, verbose=verbose)
     except Exception as e:
         print("context creation failed: " + str(e), flush=True)
+    try:
+        client_close = grpcclient.InferenceServerClient(url="localhost:8004", verbose=verbose)
+    except Exception as e:
+        print("context creation failed: " + str(e), flush=True)
+    
 
-    # start timer
+    #  function for process spawn for test cases
+    def foo():
+        load_model(client,client_close,model_name_test,
+                        json.loads(configuration), idle_check=True)
+        return
+  # start timer
     start = time.time()
 
     # create input, output queues
@@ -173,21 +196,31 @@ if __name__ == "__main__":
     for w in consumers:
         w.start()
 
+    
     # initialize producer
     producer = iter(SimulatedProducer(batch_size, dimension_input, np.float16))
+
+    Process_jobs = []
+
 
     # enqueue tasks
     print("Enqueuing inference jobs")
     for _ in range(N):
-        data = next(producer)
+        data = next(producer)   
         metadata = {"key": "random stuff"}
-        qin.put((model_name, [data], metadata))
+        qin.put((model_name_test, [data], metadata))
+
+    #  function for process spawn for test cases
+    p = multiprocessing.Process(target=foo, args=())
+    Process_jobs.append(p)
+    p.start()
+    p.join()
 
     # enqueue stop signals
     for i in range(workers):
         qin.put(None)
 
-    # collect results
+    # collecct results
     print("Collecting results")
     results = []
     while N:
@@ -201,3 +234,5 @@ if __name__ == "__main__":
     # display elapsed time
     print(f"Total elapsed time: {time.time()-start}")
     analyze(results)
+    
+    
