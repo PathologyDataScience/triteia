@@ -25,4 +25,4 @@ docker run --gpus=8 --rm --network host -v/host_model_repository:/models nvcr.io
 
 The Triton argument `--model-control-mode=explicit` is necessary for the client to load/unload models and to manipulate their configurations.
 
-Triton uses ports 8000-8003. As an alternative to `--network host` these ports can be mapped individually `-p 8000:8000 -p 8001:8001 -p 8002:8002 -p8003:8003`.
+Triton uses ports 8000-8003. The above command uses `--network host` to share the host network with the container. If more isolation is desired, these ports can be mapped individually `-p 8000:8000 -p 8001:8001 -p 8002:8002 -p8003:8003`.
