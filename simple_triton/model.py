@@ -3,32 +3,6 @@ import time
 from tritonclient.utils import InferenceServerException
 
 
-def check_stats(client, model_name, batch_size):
-    stats = client.get_inference_statistics(model_name, "1")
-    print(len(stats.model_stats), 1, "expect 1 model stats")
-    print(
-        stats.model_stats[0].name,
-        model_name,
-        "expect model stats for model {}".format(model_name),
-    )
-    print(
-        stats.model_stats[0].version,
-        "1",
-        "expect model stats for model {} version 1".format(model_name),
-    )
-
-    if batch_size is not None:
-        batch_stats = stats.model_stats[0].batch_stats
-        print(batch_stats)
-        print(
-            len(batch_stats),
-            (batch_size),
-            "expected {} different batch-sizes, got {}".format(
-                (batch_size), len(batch_stats)
-            ),
-        )
-
-
 def instance_group(count, kind="KIND_GPU", gpus=None):
     """Generates an instance count dictionary for use in a model config.
 
