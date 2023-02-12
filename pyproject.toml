@@ -21,3 +21,27 @@ dependencies = [
 dynamic = ["version"]
 
 [tool.setuptools_scm]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q"
+testpaths = ["tests"]
+
+[tox]
+envlist = 
+  py{37,38,39,310,311}
+  lint
+toxworkdir = {tox_root}/.tox
+skip_missing_interpreters = true
+
+[testenv]
+deps =
+  coverage
+  pytest
+commands =
+    python3 -m coverage run --branch pytest {posargs:tests}
+
+[testenv:lint]
+deps =
+  black
+commands = black {posargs:.}
