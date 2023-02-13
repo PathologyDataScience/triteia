@@ -65,7 +65,7 @@ def model_config(client, model_name):
     return config["config"]
 
 
-def model_idle(client, model_name, idle=1.):
+def model_idle(client, model_name, idle=1.0):
     """Determines if a model is idle based on time of last inference.
 
     Since we cannot query the model queue size of pending requests, we
@@ -94,10 +94,10 @@ def model_idle(client, model_name, idle=1.):
 
     # convert from protobuffer to dict
     model_stats = MessageToDict(model_stats)
-    
+
     # get last inference time as float in seconds
-    last_inference = float(model_stats["modelStats"][0]["lastInference"])/1000
-    
+    last_inference = float(model_stats["modelStats"][0]["lastInference"]) / 1000
+
     # calculate time elapsed since last inference seconds
     delta = time.time() - last_inference
 

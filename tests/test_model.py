@@ -114,13 +114,12 @@ def test_model_idle_false():
     client = grpcclient.InferenceServerClient(url=URL, verbose=False)
 
     # get fork context for multiprocessing
-    context = get_context('fork')
+    context = get_context("fork")
 
     # for a range of values, make a periodic submissions and check idle
     trials = 10
     factor = 1.1
     for delta in [0.5, 0.1, 0.05]:
-
         # counter for successful trials
         success = 0
 
@@ -128,27 +127,30 @@ def test_model_idle_false():
         event = context.Event()
 
         # start inference request process
-        p = context.Process(target=attend_model, 
-                            args=(event,), 
-                            kwargs={"interval": delta})
+        p = context.Process(
+            target=attend_model, args=(event,), kwargs={"interval": delta}
+        )
         p.start()
-        
-        # delay evaluation
-        time.sleep(factor*delta)
-            
-        # conduct trials
-        for _ in range(trials):
 
-            # sleep for interval and check model
-            time.sleep(delta)
-            
-            # verify that model is not idle
-            success += int(not model_idle(client, MODEL, idle=factor*delta))
-            print(success)
-    
+        # delay evaluation
+        time.sleep(factor * delta)
+
+        # conduct trials
+        try:
+            for _ in range(trials):
+                # sleep for interval and check model
+                time.sleep(delta)
+
+                # verify that model is not idle
+                success += int(not model_idle(client, MODEL, idle=factor * delta))
+        except:
+            # end subprocess
+            event.set()
+            assert False
+
         # end subprocess
         event.set()
- 
+
         # assert 80% success rate
         assert success / trials >= 0.8
 
@@ -160,27 +162,27 @@ def test_model_idle_true():
 
     # create client
     client = grpcclient.InferenceServerClient(url=URL, verbose=False)
-    
+
     # check idle status
-    context = get_context('fork')
+    context = get_context("fork")
 
     # create event to signal subprocess experiment end
     event = context.Event()
-    
+
     # start inference request process
-    p = context.Process(target=attend_model, 
-                        args=(event,), 
-                        kwargs={"interval": 0.1})
+    p = context.Process(target=attend_model, args=(event,), kwargs={"interval": 0.1})
     p.start()
-            
+
     # delay evaluation to allow inferences to start
-    time.sleep(1.)
-            
+    time.sleep(1.0)
+
     # end subprocess
     event.set()
-            
+
     # calculate idle stats at multiple lags
-    lags = [model_idle(client, MODEL, idle=delta) for delta in np.logspace(-5, 2, num=10)]
+    lags = [
+        model_idle(client, MODEL, idle=delta) for delta in np.logspace(-5, 2, num=10)
+    ]
 
     # verify that transition was observed
     assert any(lags) and any([not lag for lag in lags])
