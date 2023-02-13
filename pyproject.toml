@@ -15,7 +15,8 @@ license = {text = "Apache-2.0"}
 dependencies = [
     "numpy>=1.21",
     "tabulate",
-    "tritonclient>=2.30.0"
+    "tritonclient[all]>=2.30.0",
+    "protobuf"
 ]
 dynamic = ["version"]
 
