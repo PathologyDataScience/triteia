@@ -2,13 +2,13 @@
 
 A simple python client for efficient inference with the NVIDIA Triton inference server.
 
-### Installation
+## Installation
 
 This package can be installed using `pip install`. The build and dependencies are defined in pyproject.toml. Editable install is supported.
 
 ## Testing
 
-Testing and code formatting is automated using tox and pytest and can be run using `python -m tox run`. Running this will evaluate the tests in the environments defined in `tox.ini` and will format the source using Black.
+Testing and code formatting is automated using tox and pytest and can be run using `python -m tox run`. Running this will evaluate the tests in the environments defined in `tox.ini` and will format the source using Black. Following testing, a coverage.html file will be located in .tox/coverage.
 
 Testing requires running a Triton server on the local machine. Tests are run using a `densenet_onnx` model used in the Triton quickstart guide.
 
@@ -29,7 +29,7 @@ docker run --gpus=8 --rm -p 8000:8000 -p 8001:8001 -p 8002:8002 -p 8003:8003 -v/
 
 The argument `--model-control-mode=explicit` is necessary for the client to load/unload models and to manipulate their configurations while the server is running. The argument `--load-model=*` loads available models from the repository on startup.
 
-### Repository organization
+## Repository organization
 
 - /simple_triton - source code
 - /tests - tests for source
