@@ -154,7 +154,9 @@ def test_model_idle_false():
 
 
 def test_model_idle_true():
-    """Check that `model_idle` returns true after a delay"""
+    """Check that `model_idle` returns true after a delay. Submit inferences
+    with an interval of 0.1 seconds, and after stoping evalaute model_idle
+    for various lags to see transition."""
 
     # create client
     client = grpcclient.InferenceServerClient(url=URL, verbose=False)
@@ -180,5 +182,5 @@ def test_model_idle_true():
     # calculate idle stats at multiple lags
     lags = [model_idle(client, MODEL, idle=delta) for delta in np.logspace(-5, 2, num=10)]
 
-    # verify that model was idle
-    assert any(lags)
+    # verify that transition was observed
+    assert any(lags) and any([not lag for lag in lags])
