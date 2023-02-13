@@ -134,7 +134,7 @@ def load_model(
     config=None,
     retries=5,
     wait=10e-3,
-    block=True,
+    block=False,
     timeout=1.0,
     verbose=False,
 ):
@@ -166,7 +166,8 @@ def load_model(
         The time to wait between failed attempts. Default value is 0.1 seconds.
     block : bool
         If True, block until the model is idle. See check_stats() for model
-        idle definition. Default value is True.
+        idle definition. Loading can either retry or block, but not both. 
+        Default value is False for no blocking (will use retry instead).
     timeout : float
         The timeout limit for waiting for model idle status. Default value is
         1 second.
@@ -185,7 +186,7 @@ def load_model(
             if not client.is_server_ready():
                 attempts += 1
                 if attempts > retries:
-                    raise Exception("Triton server is not ready. Retry limit reached.")
+                    raise InferenceServerException("Triton server is not ready. Retry limit reached.")
                 else:
                     time.sleep(wait)
                     continue
@@ -230,7 +231,7 @@ def load_model(
                 if not block:
                     attempts += 1
                     if attempts > retries:
-                        raise Exception(
+                        raise InferenceServerException(
                             f"Model {model_name} not idle. Retry limit reached."
                         )
                     time.sleep(wait)
@@ -240,7 +241,7 @@ def load_model(
                         start = time.time()
                         attempts += 1
                     if time.time() - start > timeout:
-                        raise Exception(
+                        raise InferenceServerException(
                             f"Model {model_name} not idle. Block timeout elapsed."
                         )
 

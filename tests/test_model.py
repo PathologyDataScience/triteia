@@ -186,58 +186,10 @@ def test_model_metadata_badmodel():
         model_metadata(client, "unloaded")
 
 
-def test_model_idle_false():
-    """Check that `model_idle` returns false under timed periodic submissions"""
-
-    # create client
-    client = grpcclient.InferenceServerClient(url=URL, verbose=False)
-
-    # get fork context for multiprocessing
-    context = get_context("fork")
-
-    # for a range of values, make a periodic submissions and check idle
-    trials = 10
-    factor = 1.1
-    for delta in [0.5, 0.1, 0.05]:
-        # counter for successful trials
-        success = 0
-
-        # create event to signal subprocess experiment end
-        event = context.Event()
-
-        # start inference request process
-        p = context.Process(
-            target=attend_model, args=(event,), kwargs={"interval": delta}
-        )
-        p.start()
-
-        # delay evaluation
-        time.sleep(factor * delta)
-
-        # conduct trials
-        try:
-            for _ in range(trials):
-                # sleep for interval and check model
-                time.sleep(delta)
-
-                # verify that model is not idle
-                success += int(not model_idle(client, MODEL, idle=factor * delta))
-        except:
-            # end subprocess
-            event.set()
-            assert False
-
-        # end subprocess
-        event.set()
-
-        # assert 80% success rate
-        assert success / trials >= 0.8
-
-
-def test_model_idle_true():
+def test_model_idle():
     """Check that `model_idle` returns true after a delay. Submit inferences
     with an interval of 0.1 seconds, and after stoping evalaute model_idle
-    for various lags to see transition."""
+    for various lags to see verify observed transition from busy to idle."""
 
     # create client
     client = grpcclient.InferenceServerClient(url=URL, verbose=False)
@@ -265,3 +217,99 @@ def test_model_idle_true():
 
     # verify that transition was observed
     assert any(lags) and any([not lag for lag in lags])
+
+
+def test_load_model_new_config():
+    """Check that a currently loaded but idle model can be unloaded/loaded with
+    a new config."""
+    
+    # create client
+    client = grpcclient.InferenceServerClient(url=URL, verbose=False)
+    
+    # provide a trivial config to update
+    config = "\"parameters\": {\"config\": {{\"max_batch_size\": \"16\"}}}"
+    
+    # attempt to unload/load model with retry
+    try:
+        load_model(client, MODEL, config, block=True, timeout=2.)
+        assert True
+    except:
+        assert False
+
+
+def test_load_model_busy_retry():
+    """Check that a busy model cannot be unloaded/loaded using a retry
+    mechanism to handle busy status."""
+    
+    # create client
+    client = grpcclient.InferenceServerClient(url=URL, verbose=False)
+
+    # check idle status
+    context = get_context("fork")
+
+    # create event to signal subprocess experiment end
+    event = context.Event()
+
+    # start inference request process
+    p = context.Process(target=attend_model, args=(event,), kwargs={"interval": 0.1})
+    p.start()
+
+    # delay evaluation to allow inferences to start
+    time.sleep(1.0)
+    
+    # provide a trivial config to update
+    config = "\"parameters\": {\"config\": {{\"max_batch_size\": \"16\"}}}"
+    
+    # attempt to unload/load model with retry
+    try:
+        with pytest.raises(InferenceServerException):
+            load_model(client, MODEL, config, retries=5, block=False)
+    finally:
+        # end subprocess
+        event.set()
+        
+    
+def test_load_model_busy_timeout():
+    """Check that a busy model cannot be unloaded/loaded using a retry
+    mechanism to handle busy status."""    
+    
+    # create client
+    client = grpcclient.InferenceServerClient(url=URL, verbose=False)
+
+    # check idle status
+    context = get_context("fork")
+
+    # create event to signal subprocess experiment end
+    event = context.Event()
+
+    # start inference request process
+    p = context.Process(target=attend_model, args=(event,), kwargs={"interval": 0.1})
+    p.start()
+
+    # delay evaluation to allow inferences to start
+    time.sleep(1.0)
+    
+    # provide a trivial config to update
+    config = "\"parameters\": {\"config\": {{\"max_batch_size\": \"16\"}}}"
+    
+    # attempt to unload/load model with retry
+    try:
+        with pytest.raises(InferenceServerException):
+            load_model(client, MODEL, config, block=True)
+    finally:
+        # end subprocess
+        event.set()
+        
+
+def test_load_model_noconfig():
+    """Check re-load of model with no config (do nothing)"""
+
+    # create client
+    client = grpcclient.InferenceServerClient(url=URL, verbose=False)
+
+    # load model with empty config
+    try:
+        load_model(client, MODEL, config=None)
+        assert True
+    except:
+        assert False
