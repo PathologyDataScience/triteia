@@ -180,5 +180,5 @@ def test_model_idle_true():
     # calculate idle stats at multiple lags
     lags = [model_idle(client, MODEL, idle=delta) for delta in np.logspace(-5, 2, num=10)]
 
-    # verify that model was 
+    # verify that model was idle
     assert any(lags)
