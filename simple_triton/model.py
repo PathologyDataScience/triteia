@@ -3,32 +3,6 @@ import time
 from tritonclient.utils import InferenceServerException
 
 
-def check_stats(client, model_name, batch_size):
-    stats = client.get_inference_statistics(model_name, "1")
-    print(len(stats.model_stats), 1, "expect 1 model stats")
-    print(
-        stats.model_stats[0].name,
-        model_name,
-        "expect model stats for model {}".format(model_name),
-    )
-    print(
-        stats.model_stats[0].version,
-        "1",
-        "expect model stats for model {} version 1".format(model_name),
-    )
-
-    if batch_size is not None:
-        batch_stats = stats.model_stats[0].batch_stats
-        print(batch_stats)
-        print(
-            len(batch_stats),
-            (batch_size),
-            "expected {} different batch-sizes, got {}".format(
-                (batch_size), len(batch_stats)
-            ),
-        )
-
-
 def instance_group(count, kind="KIND_GPU", gpus=None):
     """Generates an instance count dictionary for use in a model config.
 
@@ -91,7 +65,7 @@ def model_config(client, model_name):
     return config["config"]
 
 
-def model_idle(client, model_name, idle=1000.0):
+def model_idle(client, model_name, idle=1.0):
     """Determines if a model is idle based on time of last inference.
 
     Since we cannot query the model queue size of pending requests, we
@@ -105,9 +79,9 @@ def model_idle(client, model_name, idle=1000.0):
     model_name : string
         The name of the model to query as registered in triton.
     idle : float
-        The time window (milliseconds) after the last inference when a model
-        is considered idle. The default value is a model is idle after 1000
-        milisecodns have elapsed since the last inference.
+        The time window (seconds) after the last inference when a model
+        is considered idle. The default value is a model is idle after 1.
+        second has elapsed since the last inference.
 
     Returns
     -------
@@ -121,11 +95,18 @@ def model_idle(client, model_name, idle=1000.0):
     # convert from protobuffer to dict
     model_stats = MessageToDict(model_stats)
 
-    # calculate time elapsed since last inference (milliseconds)
-    delta = 1000.0 * time.time() - 1674859869617
+    # get last inference time as float in seconds
+    if "lastInference" in model_stats["modelStats"][0].keys():
+        last_inference = float(model_stats["modelStats"][0]["lastInference"]) / 1000
 
-    # return idle status
-    return delta > idle
+        # calculate time elapsed since last inference seconds
+        delta = time.time() - last_inference
+
+        # return idle status
+        return delta > idle
+
+    else:  # model has zero inferences
+        return True
 
 
 def model_metadata(client, model_name):
@@ -157,7 +138,7 @@ def load_model(
     config=None,
     retries=5,
     wait=10e-3,
-    block=True,
+    block=False,
     timeout=1.0,
     verbose=False,
 ):
@@ -189,7 +170,8 @@ def load_model(
         The time to wait between failed attempts. Default value is 0.1 seconds.
     block : bool
         If True, block until the model is idle. See check_stats() for model
-        idle definition. Default value is True.
+        idle definition. Loading can either retry or block, but not both.
+        Default value is False for no blocking (will use retry instead).
     timeout : float
         The timeout limit for waiting for model idle status. Default value is
         1 second.
@@ -204,11 +186,13 @@ def load_model(
     while True:
         # execute all client calls in a try block to catch exceptions
         try:
-            # server should be ready before models can be manipulated
-            if not client.is_server_ready():
+            # server should be live before models can be manipulated
+            if not client.is_server_live():
                 attempts += 1
                 if attempts > retries:
-                    raise Exception("Triton server is not ready. Retry limit reached.")
+                    raise InferenceServerException(
+                        "Triton server is not ready. Retry limit reached."
+                    )
                 else:
                     time.sleep(wait)
                     continue
@@ -233,7 +217,7 @@ def load_model(
                         print(
                             f"load_model(): {model_name} is not loaded. Loading with provided config."
                         )
-                    client.load_model(model_name, config)
+                    client.load_model(model_name, config=config)
                     return
 
             # reload model and with provided config
@@ -246,14 +230,14 @@ def load_model(
                 # check if model is idle and can be unloaded
                 if model_idle(client, model_name):
                     client.unload_model(model_name)
-                    client.load_model(model_name, config)
+                    client.load_model(model_name, config=config)
                     return
 
                 # if not idle, either increment attempts or check timeout
                 if not block:
                     attempts += 1
                     if attempts > retries:
-                        raise Exception(
+                        raise InferenceServerException(
                             f"Model {model_name} not idle. Retry limit reached."
                         )
                     time.sleep(wait)
@@ -263,7 +247,7 @@ def load_model(
                         start = time.time()
                         attempts += 1
                     if time.time() - start > timeout:
-                        raise Exception(
+                        raise InferenceServerException(
                             f"Model {model_name} not idle. Block timeout elapsed."
                         )
 
