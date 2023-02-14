@@ -96,13 +96,17 @@ def model_idle(client, model_name, idle=1.0):
     model_stats = MessageToDict(model_stats)
 
     # get last inference time as float in seconds
-    last_inference = float(model_stats["modelStats"][0]["lastInference"]) / 1000
+    if "lastInference" in model_stats["modelStats"][0].keys():
+        last_inference = float(model_stats["modelStats"][0]["lastInference"]) / 1000
 
-    # calculate time elapsed since last inference seconds
-    delta = time.time() - last_inference
+        # calculate time elapsed since last inference seconds
+        delta = time.time() - last_inference
 
-    # return idle status
-    return delta > idle
+        # return idle status
+        return delta > idle
+
+    else:  # model has zero inferences
+        return True
 
 
 def model_metadata(client, model_name):
@@ -166,7 +170,7 @@ def load_model(
         The time to wait between failed attempts. Default value is 0.1 seconds.
     block : bool
         If True, block until the model is idle. See check_stats() for model
-        idle definition. Loading can either retry or block, but not both. 
+        idle definition. Loading can either retry or block, but not both.
         Default value is False for no blocking (will use retry instead).
     timeout : float
         The timeout limit for waiting for model idle status. Default value is
@@ -182,11 +186,13 @@ def load_model(
     while True:
         # execute all client calls in a try block to catch exceptions
         try:
-            # server should be ready before models can be manipulated
-            if not client.is_server_ready():
+            # server should be live before models can be manipulated
+            if not client.is_server_live():
                 attempts += 1
                 if attempts > retries:
-                    raise InferenceServerException("Triton server is not ready. Retry limit reached.")
+                    raise InferenceServerException(
+                        "Triton server is not ready. Retry limit reached."
+                    )
                 else:
                     time.sleep(wait)
                     continue
@@ -211,7 +217,7 @@ def load_model(
                         print(
                             f"load_model(): {model_name} is not loaded. Loading with provided config."
                         )
-                    client.load_model(model_name, config)
+                    client.load_model(model_name, config=config)
                     return
 
             # reload model and with provided config
@@ -224,7 +230,7 @@ def load_model(
                 # check if model is idle and can be unloaded
                 if model_idle(client, model_name):
                     client.unload_model(model_name)
-                    client.load_model(model_name, config)
+                    client.load_model(model_name, config=config)
                     return
 
                 # if not idle, either increment attempts or check timeout
