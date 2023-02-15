@@ -153,11 +153,7 @@ if __name__ == "__main__":
     kind = "KIND_GPU"
     gpus = [0]
     instance_config = {"count": count, "kind": kind, "gpus": gpus}
-<<<<<<< HEAD
     batch_config = "{\"max_batch_size\":\"2048\"}"
-=======
-    batch_config = '{"max_batch_size":"2048"}'
->>>>>>> 45780cf7badbbd6f4fff8f54731d69136c7a1d78
     optimization = '{"execution_accelerators":{"gpu_execution_accelerator" : [\
            {"name" : "tensorrt", "parameters": {"precision_mode": "FP16"}}]}}'
 
