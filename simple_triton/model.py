@@ -1,7 +1,7 @@
 from google.protobuf.json_format import MessageToDict
 import time
 from tritonclient.utils import InferenceServerException
-
+import json
 
 def instance_group(count, kind="KIND_GPU", gpus=None):
     """Generates an instance count dictionary for use in a model config.
@@ -26,7 +26,6 @@ def instance_group(count, kind="KIND_GPU", gpus=None):
         Default value of `None` means that `count` instances will be served on
         each available gpu.
     """
-
     # gpus must be None if KIND_GPU
     if kind == "KIND_CPU":
         gpus = None
@@ -36,6 +35,56 @@ def instance_group(count, kind="KIND_GPU", gpus=None):
         instance = {"count": count, "kind": kind, "gpus": gpus}
 
     return instance
+
+
+
+def get_config_by_name(model_config, name):
+        """Get input properties corresponding to the input
+        with given `name`
+        Parameters
+        ----------
+        model_config : dict
+            dictionary object containing the model configuration
+        name : str
+            name of the input object
+        Returns
+        -------
+        dict
+            A dictionary containing all the properties for a given input
+            name, or None if no input with this name exists
+        """
+        if 'input' in model_config:
+            inputs = model_config['input']
+            for input_properties in inputs:
+                if input_properties['name'] == name:
+                    return input_properties
+                
+        if 'output' in model_config:
+            outputs = model_config['output']
+            for output_properties in outputs:
+                if output_properties['name'] == name:
+                    return output_properties
+                
+        if 'max_batch_size' in model_config:
+                max_batch_size = model_config['max_batch_size']
+                if name == 'max_batch_size':
+                    return max_batch_size
+
+                
+        if 'instance_group' in model_config:
+            instance_group = model_config['instance_group']
+            for output_properties in instance_group:
+                if  name == 'instance_group':
+                    return output_properties
+                
+        if 'execution_accelerators' in model_config:
+            return model_config
+            optimization = model_config['execution_accelerators']
+            for output_properties in optimization:
+                if  name == 'execution_accelerators':
+                    return output_properties
+
+        return None
 
 
 def model_config(client, model_name):
@@ -130,6 +179,47 @@ def model_metadata(client, model_name):
     metadata = MessageToDict(client.get_model_metadata(model_name))
 
     return metadata
+
+def model_update(batch_config, config, optimization, client, model_name):
+    """loaded model with updated configurations.
+
+        The model configuration defines serving parameters like input, output, maximum batch size,
+        dynamic batching, maximum queue delay, and maps instances to system cpu and
+        gpu resources.
+
+        Parameters
+        ----------
+        update : string
+            updated model configuration parameters
+        instance : string
+            updated instance configuration parameters
+        optimization : string 
+            updated optimization configuration parameters
+        client : tritonclient.grpc.InferenceServerClient
+            A remote-procedure call client for the triton server.
+        model_name : string
+            The name of the model to query as registered in triton.
+
+        Returns
+        -------
+        config : dict
+            A dictionary describing the model configuration. See Triton
+            documentation for more details.
+        """
+    config_model = model_config(client, model_name)
+
+    max_batch_size = get_config_by_name(json.loads(batch_config), "max_batch_size")
+    instance = instance_group(list(config.values())[0],
+                              list(config.values())[1],
+                              list(config.values())[2])
+    optimization = get_config_by_name(json.loads(optimization), "execution_accelerators") # TBD: pass optimization as dict
+
+    config_model["maxBatchSize"] = max_batch_size 
+    config_model["instanceGroup"][0] = instance 
+    config_model["optimization"] = optimization 
+    
+    client.load_model(model_name,config=json.dumps(config_model))
+    return config_model
 
 
 def load_model(

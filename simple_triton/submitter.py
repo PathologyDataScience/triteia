@@ -3,6 +3,7 @@ import multiprocessing
 import multiprocessing.queues
 import numpy as np
 from tabulate import tabulate
+from model import model_update
 import time
 
 
@@ -148,6 +149,13 @@ if __name__ == "__main__":
     batch_size = 1024
     dimension_input = 1024
     dimension_output = 1
+    count = 1 
+    kind="KIND_GPU" 
+    gpus= [ 0 ]
+    instance_config = {'count': count, 'kind': kind , 'gpus':gpus}
+    batch_config = "{\"max_batch_size\":\"2048\"}"
+    optimization = '{"execution_accelerators":{"gpu_execution_accelerator" : [\
+           {"name" : "tensorrt", "parameters": {"precision_mode": "FP16"}}]}}'
 
     import tritonclient.grpc as grpcclient
 
@@ -156,6 +164,8 @@ if __name__ == "__main__":
         client = grpcclient.InferenceServerClient(url=url, verbose=verbose)
     except Exception as e:
         print("context creation failed: " + str(e), flush=True)
+
+    config_model_updated = model_update(batch_config, instance_config, optimization, client, model_name_test)
 
     # start timer
     start = time.time()
