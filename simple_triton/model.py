@@ -1,4 +1,5 @@
 from google.protobuf.json_format import MessageToDict
+import numpy as np
 import time
 from tritonclient.utils import InferenceServerException
 import json
@@ -180,25 +181,28 @@ def model_metadata(client, model_name):
     return metadata
 
 
-def model_update(batch_config, config, optimization, client, model_name):
-    """loaded model with updated configurations.
+def model_update(
+    client, model_name, max_batch_size=None, instances=None, trt=None, amp=False
+):
+    """Generate a valid configuration for model loading.
 
-    The model configuration defines serving parameters like input, output, maximum batch size,
-    dynamic batching, maximum queue delay, and maps instances to system cpu and
-    gpu resources.
+    The model configuration defines serving parameters like input/output names,
+    types, and dimensions as well as model optimizations and other serving
+    parameters like maximum batch size and system resources.
 
     Parameters
     ----------
-    update : string
-        updated model configuration parameters
-    instance : string
-        updated instance configuration parameters
-    optimization : string
-        updated optimization configuration parameters
     client : tritonclient.grpc.InferenceServerClient
         A remote-procedure call client for the triton server.
     model_name : string
         The name of the model to query as registered in triton.
+    max_batch_size : int
+        The maximum batch size for the model. If None, do not add maxBatchSize
+        to the generated config. Default value is None.
+    instance : string
+        updated instance configuration parameters
+    optimization : string
+        updated optimization configuration parameters
 
     Returns
     -------
@@ -206,22 +210,56 @@ def model_update(batch_config, config, optimization, client, model_name):
         A dictionary describing the model configuration. See Triton
         documentation for more details.
     """
-    config_model = model_config(client, model_name)
 
-    max_batch_size = get_config_by_name(json.loads(batch_config), "max_batch_size")
-    instance = instance_group(
-        list(config.values())[0], list(config.values())[1], list(config.values())[2]
-    )
-    optimization = get_config_by_name(
-        json.loads(optimization), "execution_accelerators"
-    )  # TBD: pass optimization as dict
+    # acquire the current model config
+    config = model_config(client, model_name)
 
-    config_model["maxBatchSize"] = max_batch_size
-    config_model["instanceGroup"][0] = instance
-    config_model["optimization"] = optimization
+    # handle max batch size - verify that batch dimension exists
+    batch_dim = [input["dims"][0] == "-1" for input in config["input"]]
+    if all(batch_dim):
+        config["maxBatchSize"] = str(max_batch_size)
+    else:
+        raise Warning(
+            f"Model {model_name} is not configured for batching, cannot set maxBatchSize"
+        )
 
-    client.load_model(model_name, config=json.dumps(config_model))
-    return config_model
+    # handle instances here
+    # instance = instance_group(
+    #     list(config.values())[0], list(config.values())[1], list(config.values())[2]
+    # )
+
+    # if TensorRT is not none, add optimization to configuration
+    if trt is not None:
+        if "optimization" not in config.keys():
+            config["optimization"] = {}
+        if trt == np.float16:
+            config["optimization"]["execution_accelerators"] = {
+                "gpu_execution_accelerator": [
+                    {"name": "tensorrt", "parameters": {"precision_mode": "FP16"}}
+                ]
+            }
+        elif trt == np.float32:
+            config["optimization"]["execution_accelerators"] = {
+                "gpu_execution_accelerator": [
+                    {"name": "tensorrt", "parameters": {"precision_mode": "FP32"}}
+                ]
+            }
+        else:
+            raise ValueError("trt must be one of None, numpy.float16, numpy.float32")
+
+    # amp (automatic mixed precision) cannot be used with trt, default to trt
+    if amp and trt is None:
+        if "optimization" not in config.keys():
+            config["optimization"] = {}
+        config["optimization"]["execution_accelerators"] = {
+            "gpu_execution_accelerator": [{"name": "auto_mixed_precision"}]
+        }
+    elif amp and trt is not None:
+        raise Warning(
+            "Cannot use automatic-mixed precision with TensorRT, defaulting to TRT selection."
+        )
+
+    return config
 
 
 def load_model(
