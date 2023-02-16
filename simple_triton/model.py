@@ -38,6 +38,25 @@ def instance_group(count, kind="KIND_GPU", gpus=None):
 
     return instance
 
+def trt_optimization(dtype="FP16", amp=False):
+    """Generates optimization dictionary for use in a model config.
+
+    A Triton configuration allows specification of resources used to serve a
+    model. The instance group specifies the number of concurrent instances of
+    a model to serve for a given set of resources. Resources can specify cpu
+    or gpu hosting, or specific gpus. See Triton documentation for more
+    details.
+
+    Parameters
+    ----------
+    dtype : string
+        The dtype to use in optimization as precision mode such as FP16, FP32
+    amp : bool
+        In Automatic FP16 Optimization, TensorFlow has an option to provide 
+        FP16 optimization that can be enabled in the model configuration.
+    """
+    # To add optimization logic here
+    return
 
 def get_config_by_name(model_config, name):
     """Get input properties corresponding to the input
