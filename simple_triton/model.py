@@ -231,6 +231,13 @@ def model_update(
         A dictionary describing the model configuration. See Triton
         documentation for more details.
     """
+    def _lookup(k, d):
+        if k in d: return d[k]
+        for v in d.values():
+            if isinstance(v, dict):
+                a = _lookup(k, v)
+                if a is not None: return a
+        return None
 
     # acquire the current model config
     config = model_config(client, model_name)
@@ -239,10 +246,10 @@ def model_update(
     batch_dim = [input["dims"][0] == "-1" for input in config["input"]]
     if all(batch_dim):
         config["maxBatchSize"] = str(max_batch_size)
-    else:
-        raise Warning(
-            f"Model {model_name} is not configured for batching, cannot set maxBatchSize"
-        )
+    # else:
+    #     raise Warning(
+    #         f"Model {model_name} is not configured for batching, cannot set maxBatchSize"
+    #     )
 
     # handle instances here
     config["instanceGroup"][0] = instance_group(
@@ -253,17 +260,24 @@ def model_update(
     )
     # if TensorRT is not none and amp is false, add optimization to configuration
     if not amp and trt is not None:
+        if _lookup('name',config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"][0]) == 'auto_mixed_precision':
+            config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"] = {}
         if "optimization" not in config.keys():
             config["optimization"] = {}
+        if trt == "FP16" or trt == "FP32":
             config["optimization"]["executionAccelerators"] = {
-                "gpuExecutionAccelerator": [
-                    {"name": "tensorrt", "parameters": {"precision_mode": f"{trt}"}}
-                ]
-            }
+            "gpuExecutionAccelerator": [
+                {"name": "tensorrt", "parameters": {"precision_mode": f"{trt}"}}
+            ]
+        }
         else:
             raise ValueError("trt must be one of None, numpy.float16, numpy.float32")
     # amp (automatic mixed precision) cannot be used with trt, default to amp
     if amp and trt is None:
+        if _lookup('name',config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"][0]) == 'tensorrt':
+            config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"] = {}
+        if "precision_mode" in config.keys():
+            config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"] = {}
         if "optimization" not in config.keys():
             config["optimization"] = {}
         config["optimization"]["executionAccelerators"] = {
@@ -271,6 +285,10 @@ def model_update(
         }
     # both amp (automatic mixed precision) and trt cannot be added together. Select trt and raise warning.
     elif amp and trt is not None:
+        if _lookup('name',config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"][0]) == 'auto_mixed_precision':
+            config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"] = {}
+        if "precision_mode" in config["optimization"] :
+            config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"] = {}
         config["optimization"]["executionAccelerators"] = {
             "gpuExecutionAccelerator": [
                 {"name": "tensorrt", "parameters": {"precision_mode": f"{trt}"}}
