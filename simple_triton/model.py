@@ -253,7 +253,7 @@ def model_update(
         list(instances.values())[2],
     )
 
-    if amp is None and trt is not None:
+    if not amp and trt is not None:
         if "optimization" not in config.keys():
             config["optimization"] = {}
         if trt == "FP16" or trt == "FP32":
@@ -265,7 +265,7 @@ def model_update(
         else:
             raise ValueError("trt must be one of None, numpy.float16, numpy.float32")
     # if tensorRT is none and amp is not None, add amp to configuration
-    if not amp and trt is None:
+    if  amp and trt is None:
         if "optimization" not in config.keys():
             config["optimization"] = {}
         config["optimization"]["executionAccelerators"] = {
