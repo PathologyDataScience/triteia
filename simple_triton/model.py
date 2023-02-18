@@ -5,7 +5,7 @@ from tritonclient.utils import InferenceServerException
 import json
 
 
-def instance_group(model_name,count, kind="KIND_GPU", gpus=None):
+def instance_group(model_name, count, kind="KIND_GPU", gpus=None):
     """Generates an instance count dictionary for use in a model config.
 
     A Triton configuration allows specification of resources used to serve a
@@ -32,11 +32,12 @@ def instance_group(model_name,count, kind="KIND_GPU", gpus=None):
     if kind == "KIND_CPU":
         gpus = None
     if gpus is None:
-        instance = {"name":model_name,"count": count, "kind": kind}
+        instance = {"name": model_name, "count": count, "kind": kind}
     else:
-        instance = {"name":model_name,"count": count, "kind": kind, "gpus": gpus}
+        instance = {"name": model_name, "count": count, "kind": kind, "gpus": gpus}
 
     return instance
+
 
 def optimization(dtype="FP16", amp=False):
     """Generates optimization dictionary for use in a model config.
@@ -52,11 +53,12 @@ def optimization(dtype="FP16", amp=False):
     dtype : string
         The dtype to use in optimization as precision mode such as FP16, FP32
     amp : bool
-        In Automatic FP16 Optimization, TensorFlow has an option to provide 
+        In Automatic FP16 Optimization, TensorFlow has an option to provide
         FP16 optimization that can be enabled in the model configuration.
     """
     # To add optimization logic here
     return
+
 
 def get_config_by_name(model_config, name):
     """Get input properties corresponding to the input
@@ -232,8 +234,8 @@ def model_update(
 
     # acquire the current model config
     config = model_config(client, model_name)
-    load_model(client, model_name,json.dumps(config))
-    
+    load_model(client, model_name, json.dumps(config))
+
     # handle max batch size - verify that batch dimension exists
     batch_dim = [input["dims"][0] == "-1" for input in config["input"]]
     if all(batch_dim):
@@ -244,10 +246,13 @@ def model_update(
         )
 
     # handle instances here
-    config["instanceGroup"][0] = instance_group(model_name,
-        list(instances.values())[0], list(instances.values())[1], list(instances.values())[2]
+    config["instanceGroup"][0] = instance_group(
+        model_name,
+        list(instances.values())[0],
+        list(instances.values())[1],
+        list(instances.values())[2],
     )
- 
+
     if amp is None and trt is not None:
         if "optimization" not in config.keys():
             config["optimization"] = {}
@@ -267,7 +272,7 @@ def model_update(
             "gpuExecutionAccelerator": [{"name": "auto_mixed_precision"}]
         }
         return
-    
+
     # amp (automatic mixed precision) cannot be used with trt, default to amp
     if amp and trt is None:
         if "optimization" not in config.keys():
