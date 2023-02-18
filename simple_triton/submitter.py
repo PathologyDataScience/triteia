@@ -1,4 +1,4 @@
-from simple_triton.inference import InferenceRunner
+from inference import InferenceRunner
 import multiprocessing
 import multiprocessing.queues
 import numpy as np
@@ -6,7 +6,8 @@ from tabulate import tabulate
 import time
 import tritonclient.grpc as grpcclient
 from tritonclient.utils import InferenceServerException
-from simple_triton.model import load_model, model_config, model_update
+from model import load_model, model_config, model_update
+import json
 
 
 class SimulatedProducer(object):
@@ -141,11 +142,13 @@ if __name__ == "__main__":
     # model configuration parameters
     # input_dtype = "TYPE_FP16"  # set input data type
     # output_dtype = "TYPE_FP32"  # set input data type    
-    model_name = "densenet_onnx"  # set model name
-    batch_size = 16
+    model_name = "simple-trt-model-FP16-test"  # set model name
+    batch_size = 1024
+    trt = "FP16"
+    amp = False
     # dimension_input = 1024
     # dimension_output = 1
-    instance_group = {"count": 4, "kind": "KIND_CPU", "gpus": None}
+    instances = {"count": 4, "kind": "KIND_CPU", "gpus": None}
     optimization = '{"execution_accelerators":{"gpu_execution_accelerator" : [\
            {"name" : "tensorrt", "parameters": {"precision_mode": "FP16"}}]}}'
 
@@ -170,8 +173,7 @@ if __name__ == "__main__":
     
     # apply an update to the model configuration, changing resources
     config_model_updated = model_update(
-        batch_config, instance_config, optimization, client, model_name_test
-    )
+        client, model_name, batch_size, instances, trt, amp=False)
 
     # start experiment timer
     start = time.time()

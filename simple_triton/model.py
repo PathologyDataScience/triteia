@@ -234,16 +234,15 @@ def model_update(
 
     # acquire the current model config
     config = model_config(client, model_name)
-    load_model(client, model_name, json.dumps(config))
 
     # handle max batch size - verify that batch dimension exists
     batch_dim = [input["dims"][0] == "-1" for input in config["input"]]
     if all(batch_dim):
         config["maxBatchSize"] = str(max_batch_size)
-    else:
-        raise Warning(
-            f"Model {model_name} is not configured for batching, cannot set maxBatchSize"
-        )
+    # else:
+    #     raise Warning(
+    #         f"Model {model_name} is not configured for batching, cannot set maxBatchSize"
+    #     )
 
     # handle instances here
     config["instanceGroup"][0] = instance_group(
@@ -252,26 +251,22 @@ def model_update(
         list(instances.values())[1],
         list(instances.values())[2],
     )
-
+    # if TensorRT is not none and amp is false, add optimization to configuration
     if not amp and trt is not None:
         if "optimization" not in config.keys():
             config["optimization"] = {}
         if trt == "FP16" or trt == "FP32":
             config["optimization"]["executionAccelerators"] = {
+                "gpuExecutionAccelerator": [{"name": "auto_mixed_precision"}]
+            }
+            config["optimization"]["executionAccelerators"] = {
                 "gpuExecutionAccelerator": [
                     {"name": "tensorrt", "parameters": {"precision_mode": f"{trt}"}}
                 ]
             }
+
         else:
             raise ValueError("trt must be one of None, numpy.float16, numpy.float32")
-    # if tensorRT is none and amp is not None, add amp to configuration
-    if  amp and trt is None:
-        if "optimization" not in config.keys():
-            config["optimization"] = {}
-        config["optimization"]["executionAccelerators"] = {
-            "gpuExecutionAccelerator": [{"name": "auto_mixed_precision"}]
-        }
-        return
 
     # amp (automatic mixed precision) cannot be used with trt, default to amp
     if amp and trt is None:
@@ -284,6 +279,7 @@ def model_update(
         raise Warning(
             "Cannot use automatic-mixed precision with TensorRT, defaulting to TRT selection."
         )
+    load_model(client, model_name, json.dumps(config))
     return config
 
 
