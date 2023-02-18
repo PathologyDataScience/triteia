@@ -301,8 +301,7 @@ def model_update(
         )
     # both amp (automatic mixed precision) and trt are not requested, default to TRT selection
     elif not amp and trt is  None:    
-        if "optimization" not in config.keys():
-            config["optimization"] = {}
+        config.pop("optimization")
         if _lookup('name',config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"][0]) == 'auto_mixed_precision':
             config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"] = {}
         config["optimization"]["executionAccelerators"] = {
