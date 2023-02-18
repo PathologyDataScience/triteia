@@ -246,10 +246,10 @@ def model_update(
     batch_dim = [input["dims"][0] == "-1" for input in config["input"]]
     if all(batch_dim):
         config["maxBatchSize"] = str(max_batch_size)
-    # else:
-    #     raise Warning(
-    #         f"Model {model_name} is not configured for batching, cannot set maxBatchSize"
-    #     )
+    else:
+        raise Warning(
+            f"Model {model_name} is not configured for batching, cannot set maxBatchSize"
+        )
 
     # handle instances here
     config["instanceGroup"][0] = instance_group(
