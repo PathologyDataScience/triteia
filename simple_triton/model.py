@@ -5,7 +5,7 @@ from tritonclient.utils import InferenceServerException
 import json
 
 
-def instance_group(count, kind="KIND_GPU", gpus=None):
+def instance_group(model_name,count, kind="KIND_GPU", gpus=None):
     """Generates an instance count dictionary for use in a model config.
 
     A Triton configuration allows specification of resources used to serve a
@@ -32,13 +32,13 @@ def instance_group(count, kind="KIND_GPU", gpus=None):
     if kind == "KIND_CPU":
         gpus = None
     if gpus is None:
-        instance = {"count": count, "kind": kind}
+        instance = {"name":model_name,"count": count, "kind": kind}
     else:
-        instance = {"count": count, "kind": kind, "gpus": gpus}
+        instance = {"name":model_name,"count": count, "kind": kind, "gpus": gpus}
 
     return instance
 
-def trt_optimization(dtype="FP16", amp=False):
+def optimization(dtype="FP16", amp=False):
     """Generates optimization dictionary for use in a model config.
 
     A Triton configuration allows specification of resources used to serve a
@@ -232,7 +232,8 @@ def model_update(
 
     # acquire the current model config
     config = model_config(client, model_name)
-
+    load_model(client, model_name,json.dumps(config))
+    
     # handle max batch size - verify that batch dimension exists
     batch_dim = [input["dims"][0] == "-1" for input in config["input"]]
     if all(batch_dim):
@@ -243,41 +244,41 @@ def model_update(
         )
 
     # handle instances here
-    # instance = instance_group(
-    #     list(config.values())[0], list(config.values())[1], list(config.values())[2]
-    # )
-
-    # if TensorRT is not none, add optimization to configuration
-    if trt is not None:
+    config["instanceGroup"][0] = instance_group(model_name,
+        list(instances.values())[0], list(instances.values())[1], list(instances.values())[2]
+    )
+ 
+    if amp is None and trt is not None:
         if "optimization" not in config.keys():
             config["optimization"] = {}
-        if trt == np.float16:
-            config["optimization"]["execution_accelerators"] = {
-                "gpu_execution_accelerator": [
-                    {"name": "tensorrt", "parameters": {"precision_mode": "FP16"}}
-                ]
-            }
-        elif trt == np.float32:
-            config["optimization"]["execution_accelerators"] = {
-                "gpu_execution_accelerator": [
-                    {"name": "tensorrt", "parameters": {"precision_mode": "FP32"}}
+        if trt == "FP16" or trt == "FP32":
+            config["optimization"]["executionAccelerators"] = {
+                "gpuExecutionAccelerator": [
+                    {"name": "tensorrt", "parameters": {"precision_mode": f"{trt}"}}
                 ]
             }
         else:
             raise ValueError("trt must be one of None, numpy.float16, numpy.float32")
-
-    # amp (automatic mixed precision) cannot be used with trt, default to trt
+    # if tensorRT is none and amp is not None, add amp to configuration
+    if not amp and trt is None:
+        if "optimization" not in config.keys():
+            config["optimization"] = {}
+        config["optimization"]["executionAccelerators"] = {
+            "gpuExecutionAccelerator": [{"name": "auto_mixed_precision"}]
+        }
+        return
+    
+    # amp (automatic mixed precision) cannot be used with trt, default to amp
     if amp and trt is None:
         if "optimization" not in config.keys():
             config["optimization"] = {}
-        config["optimization"]["execution_accelerators"] = {
-            "gpu_execution_accelerator": [{"name": "auto_mixed_precision"}]
+        config["optimization"]["executionAccelerators"] = {
+            "gpuExecutionAccelerator": [{"name": "auto_mixed_precision"}]
         }
     elif amp and trt is not None:
         raise Warning(
             "Cannot use automatic-mixed precision with TensorRT, defaulting to TRT selection."
         )
-
     return config
 
 
