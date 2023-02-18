@@ -226,7 +226,8 @@ def model_update(
         updated optimization configuration parameters. 
         Possible values are None, "FP32", "FP16"
     amp : bool
-        amp (automatic mixed precision) is either True or False
+        In Automatic FP16 Optimization, TensorFlow has an option to provide
+        FP16 optimization that can be enabled in the model configuration.
 
     Returns
     -------
