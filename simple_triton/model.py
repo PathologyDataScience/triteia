@@ -282,7 +282,7 @@ def model_update(
             "gpuExecutionAccelerator": [{"name": "auto_mixed_precision"}]
         }
     # both amp (automatic mixed precision) and trt cannot be added together. Select trt and raise warning.
-    elif amp and trt is not None:
+    if amp and trt is not None:
         if "optimization" not in config.keys():
             config["optimization"] = {}
         if _lookup('name',config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"][0]) == 'auto_mixed_precision':
@@ -295,6 +295,18 @@ def model_update(
         raise Warning(
             "Cannot use automatic-mixed precision with TensorRT, defaulting to TRT selection."
         )
+    # both amp (automatic mixed precision) and trt are not requested, default to TRT selection
+    elif not amp and trt is  None:    
+        if "optimization" not in config.keys():
+            config["optimization"] = {}
+        if _lookup('name',config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"][0]) == 'auto_mixed_precision':
+            config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"] = {}
+        config["optimization"]["executionAccelerators"] = {
+            "gpuExecutionAccelerator": [
+                {"name": "tensorrt", "parameters": {"precision_mode": f"{trt}"}}
+            ]
+        }
+        
     return config
 
 
