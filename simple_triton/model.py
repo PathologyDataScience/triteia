@@ -260,10 +260,10 @@ def model_update(
     )
     # if TensorRT is not none and amp is false, add optimization to configuration
     if not amp and trt is not None:
-        if _lookup('name',config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"][0]) == 'auto_mixed_precision':
-            config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"] = {}
         if "optimization" not in config.keys():
             config["optimization"] = {}
+    if _lookup('name',config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"][0]) == 'auto_mixed_precision':
+        config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"] = {}
         if trt == "FP16" or trt == "FP32":
             config["optimization"]["executionAccelerators"] = {
             "gpuExecutionAccelerator": [
@@ -274,20 +274,18 @@ def model_update(
             raise ValueError("trt must be one of None, numpy.float16, numpy.float32")
     # amp (automatic mixed precision) cannot be used with trt, default to amp
     if amp and trt is None:
-        if _lookup('name',config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"][0]) == 'tensorrt':
-            config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"] = {}
-        if "precision_mode" in config.keys():
-            config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"] = {}
         if "optimization" not in config.keys():
             config["optimization"] = {}
+        if _lookup('name',config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"][0]) == 'tensorrt':
+            config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"] = {}
         config["optimization"]["executionAccelerators"] = {
             "gpuExecutionAccelerator": [{"name": "auto_mixed_precision"}]
         }
     # both amp (automatic mixed precision) and trt cannot be added together. Select trt and raise warning.
     elif amp and trt is not None:
+        if "optimization" not in config.keys():
+            config["optimization"] = {}
         if _lookup('name',config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"][0]) == 'auto_mixed_precision':
-            config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"] = {}
-        if "precision_mode" in config["optimization"] :
             config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"] = {}
         config["optimization"]["executionAccelerators"] = {
             "gpuExecutionAccelerator": [
