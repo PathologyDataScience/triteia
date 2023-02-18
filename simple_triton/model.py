@@ -222,8 +222,11 @@ def model_update(
         to the generated config. Default value is None.
     instance : string
         updated instance configuration parameters
-    optimization : string
-        updated optimization configuration parameters
+    trt : string
+        updated optimization configuration parameters. 
+        Possible values are None, "FP32", "FP16"
+    amp : bool
+        amp (automatic mixed precision) is either True or False
 
     Returns
     -------
