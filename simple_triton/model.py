@@ -239,10 +239,10 @@ def model_update(
     batch_dim = [input["dims"][0] == "-1" for input in config["input"]]
     if all(batch_dim):
         config["maxBatchSize"] = str(max_batch_size)
-    # else:
-    #     raise Warning(
-    #         f"Model {model_name} is not configured for batching, cannot set maxBatchSize"
-    #     )
+    else:
+        raise Warning(
+            f"Model {model_name} is not configured for batching, cannot set maxBatchSize"
+        )
 
     # handle instances here
     config["instanceGroup"][0] = instance_group(
@@ -255,19 +255,13 @@ def model_update(
     if not amp and trt is not None:
         if "optimization" not in config.keys():
             config["optimization"] = {}
-        if trt == "FP16" or trt == "FP32":
-            config["optimization"]["executionAccelerators"] = {
-                "gpuExecutionAccelerator": [{"name": "auto_mixed_precision"}]
-            }
             config["optimization"]["executionAccelerators"] = {
                 "gpuExecutionAccelerator": [
                     {"name": "tensorrt", "parameters": {"precision_mode": f"{trt}"}}
                 ]
             }
-
         else:
             raise ValueError("trt must be one of None, numpy.float16, numpy.float32")
-
     # amp (automatic mixed precision) cannot be used with trt, default to amp
     if amp and trt is None:
         if "optimization" not in config.keys():
@@ -275,11 +269,16 @@ def model_update(
         config["optimization"]["executionAccelerators"] = {
             "gpuExecutionAccelerator": [{"name": "auto_mixed_precision"}]
         }
+    # both amp (automatic mixed precision) and trt cannot be added together. Select trt and raise warning.
     elif amp and trt is not None:
+        config["optimization"]["executionAccelerators"] = {
+            "gpuExecutionAccelerator": [
+                {"name": "tensorrt", "parameters": {"precision_mode": f"{trt}"}}
+            ]
+        }
         raise Warning(
             "Cannot use automatic-mixed precision with TensorRT, defaulting to TRT selection."
         )
-    load_model(client, model_name, json.dumps(config))
     return config
 
 
