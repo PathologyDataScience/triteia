@@ -5,7 +5,7 @@ from tritonclient.utils import InferenceServerException
 import json
 
 
-def instance_group(model_name, count, kind="KIND_GPU", gpus=None):
+def instance_group(model_name,instances):
     """Generates an instance count dictionary for use in a model config.
 
     A Triton configuration allows specification of resources used to serve a
@@ -29,12 +29,19 @@ def instance_group(model_name, count, kind="KIND_GPU", gpus=None):
         each available gpu.
     """
     # gpus must be None if KIND_GPU
-    if kind == "KIND_CPU":
+    
+    # count =instances.get('count')   # list(instances.values())[0],
+    # kind = instances.get('kind') #list(instances.values())[1],
+    # gpus = instances.get('gpus') #list(instances.values())[2],
+
+    if instances.get('kind') == "KIND_CPU":
         gpus = None
-    if gpus is None:
-        instance = {"name": model_name, "count": count, "kind": kind}
+    else: 
+        instances.get('kind') == "KIND_GPU"
+    if instances.get('gpus') is None:
+        instance = {"name": model_name, "count": instances.get('count'), "kind": instances.get('kind')}
     else:
-        instance = {"name": model_name, "count": count, "kind": kind, "gpus": gpus}
+        instance = {"name": model_name, "count": instances.get('count'), "kind": instances.get('kind'), "gpus": instances.get('gpus')}
 
     return instance
 
@@ -250,18 +257,15 @@ def model_update(
     batch_dim = [input["dims"][0] == "-1" for input in config["input"]]
     if all(batch_dim):
         config["maxBatchSize"] = str(max_batch_size)
-    else:
-        raise Warning(
-            f"Model {model_name} is not configured for batching, cannot set maxBatchSize"
-        )
+    # else:
+    #     raise Warning(
+    #         f"Model {model_name} is not configured for batching, cannot set maxBatchSize"
+    #     )
 
     # handle instances here
-    config["instanceGroup"][0] = instance_group(
-        model_name,
-        list(instances.values())[0],
-        list(instances.values())[1],
-        list(instances.values())[2],
-    )
+    config["instanceGroup"] = instance_group(
+        model_name,instances)
+    
     # if TensorRT is not none and amp is false, add optimization to configuration
     if not amp and trt is not None:
         if "optimization" not in config.keys():
@@ -301,7 +305,13 @@ def model_update(
         )
     # both amp (automatic mixed precision) and trt are not requested, default to TRT selection
     elif not amp and trt is  None:    
-        config.pop("optimization")
+        # config.pop("optimization")
+        try:
+            config.pop("optimization",None)
+            # del config("optimization")
+        except InferenceServerException as e:
+            raise
+
 
         
     return config
