@@ -5,7 +5,7 @@ from tritonclient.utils import InferenceServerException
 import json
 
 
-def instance_group(model_name,instances):
+def instance_group(model_name, count, kind="gpu", gpus=None):
     """Generates an instance count dictionary for use in a model config.
 
     A Triton configuration allows specification of resources used to serve a
@@ -19,29 +19,33 @@ def instance_group(model_name,instances):
     count : int
         The number of model instances to run concurrently.
     kind : str
-        One of "KIND_GPU" for gpu serving, or "KIND_CPU" for cpu serving.
-        Default value of "KIND_GPU" specifies that `count` models be hosted
-        on each available gpu.
+        One of {"cpu", "gpu"}. Default value of "gpu" specifies that `count` 
+        models be hosted on each available gpu. 
     gpus : list of int
         If specified, `count` instances will be hosted on each of the listed
         gpus. For example, [0, 1] would specify serving on gpus zero and one.
         Default value of `None` means that `count` instances will be served on
         each available gpu.
     """
-    # gpus must be None if KIND_GPU
-    
-    # count =instances.get('count')   # list(instances.values())[0],
-    # kind = instances.get('kind') #list(instances.values())[1],
-    # gpus = instances.get('gpus') #list(instances.values())[2],
-
-    if instances.get('kind') == "KIND_CPU":
-        gpus = None
-    else: 
-        instances.get('kind') == "KIND_GPU"
-    if instances.get('gpus') is None:
-        instance = {"name": model_name, "count": instances.get('count'), "kind": instances.get('kind')}
+    if not isinstance(count, int):
+        raise ValueError("argument 'count' must be int.")
+    if kind.lower() not in ["cpu", "gpu"]:
+        raise ValueError("argument 'kind' must be one of 'cpu', 'gpu'.")
+    elif kind == "cpu":
+        kind = "KIND_CPU"
     else:
-        instance = {"name": model_name, "count": instances.get('count'), "kind": instances.get('kind'), "gpus": instances.get('gpus')}
+        kind = "KIND_GPU"
+    if gpus is not None:
+        if not isinstance(gpus, list):
+            raise ValueError("argument 'gpus' must be list of int.")
+        for index in gpus:
+            if not isinstance(index, int):
+                raise ValueError("elements of 'gpus' must be int.")
+                
+    # set model name, count, and kind
+    instance = {"name": model_name, "count": count, "kind": kind}
+    if gpus is not None:
+        instance["gpus"] = gpus
 
     return instance
 
