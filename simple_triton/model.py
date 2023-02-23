@@ -19,8 +19,8 @@ def instance_group(model_name, count, kind="gpu", gpus=None):
     count : int
         The number of model instances to run concurrently.
     kind : str
-        One of {"cpu", "gpu"}. Default value of "gpu" specifies that `count` 
-        models be hosted on each available gpu. 
+        One of {"cpu", "gpu"}. Default value of "gpu" specifies that `count`
+        models be hosted on each available gpu.
     gpus : list of int
         If specified, `count` instances will be hosted on each of the listed
         gpus. For example, [0, 1] would specify serving on gpus zero and one.
@@ -41,7 +41,7 @@ def instance_group(model_name, count, kind="gpu", gpus=None):
         for index in gpus:
             if not isinstance(index, int):
                 raise ValueError("elements of 'gpus' must be int.")
-                
+
     # set model name, count, and kind
     instance = {"name": model_name, "count": count, "kind": kind}
     if gpus is not None:
@@ -144,6 +144,47 @@ def model_metadata(client, model_name):
     return metadata
 
 
+def _lookup(k, d):
+    if k in d:
+        return d[k]
+    for v in d.values():
+        if isinstance(v, dict):
+            a = _lookup(k, v)
+            if a is not None:
+                return a
+    return None
+
+
+def is_amp_set(config):
+    if (
+        _lookup(
+            "name",
+            config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"][
+                0
+            ],
+        )
+        == "auto_mixed_precision"
+    ):
+        return True
+    else:
+        return False
+
+
+def is_trt_set(config):
+    if (
+        _lookup(
+            "name",
+            config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"][
+                0
+            ],
+        )
+        == "tensorrt"
+    ):
+        return True
+    else:
+        return False
+
+
 def model_update(
     client, model_name, max_batch_size=None, instances=None, trt=None, amp=False
 ):
@@ -165,7 +206,7 @@ def model_update(
     instance : string
         updated instance configuration parameters
     trt : string
-        updated optimization configuration parameters. 
+        updated optimization configuration parameters.
         Possible values are None, "FP32", "FP16"
     amp : bool
         In Automatic FP16 Optimization, TensorFlow has an option to provide
@@ -177,16 +218,12 @@ def model_update(
         A dictionary describing the model configuration. See Triton
         documentation for more details.
     """
-    def _lookup(k, d):
-        if k in d: return d[k]
-        for v in d.values():
-            if isinstance(v, dict):
-                a = _lookup(k, v)
-                if a is not None: return a
-        return None
 
     # acquire the current model config
     config = model_config(client, model_name)
+    # check whether AMP or TRT is set here
+    amp_current = is_amp_set(config)
+    trt_current = is_trt_set(config)
 
     # handle max batch size - verify that batch dimension exists
     batch_dim = [input["dims"][0] == "-1" for input in config["input"]]
@@ -198,29 +235,30 @@ def model_update(
     #     )
 
     # handle instances here
-    config["instanceGroup"] = instance_group(
-        model_name,instances)
-    
+    config["instanceGroup"] = instance_group(model_name, instances)
+
     # if TensorRT is not none and amp is false, add optimization to configuration
     if not amp and trt is not None:
         if "optimization" not in config.keys():
             config["optimization"] = {}
-    if _lookup('name',config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"][0]) == 'auto_mixed_precision':
+    if amp_current:
         config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"] = {}
         if trt == "FP16" or trt == "FP32":
             config["optimization"]["executionAccelerators"] = {
-            "gpuExecutionAccelerator": [
-                {"name": "tensorrt", "parameters": {"precision_mode": f"{trt}"}}
-            ]
-        }
+                "gpuExecutionAccelerator": [
+                    {"name": "tensorrt", "parameters": {"precision_mode": f"{trt}"}}
+                ]
+            }
         else:
             raise ValueError("trt must be one of None, numpy.float16, numpy.float32")
     # amp (automatic mixed precision) cannot be used with trt, default to amp
     if amp and trt is None:
         if "optimization" not in config.keys():
             config["optimization"] = {}
-        if _lookup('name',config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"][0]) == 'tensorrt':
-            config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"] = {}
+        if trt_current:
+            config["optimization"]["executionAccelerators"][
+                "gpuExecutionAccelerator"
+            ] = {}
         config["optimization"]["executionAccelerators"] = {
             "gpuExecutionAccelerator": [{"name": "auto_mixed_precision"}]
         }
@@ -228,8 +266,10 @@ def model_update(
     if amp and trt is not None:
         if "optimization" not in config.keys():
             config["optimization"] = {}
-        if _lookup('name',config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"][0]) == 'auto_mixed_precision':
-            config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"] = {}
+        if amp_current:
+            config["optimization"]["executionAccelerators"][
+                "gpuExecutionAccelerator"
+            ] = {}
         config["optimization"]["executionAccelerators"] = {
             "gpuExecutionAccelerator": [
                 {"name": "tensorrt", "parameters": {"precision_mode": f"{trt}"}}
@@ -239,16 +279,14 @@ def model_update(
             "Cannot use automatic-mixed precision with TensorRT, defaulting to TRT selection."
         )
     # both amp (automatic mixed precision) and trt are not requested, default to TRT selection
-    elif not amp and trt is  None:    
+    elif not amp and trt is None:
         # config.pop("optimization")
         try:
-            config.pop("optimization",None)
+            config.pop("optimization", None)
             # del config("optimization")
         except InferenceServerException as e:
             raise
 
-
-        
     return config
 
 
