@@ -238,7 +238,6 @@ def model_update(
 
     # handle instances here
     config["instanceGroup"] = instance_group(model_name, instances)
-    print(trt)
     # if TensorRT is not none and amp is false, add optimization to configuration
     if not amp and trt is not None:
         if "optimization" not in config.keys():
@@ -283,7 +282,6 @@ def model_update(
     # both amp (automatic mixed precision) and trt are not requested, default to TRT selection
     elif not amp and trt is None:
         try:
-            # config.pop("optimization", None)
             del config["optimization"]
         except InferenceServerException as e:
             raise
