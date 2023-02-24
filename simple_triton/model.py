@@ -191,7 +191,9 @@ def model_update(
 
     # Return True if 'auto_mixed_precision' is found in optimization, else return False
     def is_amp_set(config):
-        if (
+        if "name" not in config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"][0]:
+            return False
+        elif (
             _lookup(
                 "name",
                 config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"][
@@ -206,7 +208,9 @@ def model_update(
 
     # Return True if 'tensorrt' is found in optimization, else return False
     def is_trt_set(config):
-        if (
+        if "name" not in config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"][0]:
+            return False
+        elif (
             _lookup(
                 "name",
                 config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"][
