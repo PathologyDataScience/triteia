@@ -145,48 +145,6 @@ def model_metadata(client, model_name):
 
     return metadata
 
-
-def _lookup(k, d):
-    if k in d:
-        return d[k]
-    for v in d.values():
-        if isinstance(v, dict):
-            a = _lookup(k, v)
-            if a is not None:
-                return a
-    return None
-
-
-def is_amp_set(config):
-    if (
-        _lookup(
-            "name",
-            config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"][
-                0
-            ],
-        )
-        == "auto_mixed_precision"
-    ):
-        return True
-    else:
-        return False
-
-
-def is_trt_set(config):
-    if (
-        _lookup(
-            "name",
-            config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"][
-                0
-            ],
-        )
-        == "tensorrt"
-    ):
-        return True
-    else:
-        return False
-
-
 def model_update(
     client, model_name, max_batch_size=None, instances=None, trt=None, amp=False
 ):
@@ -220,7 +178,51 @@ def model_update(
         A dictionary describing the model configuration. See Triton
         documentation for more details.
     """
+    # search and return a value for a key passed in the dict
+    def _lookup(k, d):
+        if k in d:
+            return d[k]
+        for v in d.values():
+            if isinstance(v, dict):
+                a = _lookup(k, v)
+                if a is not None:
+                    return a
+        return None
 
+    # Return True if 'auto_mixed_precision' is found in optimization, else return False
+    def is_amp_set(config):
+        if (
+            _lookup(
+                "name",
+                config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"][
+                    0
+                ],
+            )
+            == "auto_mixed_precision"
+        ):
+            return True
+        else:
+            return False
+
+    # Return True if 'tensorrt' is found in optimization, else return False
+    def is_trt_set(config):
+        if (
+            _lookup(
+                "name",
+                config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"][
+                    0
+                ],
+            )
+            == "tensorrt"
+        ):
+            return True
+        else:
+            return False
+    #  remove trt and amp from optimization, it is called after checking they exist
+    def remove_trt_amp():
+        config["optimization"]["executionAccelerators"][
+                "gpuExecutionAccelerator"
+            ][0] = {}
     # acquire the current model config
     config = model_config(client, model_name)
     # check whether AMP or TRT is set here
@@ -243,7 +245,7 @@ def model_update(
         if "optimization" not in config.keys():
             config["optimization"] = {}
         if amp_current:
-            config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"][0] = {}
+            remove_trt_amp()
             if trt == "FP16" or trt == "FP32":
                 config["optimization"]["executionAccelerators"] = {
                     "gpuExecutionAccelerator": [
@@ -257,9 +259,7 @@ def model_update(
         if "optimization" not in config.keys():
             config["optimization"] = {}
         if trt_current:
-            config["optimization"]["executionAccelerators"][
-                "gpuExecutionAccelerator"
-            ][0] = {}
+            remove_trt_amp()
         config["optimization"]["executionAccelerators"] = {
             "gpuExecutionAccelerator": [{"name": "auto_mixed_precision"}]
         }
@@ -268,9 +268,7 @@ def model_update(
         if "optimization" not in config.keys():
             config["optimization"] = {}
         if amp_current:
-            config["optimization"]["executionAccelerators"][
-                "gpuExecutionAccelerator"
-            ][0] = {}
+            remove_trt_amp
         config["optimization"]["executionAccelerators"] = {
             "gpuExecutionAccelerator": [
                 {"name": "tensorrt", "parameters": {"precision_mode": f"{trt}"}}
@@ -279,10 +277,19 @@ def model_update(
         raise Warning(
             "Cannot use automatic-mixed precision with TensorRT, defaulting to TRT selection."
         )
-    # both amp (automatic mixed precision) and trt are not requested, default to TRT selection
+    # both amp (automatic mixed precision) and trt are not requested, remove the optimization if empty
     elif not amp and trt is None:
+        if amp_current:
+            remove_trt_amp
+        if trt_current:
+            remove_trt_amp
         try:
-            del config["optimization"]
+            if config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"] == {}:
+                del config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"]
+                if config["optimization"]["executionAccelerators"] == {}:
+                    del config["optimization"]["executionAccelerators"]
+                    if config["optimization"] == {}:
+                        del config["optimization"]
         except InferenceServerException as e:
             raise
 
