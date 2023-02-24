@@ -277,7 +277,8 @@ def model_update(
         raise Warning(
             "Cannot use automatic-mixed precision with TensorRT, defaulting to TRT selection."
         )
-    # both amp (automatic mixed precision) and trt are not requested, remove the optimization if empty
+    # both amp (automatic mixed precision) and trt are not requested, 
+    # remove amp,trt if they exisit. check optimization and sub levels, if empty then remove
     elif not amp and trt is None:
         if amp_current:
             remove_trt_amp
