@@ -223,10 +223,39 @@ def model_update(
         else:
             return False
     #  remove trt and amp from optimization, it is called after checking they exist
-    def remove_trt_amp():
-        config["optimization"]["executionAccelerators"][
-                "gpuExecutionAccelerator"
-            ][0] = {}
+    # def remove_nested_keys(dictionary, keys):
+    #     for key in keys:
+    #         if key in config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"]:
+    #          del config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"][key]
+
+    def iterate_dict(d, rem_val, parents=[]):
+        """
+        This function iterates over one dict and returns a list of tuples: (key, value, parent_keys)
+        Usefull for looping through a multidimensional dictionary.
+        """
+        r = []
+        for k,v in d.items():
+            if isinstance(v, dict):
+                r.extend(iterate_dict(v, parents + [k]))
+            elif isinstance(v, list):
+                r.append((k, v, parents))
+            else:
+                if (v==rem_val):
+                    print(rem_val)
+                r.append((k, v, parents))
+                
+        return r
+    def cleanup():
+        try:
+            if config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"] == {}:
+                del config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"]
+                if config["optimization"]["executionAccelerators"] == {}:
+                    del config["optimization"]["executionAccelerators"]
+                    if config["optimization"] == {}:
+                        del config["optimization"]
+        except InferenceServerException as e:
+            raise
+
     # acquire the current model config
     config = model_config(client, model_name)
     # check whether AMP or TRT is set here
@@ -237,6 +266,7 @@ def model_update(
     batch_dim = [input["dims"][0] == "-1" for input in config["input"]]
     if all(batch_dim):
         config["maxBatchSize"] = str(max_batch_size)
+        
     # else:
     #     raise Warning(
     #         f"Model {model_name} is not configured for batching, cannot set maxBatchSize"
@@ -248,55 +278,66 @@ def model_update(
     if not amp and trt is not None:
         if "optimization" not in config.keys():
             config["optimization"] = {}
+    if amp_current:
+        for dict in config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"]:
+            for key in list(dict.keys()): 
+                if 'name' in key and dict['name'] == 'auto_mixed_precision':
+                    del dict[key]      
+        if trt == "FP16" or trt == "FP32":
+            config["optimization"]["executionAccelerators"] = {
+                "gpuExecutionAccelerator": [
+                    {"name": "tensorrt", "parameters": {"precision_mode": f"{trt}"}}
+                ]
+            }
+        else:
+            raise ValueError("trt must be one of None, numpy.float16, numpy.float32")
+        cleanup()
+    # amp (automatic mixed precision) cannot be used with trt, default to amp
+    if amp and trt is None:
+        if "optimization" not in config.keys():
+            config["optimization"] = {}
+        if trt_current:
+            for dict in config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"]:
+                for key in list(dict.keys()):  # note a list() here
+                    if 'name' in key and dict['name'] == 'tensorrt':
+                        del dict[key]
+            config["optimization"]["executionAccelerators"] = {
+                "gpuExecutionAccelerator": [{"name": "auto_mixed_precision"}]
+            }
+        cleanup()
+    # both amp (automatic mixed precision) and trt cannot be added together. Select trt and raise warning.
+    if amp and trt is not None:
+        if "optimization" not in config.keys():
+            config["optimization"] = {}
         if amp_current:
-            remove_trt_amp()
+            for dict in config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"]:
+                for key in list(dict.keys()): 
+                    if 'name' in key and dict['name'] == 'auto_mixed_precision':
+                        del dict[key]
             if trt == "FP16" or trt == "FP32":
                 config["optimization"]["executionAccelerators"] = {
                     "gpuExecutionAccelerator": [
                         {"name": "tensorrt", "parameters": {"precision_mode": f"{trt}"}}
                     ]
                 }
-        else:
-            raise ValueError("trt must be one of None, numpy.float16, numpy.float32")
-    # amp (automatic mixed precision) cannot be used with trt, default to amp
-    if amp and trt is None:
-        if "optimization" not in config.keys():
-            config["optimization"] = {}
-        if trt_current:
-            remove_trt_amp()
-        config["optimization"]["executionAccelerators"] = {
-            "gpuExecutionAccelerator": [{"name": "auto_mixed_precision"}]
-        }
-    # both amp (automatic mixed precision) and trt cannot be added together. Select trt and raise warning.
-    if amp and trt is not None:
-        if "optimization" not in config.keys():
-            config["optimization"] = {}
-        if amp_current:
-            remove_trt_amp
-        config["optimization"]["executionAccelerators"] = {
-            "gpuExecutionAccelerator": [
-                {"name": "tensorrt", "parameters": {"precision_mode": f"{trt}"}}
-            ]
-        }
-        raise Warning(
-            "Cannot use automatic-mixed precision with TensorRT, defaulting to TRT selection."
-        )
+            else:
+                raise ValueError("Cannot use automatic-mixed precision with TensorRT, defaulting to TRT selection.")
+        cleanup()
     # both amp (automatic mixed precision) and trt are not requested, 
     # remove amp,trt if they exisit. check optimization and sub levels, if empty then remove
     elif not amp and trt is None:
         if amp_current:
-            remove_trt_amp
+            for dict in config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"]:
+                for key in list(dict.keys()): 
+                    if 'name' in key and dict['name'] == 'tensorrt':
+                        del dict[key]
+            cleanup()
         if trt_current:
-            remove_trt_amp
-        try:
-            if config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"] == {}:
-                del config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"]
-                if config["optimization"]["executionAccelerators"] == {}:
-                    del config["optimization"]["executionAccelerators"]
-                    if config["optimization"] == {}:
-                        del config["optimization"]
-        except InferenceServerException as e:
-            raise
+            for dict in config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"]:
+                for key in list(dict.keys()): 
+                    if 'name' in key and dict['name'] == 'auto_mixed_precision':
+                        del dict[key]
+            cleanup()
 
     return config
 
