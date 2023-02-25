@@ -145,6 +145,7 @@ def model_metadata(client, model_name):
 
     return metadata
 
+
 def model_update(
     client, model_name, max_batch_size=None, instances=None, trt=None, amp=False
 ):
@@ -191,14 +192,19 @@ def model_update(
 
     # Return True if 'auto_mixed_precision' is found in optimization, else return False
     def is_amp_set(config):
-        if "name" not in config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"][0]:
+        if (
+            "name"
+            not in config["optimization"]["executionAccelerators"][
+                "gpuExecutionAccelerator"
+            ][0]
+        ):
             return False
         elif (
             _lookup(
                 "name",
-                config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"][
-                    0
-                ],
+                config["optimization"]["executionAccelerators"][
+                    "gpuExecutionAccelerator"
+                ][0],
             )
             == "auto_mixed_precision"
         ):
@@ -208,20 +214,26 @@ def model_update(
 
     # Return True if 'tensorrt' is found in optimization, else return False
     def is_trt_set(config):
-        if "name" not in config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"][0]:
+        if (
+            "name"
+            not in config["optimization"]["executionAccelerators"][
+                "gpuExecutionAccelerator"
+            ][0]
+        ):
             return False
         elif (
             _lookup(
                 "name",
-                config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"][
-                    0
-                ],
+                config["optimization"]["executionAccelerators"][
+                    "gpuExecutionAccelerator"
+                ][0],
             )
             == "tensorrt"
         ):
             return True
         else:
             return False
+
     #  remove trt and amp from optimization, it is called after checking they exist
     # def remove_nested_keys(dictionary, keys):
     #     for key in keys:
@@ -234,21 +246,29 @@ def model_update(
         Usefull for looping through a multidimensional dictionary.
         """
         r = []
-        for k,v in d.items():
+        for k, v in d.items():
             if isinstance(v, dict):
                 r.extend(iterate_dict(v, parents + [k]))
             elif isinstance(v, list):
                 r.append((k, v, parents))
             else:
-                if (v==rem_val):
+                if v == rem_val:
                     print(rem_val)
                 r.append((k, v, parents))
-                
+
         return r
+
     def cleanup():
         try:
-            if config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"] == {}:
-                del config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"]
+            if (
+                config["optimization"]["executionAccelerators"][
+                    "gpuExecutionAccelerator"
+                ]
+                == {}
+            ):
+                del config["optimization"]["executionAccelerators"][
+                    "gpuExecutionAccelerator"
+                ]
                 if config["optimization"]["executionAccelerators"] == {}:
                     del config["optimization"]["executionAccelerators"]
                     if config["optimization"] == {}:
@@ -266,7 +286,7 @@ def model_update(
     batch_dim = [input["dims"][0] == "-1" for input in config["input"]]
     if all(batch_dim):
         config["maxBatchSize"] = str(max_batch_size)
-        
+
     # else:
     #     raise Warning(
     #         f"Model {model_name} is not configured for batching, cannot set maxBatchSize"
@@ -279,10 +299,12 @@ def model_update(
         if "optimization" not in config.keys():
             config["optimization"] = {}
     if amp_current:
-        for dict in config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"]:
-            for key in list(dict.keys()): 
-                if 'name' in key and dict['name'] == 'auto_mixed_precision':
-                    del dict[key]      
+        for dict in config["optimization"]["executionAccelerators"][
+            "gpuExecutionAccelerator"
+        ]:
+            for key in list(dict.keys()):
+                if "name" in key and dict["name"] == "auto_mixed_precision":
+                    del dict[key]
         if trt == "FP16" or trt == "FP32":
             config["optimization"]["executionAccelerators"] = {
                 "gpuExecutionAccelerator": [
@@ -297,9 +319,11 @@ def model_update(
         if "optimization" not in config.keys():
             config["optimization"] = {}
         if trt_current:
-            for dict in config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"]:
+            for dict in config["optimization"]["executionAccelerators"][
+                "gpuExecutionAccelerator"
+            ]:
                 for key in list(dict.keys()):  # note a list() here
-                    if 'name' in key and dict['name'] == 'tensorrt':
+                    if "name" in key and dict["name"] == "tensorrt":
                         del dict[key]
             config["optimization"]["executionAccelerators"] = {
                 "gpuExecutionAccelerator": [{"name": "auto_mixed_precision"}]
@@ -310,9 +334,11 @@ def model_update(
         if "optimization" not in config.keys():
             config["optimization"] = {}
         if amp_current:
-            for dict in config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"]:
-                for key in list(dict.keys()): 
-                    if 'name' in key and dict['name'] == 'auto_mixed_precision':
+            for dict in config["optimization"]["executionAccelerators"][
+                "gpuExecutionAccelerator"
+            ]:
+                for key in list(dict.keys()):
+                    if "name" in key and dict["name"] == "auto_mixed_precision":
                         del dict[key]
             if trt == "FP16" or trt == "FP32":
                 config["optimization"]["executionAccelerators"] = {
@@ -321,21 +347,27 @@ def model_update(
                     ]
                 }
             else:
-                raise ValueError("Cannot use automatic-mixed precision with TensorRT, defaulting to TRT selection.")
+                raise ValueError(
+                    "Cannot use automatic-mixed precision with TensorRT, defaulting to TRT selection."
+                )
         cleanup()
-    # both amp (automatic mixed precision) and trt are not requested, 
+    # both amp (automatic mixed precision) and trt are not requested,
     # remove amp,trt if they exisit. check optimization and sub levels, if empty then remove
     elif not amp and trt is None:
         if amp_current:
-            for dict in config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"]:
-                for key in list(dict.keys()): 
-                    if 'name' in key and dict['name'] == 'tensorrt':
+            for dict in config["optimization"]["executionAccelerators"][
+                "gpuExecutionAccelerator"
+            ]:
+                for key in list(dict.keys()):
+                    if "name" in key and dict["name"] == "tensorrt":
                         del dict[key]
             cleanup()
         if trt_current:
-            for dict in config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"]:
-                for key in list(dict.keys()): 
-                    if 'name' in key and dict['name'] == 'auto_mixed_precision':
+            for dict in config["optimization"]["executionAccelerators"][
+                "gpuExecutionAccelerator"
+            ]:
+                for key in list(dict.keys()):
+                    if "name" in key and dict["name"] == "auto_mixed_precision":
                         del dict[key]
             cleanup()
 
