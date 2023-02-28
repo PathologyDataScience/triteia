@@ -193,8 +193,8 @@ def model_update(
                 elif del_key == False:
                     if "name" in key and dict["name"] == "auto_mixed_precision":
                         return True
-                    else:
-                        return False
+            if del_key == False: # return False if key not found in list(dict.keys()) 
+                return False
 
     # Return True if 'tensorrt' is found in optimization, else return False
     # Delete key for 'tensorrt' if del_key is true
@@ -209,10 +209,10 @@ def model_update(
                 elif del_key == False:
                     if "name" in key and dict["name"] == "tensorrt":
                         return True
-                    else:
-                        return False
+            if del_key == False: # return False if key not found in list(dict.keys()) 
+                return False
 
-    #
+    # remove distionary keys with empty values in the optimization key and nested ones
     def cleanup():
         try:
             if (
