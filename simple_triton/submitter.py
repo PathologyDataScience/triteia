@@ -131,7 +131,6 @@ def analyze(results, floatfmt=".2f"):
 
 
 if __name__ == "__main__":
-
     # server and experiment parameters
     N = 100  # total number of inferences to perform
     limit = 10  # limit on number of pending requests per worker
