@@ -279,8 +279,17 @@ def model_update(
     #         f"Model {model_name} is not configured for batching, cannot set maxBatchSize"
     #     )
 
-    # handle instances here
-    config["instanceGroup"] = instance_group(model_name, instances)
+    # modify instance group if instances providedis not None
+    if instances is not None:
+        if isinstance(instances, dict):
+            instances = [instances]
+        elif isinstance(instances, list):
+            if len(instances) == 0:
+                del config["instanceGroup"]
+        else:
+            raise ValueError(
+                "Instances must be an instance_group dict or list of dicts"
+            )
 
     # remove amp if amp==False and amp is in current config
     if not amp:
@@ -302,7 +311,8 @@ def model_update(
             gpu_accelerator_delete(config, "auto_mixed_precision")
         gpu_accelerator_add(config, gpu_accelerator_trt(trt))
 
-    return config
+    # apply model update
+    load_model(client, model_name, config=config, block=True)
 
 
 def load_model(
