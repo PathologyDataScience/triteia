@@ -180,11 +180,16 @@ def model_update(
 
     def gpu_accelerator_status(config, name):
         # returns True if a gpuExecutionAccelerator with "name" value `name` is present
-    
+
         if "optimization" in config:
             if "executionAccelerators" in config["optimization"]:
-                if "gpuExecutionAccelerator" in config["optimization"]["executionAccelerators"]:
-                    for d in config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"]:
+                if (
+                    "gpuExecutionAccelerator"
+                    in config["optimization"]["executionAccelerators"]
+                ):
+                    for d in config["optimization"]["executionAccelerators"][
+                        "gpuExecutionAccelerator"
+                    ]:
                         if "name" in d:
                             if d["name"] == name:
                                 return True
@@ -195,11 +200,10 @@ def model_update(
                 return False
         else:
             return False
-    
-    
+
     def gpu_accelerator_delete(config, name):
         # delete a gpuExecutionAccelerator and cleanup empty parents
-    
+
         if gpu_accelerator_status(config, name):
             gpuexecacc = config["optimization"]["executionAccelerators"][
                 "gpuExecutionAccelerator"
@@ -209,9 +213,9 @@ def model_update(
                 if "name" in enumerate(d):
                     if d["name"] != name:
                         keep.append(i)
-            config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"] = [
-                gpuexecacc[i] for i in keep
-            ]
+            config["optimization"]["executionAccelerators"][
+                "gpuExecutionAccelerator"
+            ] = [gpuexecacc[i] for i in keep]
             if (
                 len(
                     config["optimization"]["executionAccelerators"][
@@ -227,11 +231,14 @@ def model_update(
                 del config["optimization"]["executionAccelerators"]
             if config["optimization"] == {}:
                 del config["optimization"]
-    
+
     def gpu_accelerator_trt(precision="FP16"):
         # returns a trt configuration
         if precision.upper() == "FP16" or precision.upper() == "FP32":
-            return {"name": "tensorrt", "parameters": {"precision_mode": f"{precision.upper()}"}}
+            return {
+                "name": "tensorrt",
+                "parameters": {"precision_mode": f"{precision.upper()}"},
+            }
         else:
             raise ValueError(
                 "precision must be one of None, numpy.float16, numpy.float32"
@@ -249,11 +256,16 @@ def model_update(
             config["optimization"] = {}
         if "executionAccelerators" not in config["optimization"]:
             config["optimization"]["executionAccelerators"] = {}
-        if "gpuExecutionAccelerator" not in config["optimization"]["executionAccelerators"]:
-            config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"] = []
-        config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"].append(
-            accelerator
-            )
+        if (
+            "gpuExecutionAccelerator"
+            not in config["optimization"]["executionAccelerators"]
+        ):
+            config["optimization"]["executionAccelerators"][
+                "gpuExecutionAccelerator"
+            ] = []
+        config["optimization"]["executionAccelerators"][
+            "gpuExecutionAccelerator"
+        ].append(accelerator)
 
     # acquire the current model config
     config = model_config(client, model_name)
@@ -271,10 +283,10 @@ def model_update(
     config["instanceGroup"] = instance_group(model_name, instances)
 
     # remove amp if amp==False and amp is in current config
-    if not amp:    
+    if not amp:
         if gpu_accelerator_status(config, "auto_mixed_precision"):
             gpu_accelerator_delete(config, "auto_mixed_precision")
-            
+
     # remove trt if trt is None and trt is in current config
     if trt is None:
         if gpu_accelerator_status(config, "tensorrt"):
@@ -283,7 +295,7 @@ def model_update(
     # if amp is True, add only if trt is None
     if amp and trt is None:
         gpu_accelerator_add(config, gpu_accelerator_amp())
-    
+
     # if trt is not none add trt, remove amp if necessary
     if trt is not None:
         if gpu_accelerator_status(config, "auto_mixed_precision"):

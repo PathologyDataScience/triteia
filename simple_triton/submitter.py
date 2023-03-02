@@ -131,17 +131,17 @@ def analyze(results, floatfmt=".2f"):
 
 
 if __name__ == "__main__":
-    
+
     # server and experiment parameters
     N = 100  # total number of inferences to perform
     limit = 10  # limit on number of pending requests per worker
     workers = 4  # total number of Submitter workers
     url = "localhost:8001"  # url for grpc access to tirton server
     verbose = False  # set verbos as False
-    
+
     # model configuration parameters
     # input_dtype = "TYPE_FP16"  # set input data type
-    # output_dtype = "TYPE_FP32"  # set input data type    
+    # output_dtype = "TYPE_FP32"  # set input data type
     model_name = "simple-trt-model-FP16-test"  # set model name
     batch_size = 1024
     trt = "FP16"
@@ -163,17 +163,18 @@ if __name__ == "__main__":
         load_model(client, model_name)
     except InferenceServerException as e:
         print("model loading failed:" + str(e), flush=True)
-        
+
     # query the model to check the input/output size and type
     config = model_config(client, model_name)
     input_dimension = [int(d) for d in config["input"][0]["dims"]][1:]
     output_dimension = [int(d) for d in config["output"][0]["dims"]]
     input_dtype = config["input"][0]["dataType"]
     output_dtype = config["output"][0]["dataType"]
-    
+
     # apply an update to the model configuration, changing resources
     config_model_updated = model_update(
-        client, model_name, batch_size, instances, trt, amp=False)
+        client, model_name, batch_size, instances, trt, amp=False
+    )
 
     # start experiment timer
     start = time.time()
