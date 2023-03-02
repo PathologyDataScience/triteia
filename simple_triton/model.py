@@ -1,8 +1,6 @@
 from google.protobuf.json_format import MessageToDict
-import numpy as np
 import time
 from tritonclient.utils import InferenceServerException
-import json
 
 
 def instance_group(model_name, count, kind="gpu", gpus=None):
@@ -180,56 +178,82 @@ def model_update(
         documentation for more details.
     """
 
-    # Return True if 'auto_mixed_precision' is found in optimization, else return False
-    # Delete key for 'auto_mixed_precision' if del_key is true
-    def is_amp_set(config, del_key=False):
-        for dict in config["optimization"]["executionAccelerators"][
-            "gpuExecutionAccelerator"
-        ]:
-            for key in list(dict.keys()):
-                if del_key == True:
-                    if "name" in key and dict["name"] == "auto_mixed_precision":
-                        del dict[key]
-                elif del_key == False:
-                    if "name" in key and dict["name"] == "auto_mixed_precision":
-                        return True
-            if del_key == False: # return False if key not found in list(dict.keys()) 
+    def gpu_accelerator_status(config, name):
+        # returns True if a gpuExecutionAccelerator with "name" value `name` is present
+    
+        if "optimization" in config:
+            if "executionAccelerators" in config["optimization"]:
+                if "gpuExecutionAccelerator" in config["optimization"]["executionAccelerators"]:
+                    for d in config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"]:
+                        if "name" in d:
+                            if d["name"] == name:
+                                return True
+                    return False
+                else:
+                    return False
+            else:
                 return False
-
-    # Return True if 'tensorrt' is found in optimization, else return False
-    # Delete key for 'tensorrt' if del_key is true
-    def is_trt_set(config, del_key=False):
-        for dict in config["optimization"]["executionAccelerators"][
-            "gpuExecutionAccelerator"
-        ]:
-            for key in list(dict.keys()):
-                if del_key == True:
-                    if "name" in key and dict["name"] == "tensorrt":
-                        del dict[key]
-                elif del_key == False:
-                    if "name" in key and dict["name"] == "tensorrt":
-                        return True
-            if del_key == False: # return False if key not found in list(dict.keys()) 
-                return False
-
-    # remove distionary keys with empty values in the optimization key and nested ones
-    def cleanup():
-        try:
+        else:
+            return False
+    
+    
+    def gpu_accelerator_delete(config, name):
+        # delete a gpuExecutionAccelerator and cleanup empty parents
+    
+        if gpu_accelerator_status(config, name):
+            gpuexecacc = config["optimization"]["executionAccelerators"][
+                "gpuExecutionAccelerator"
+            ]
+            keep = []
+            for i, d in enumerate(gpuexecacc):
+                if "name" in enumerate(d):
+                    if d["name"] != name:
+                        keep.append(i)
+            config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"] = [
+                gpuexecacc[i] for i in keep
+            ]
             if (
-                config["optimization"]["executionAccelerators"][
-                    "gpuExecutionAccelerator"
-                ]
-                == {}
+                len(
+                    config["optimization"]["executionAccelerators"][
+                        "gpuExecutionAccelerator"
+                    ]
+                )
+                == 0
             ):
                 del config["optimization"]["executionAccelerators"][
                     "gpuExecutionAccelerator"
                 ]
-                if config["optimization"]["executionAccelerators"] == {}:
-                    del config["optimization"]["executionAccelerators"]
-                    if config["optimization"] == {}:
-                        del config["optimization"]
-        except Exception as e:
-            print("Dictionary keys not found")
+            if config["optimization"]["executionAccelerators"] == {}:
+                del config["optimization"]["executionAccelerators"]
+            if config["optimization"] == {}:
+                del config["optimization"]
+    
+    def gpu_accelerator_trt(precision="FP16"):
+        # returns a trt configuration
+        if precision.upper() == "FP16" or precision.upper() == "FP32":
+            return {"name": "tensorrt", "parameters": {"precision_mode": f"{precision.upper()}"}}
+        else:
+            raise ValueError(
+                "precision must be one of None, numpy.float16, numpy.float32"
+            )
+
+    def gpu_accelerator_amp():
+        # returns an amp configuration
+        return {"name": "auto_mixed_precision"}
+
+    def gpu_accelerator_add(config, accelerator=gpu_accelerator_trt("FP16")):
+        # adds a gpu accelerator to a config
+        if gpu_accelerator_status(config, accelerator["name"]):
+            gpu_accelerator_delete(config, accelerator["name"])
+        if "optimization" not in config:
+            config["optimization"] = {}
+        if "executionAccelerators" not in config["optimization"]:
+            config["optimization"]["executionAccelerators"] = {}
+        if "gpuExecutionAccelerator" not in config["optimization"]["executionAccelerators"]:
+            config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"] = []
+        config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"].append(
+            accelerator
+            )
 
     # acquire the current model config
     config = model_config(client, model_name)
@@ -238,7 +262,6 @@ def model_update(
     batch_dim = [input["dims"][0] == "-1" for input in config["input"]]
     if all(batch_dim):
         config["maxBatchSize"] = str(max_batch_size)
-
     # else:
     #     raise Warning(
     #         f"Model {model_name} is not configured for batching, cannot set maxBatchSize"
@@ -246,56 +269,27 @@ def model_update(
 
     # handle instances here
     config["instanceGroup"] = instance_group(model_name, instances)
-    # if TensorRT is not none and amp is false, add optimization to configuration
-    if not amp and trt is not None:
-        if "optimization" not in config.keys():
-            config["optimization"] = {}
-        if is_amp_set(config):
-            is_amp_set(config, del_key=True)
-            if trt == "FP16" or trt == "FP32":
-                config["optimization"]["executionAccelerators"] = {
-                    "gpuExecutionAccelerator": [
-                        {"name": "tensorrt", "parameters": {"precision_mode": f"{trt}"}}
-                    ]
-                }
-            else:
-                raise ValueError(
-                    "trt must be one of None, numpy.float16, numpy.float32"
-                )
-    # amp (automatic mixed precision) cannot be used with trt, default to amp
+
+    # remove amp if amp==False and amp is in current config
+    if not amp:    
+        if gpu_accelerator_status(config, "auto_mixed_precision"):
+            gpu_accelerator_delete(config, "auto_mixed_precision")
+            
+    # remove trt if trt is None and trt is in current config
+    if trt is None:
+        if gpu_accelerator_status(config, "tensorrt"):
+            gpu_accelerator_delete(config, "auto_mixed_precision")
+
+    # if amp is True, add only if trt is None
     if amp and trt is None:
-        if "optimization" not in config.keys():
-            config["optimization"] = {}
-        if is_trt_set(config):
-            is_trt_set(config, del_key=True)
-            config["optimization"]["executionAccelerators"] = {
-                "gpuExecutionAccelerator": [{"name": "auto_mixed_precision"}]
-            }
-    # both amp (automatic mixed precision) and trt cannot be added together. Select trt and raise warning.
-    if amp and trt is not None:
-        if "optimization" not in config.keys():
-            config["optimization"] = {}
-        if is_amp_set(config):
-            is_amp_set(config, del_key=True)
-            if trt == "FP16" or trt == "FP32":
-                config["optimization"]["executionAccelerators"] = {
-                    "gpuExecutionAccelerator": [
-                        {"name": "tensorrt", "parameters": {"precision_mode": f"{trt}"}}
-                    ]
-                }
-            else:
-                raise ValueError(
-                    "trt must be one of None, numpy.float16, numpy.float32"
-                )
-    # both amp (automatic mixed precision) and trt are not requested,
-    # remove amp,trt if they exisit. check optimization and sub levels, if empty then remove
-    elif not amp and trt is None:
-        if is_amp_set(config):
-            is_amp_set(config, del_key=True)
-            cleanup()
-        if is_trt_set(config):
-            is_trt_set(config, del_key=True)
-            cleanup()
+        gpu_accelerator_add(config, gpu_accelerator_amp())
+    
+    # if trt is not none add trt, remove amp if necessary
+    if trt is not None:
+        if gpu_accelerator_status(config, "auto_mixed_precision"):
+            gpu_accelerator_delete(config, "auto_mixed_precision")
+        gpu_accelerator_add(config, gpu_accelerator_trt(trt))
+
     return config
 
 
