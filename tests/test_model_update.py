@@ -121,6 +121,6 @@ def test_update_model_trt_NotNone():
     model_update(client, model_name, max_batch_size=None, instances=None, trt="FP16", amp=False
     )
     config = model_config(client, model_name)
-    assert gpu_accelerator_status(config, "tensorrt") == False
+    assert gpu_accelerator_status(config, "tensorrt") == True
 
 
