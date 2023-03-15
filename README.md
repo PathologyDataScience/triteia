@@ -1,31 +1,37 @@
-# triton_testing
+# simple-triton
 
-### Repository organization
+A simple python client for efficient inference with the NVIDIA Triton inference server.
 
-- /benchmarking - scripts and notebooks for generating official benchmarking results
-- /configurations - contains .pbtxt files defining triton model serving configurations
-- /notebooks - development notebooks for testing and demonstrating concepts
+## Installation
+
+This package can be installed using `pip install`. The build and dependencies are defined in pyproject.toml. Editable install is supported.
+
+## Testing
+
+Testing and code formatting is automated using tox and pytest and can be run using `python -m tox run`. Running this will evaluate the tests in the environments defined in `tox.ini` and will format the source using Black. Following testing, a coverage.html file will be located in .tox/coverage.
+
+Testing requires running a Triton server on the local machine. Tests are run using a `densenet_onnx` model used in the Triton quickstart guide.
+
+### Running Triton server
+
+Download the `densenet_onnx` test model to your host model repository folder:
+
+```
+mkdir -p host_model_repository/densenet_onnx/1
+wget -O host_model_repository/densenet_onnx/1/model.onnx https://contentmamluswest001.blob.core.windows.net/content/14b2744cf8d6418c87ffddc3f3127242/9502630827244d60a1214f250e3bbca7/08aed7327d694b8dbaee2c97b8d0fcba/densenet121-1.2.onnx
+```
+
+Run Triton as a container and provide your host model repository path to the volume `-v` option:
+
+```
+docker run --gpus=8 --rm -p 8000:8000 -p 8001:8001 -p 8002:8002 -p 8003:8003 -v/host_model_repository:/models nvcr.io/nvidia/tritonserver:23.01-py3 tritonserver --model-repository=/models --model-control-mode=explicit --exit-on-error=false --load-model=*
+```
+
+The argument `--model-control-mode=explicit` is necessary for the client to load/unload models and to manipulate their configurations while the server is running. The argument `--load-model=*` loads available models from the repository on startup.
+
+## Repository organization
+
+- /simple_triton - source code
+- /tests - tests for source
+- /benchmarking - scripts and notebooks for generating benchmarking results
 - /results - contains outputs of benchmarking experiments
-- /simple_triton - hardened and usable repository code
-
-### Using the Docker Engine Utility for Running A Container
-
-- As a user, run the container interactively.
- docker run \
-  --gpus=1 \
-  --ipc=host --rm \
-  --shm-size=1g \
-  --ulimit memlock=-1 \
-  --ulimit stack=67108864 \
-  --net=host \
-  -p 8000:8000 -p 8001:8001 -p 8002:8002 \
-  -v /home/mar9654/tritonClient/models:/models \
-  nvcr.io/nvidia/tritonserver:22.07-py3 \
-  tritonserver \
-  --model-repository=/models \
-  --exit-on-error=false \
-  --model-control-mode=poll \
-  --repository-poll-secs 30 ![image](https://user-images.githubusercontent.com/30137669/189497450-6ab6d43f-155b-4a20-b5d3-050f5adc490c.png)
-
-Client libraries are installed on Docker running Jupyter notebook and run seprately.
-For this experiiment both server and client are running on the same machine. 
