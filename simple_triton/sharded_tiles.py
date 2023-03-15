@@ -14,8 +14,8 @@ class ShardedTiles(object):
         parameters and tile locations for possibly multiple slides.
     batch : int
         The number of tiles in each batch. Partial batches are not padded.
-    worker_id : int
-        The worker id, ranging from 0 to `num_workers`.
+    worker_index : int
+        The worker index, ranging from 0 to `num_workers`.
     num_workers : int
         The total number of workers.
     
@@ -30,8 +30,8 @@ class ShardedTiles(object):
     ----------
     batch : int
         The number of tiles in each batch. Partial batches are not padded.
-    worker_id : int
-        The worker id, ranging from 0 to `num_workers`.
+    worker_index : int
+        The worker index, ranging from 0 to `num_workers`.
     num_workers : int
         The total number of workers.
 
@@ -45,7 +45,7 @@ class ShardedTiles(object):
     def __init__(self, study, batch, worker_id, num_workers):
         self.study = study
         self.batch = batch
-        self.worker_id = worker_id
+        self.worker_index = worker_index
         self.num_workers = num_workers
         self.large_images = None
         self._shard()
@@ -66,8 +66,8 @@ class ShardedTiles(object):
                  )
                  for slide in self.study["slides"].values() 
                  for tile in slide["tiles"].values()]
-        indices = range(len(reads) * self.worker_id // self.num_workers,
-                        len(reads) * (self.worker_id + 1) // self.num_workers)
+        indices = range(len(reads) * self.worker_index // self.num_workers,
+                        len(reads) * (self.worker_index + 1) // self.num_workers)
         self.tiles = [reads[i] for i in indices]
     
     def __iter__(self):
