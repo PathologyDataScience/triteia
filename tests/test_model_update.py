@@ -78,12 +78,23 @@ def test_update_model_instance_gpu():
     """
     instance = instance_group(model_name, count=1, kind="gpu", gpus=[ 0 ])
     assert instance['kind'] == 'KIND_GPU'
+    # load the test model to reset the config
+    try:
+        load_model(client, model_name)
+    except InferenceServerException as e:
+        print("model loading failed:" + str(e), flush=True)
 
 def test_update_model_instance_cpu():
     """ Evaluate instance group for  kind="cpu", 
     """
     instance = instance_group(model_name, count=1, kind="cpu", gpus=None)
     assert instance['kind'] == 'KIND_CPU'
+    # load the test model to reset the config
+    try:
+        load_model(client, model_name)
+    except InferenceServerException as e:
+        print("model loading failed:" + str(e), flush=True)
+
 
 def test_update_model_amp_False():
     """ Evaluate remove amp if amp==False and amp is in current config
@@ -95,7 +106,11 @@ def test_update_model_amp_False():
     )
     config = model_config(client, model_name)
     assert gpu_accelerator_status(config, "auto_mixed_precision") ==False
-
+    # load the test model to reset the config
+    try:
+        load_model(client, model_name)
+    except InferenceServerException as e:
+        print("model loading failed:" + str(e), flush=True)
 
 def test_update_model_trt_None():
     """ Evaluate remove trt if trt is None and trt is in current config
@@ -104,7 +119,11 @@ def test_update_model_trt_None():
     )
     config = model_config(client, model_name)
     assert gpu_accelerator_status(config, "tensorrt") ==False
-
+    # load the test model to reset the config
+    try:
+        load_model(client, model_name)
+    except InferenceServerException as e:
+        print("model loading failed:" + str(e), flush=True)
 
 
 def test_update_model_amp_True_trt_None():
@@ -114,6 +133,11 @@ def test_update_model_amp_True_trt_None():
     )
     config = model_config(client, model_name)
     assert gpu_accelerator_status(config, "auto_mixed_precision") ==True
+    # load the test model to reset the config
+    try:
+        load_model(client, model_name)
+    except InferenceServerException as e:
+        print("model loading failed:" + str(e), flush=True)
 
 def test_update_model_trt_NotNone():
     """ Evaluate if trt is not none add trt, remove amp if necessary
@@ -122,5 +146,10 @@ def test_update_model_trt_NotNone():
     )
     config = model_config(client, model_name)
     assert gpu_accelerator_status(config, "tensorrt") == True
+    # load the test model to reset the config
+    try:
+        load_model(client, model_name)
+    except InferenceServerException as e:
+        print("model loading failed:" + str(e), flush=True)
 
 
