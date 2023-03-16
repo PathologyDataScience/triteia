@@ -15,7 +15,7 @@ try:
     load_model(client, model_name)
 except InferenceServerException as e:
     print("model loading failed:" + str(e), flush=True)
-config =  model_config(client, model_name)
+config = model_config(client, model_name)
 
 MODEL = "densenet_onnx"
 URL = "localhost:8001"
@@ -49,47 +49,110 @@ METADATA = {
     ],
 }
 
-def gpu_accelerator_status(config, name):
-        # returns True if a gpuExecutionAccelerator with "name" value `name` is present
 
-        if "optimization" in config:
-            if "executionAccelerators" in config["optimization"]:
-                if (
+def gpu_accelerator_status(config, name):
+    # returns True if a gpuExecutionAccelerator with "name" value `name` is present
+
+    if "optimization" in config:
+        if "executionAccelerators" in config["optimization"]:
+            if (
+                "gpuExecutionAccelerator"
+                in config["optimization"]["executionAccelerators"]
+            ):
+                for d in config["optimization"]["executionAccelerators"][
                     "gpuExecutionAccelerator"
-                    in config["optimization"]["executionAccelerators"]
-                ):
-                    for d in config["optimization"]["executionAccelerators"][
-                        "gpuExecutionAccelerator"
-                    ]:
-                        if "name" in d:
-                            if d["name"] == name:
-                                return True
-                    return False
-                else:
-                    return False
+                ]:
+                    if "name" in d:
+                        if d["name"] == name:
+                            return True
+                return False
             else:
                 return False
         else:
             return False
+    else:
+        return False
+
+
+def gpu_accelerator_trt(precision="FP16"):
+    # returns a trt configuration
+    if precision.upper() == "FP16" or precision.upper() == "FP32":
+        return {
+            "name": "tensorrt",
+            "parameters": {"precision_mode": f"{precision.upper()}"},
+        }
+    else:
+        raise ValueError("precision must be one of None, numpy.float16, numpy.float32")
+
+
+def gpu_accelerator_amp():
+    # returns an amp configuration
+    return {"name": "auto_mixed_precision"}
+
+
+def gpu_accelerator_delete(config, name):
+    # delete a gpuExecutionAccelerator and cleanup empty parents
+
+    if gpu_accelerator_status(config, name):
+        gpuexecacc = config["optimization"]["executionAccelerators"][
+            "gpuExecutionAccelerator"
+        ]
+        keep = []
+        for i, d in enumerate(gpuexecacc):
+            if "name" in enumerate(d):
+                if d["name"] != name:
+                    keep.append(i)
+        config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"] = [
+            gpuexecacc[i] for i in keep
+        ]
+        if (
+            len(
+                config["optimization"]["executionAccelerators"][
+                    "gpuExecutionAccelerator"
+                ]
+            )
+            == 0
+        ):
+            del config["optimization"]["executionAccelerators"][
+                "gpuExecutionAccelerator"
+            ]
+        if config["optimization"]["executionAccelerators"] == {}:
+            del config["optimization"]["executionAccelerators"]
+        if config["optimization"] == {}:
+            del config["optimization"]
+
+
+def gpu_accelerator_add(config, accelerator=gpu_accelerator_trt("FP16")):
+    # adds a gpu accelerator to a config
+    if gpu_accelerator_status(config, accelerator["name"]):
+        gpu_accelerator_delete(config, accelerator["name"])
+    if "optimization" not in config:
+        config["optimization"] = {}
+    if "executionAccelerators" not in config["optimization"]:
+        config["optimization"]["executionAccelerators"] = {}
+    if "gpuExecutionAccelerator" not in config["optimization"]["executionAccelerators"]:
+        config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"] = []
+    config["optimization"]["executionAccelerators"]["gpuExecutionAccelerator"].append(
+        accelerator
+    )
 
 
 def test_update_model_instance_gpu():
-    """ Evaluate instance group for  kind="gpu", 
-    """
-    instance = instance_group(model_name, count=1, kind="gpu", gpus=[ 0 ])
-    assert instance['kind'] == 'KIND_GPU'
-    # load the test model to reset the config
+    """Evaluate instance group for  kind="gpu","""
+    instance = instance_group(model_name, count=1, kind="gpu", gpus=[0])
+    assert instance["kind"] == "KIND_GPU"
+    # re-load the test model to reset the config for next tests
     try:
         load_model(client, model_name)
     except InferenceServerException as e:
         print("model loading failed:" + str(e), flush=True)
 
+
 def test_update_model_instance_cpu():
-    """ Evaluate instance group for  kind="cpu", 
-    """
+    """Evaluate instance group for  kind="cpu","""
     instance = instance_group(model_name, count=1, kind="cpu", gpus=None)
-    assert instance['kind'] == 'KIND_CPU'
-    # load the test model to reset the config
+    assert instance["kind"] == "KIND_CPU"
+    # re-load the test model to reset the config for next tests
     try:
         load_model(client, model_name)
     except InferenceServerException as e:
@@ -97,29 +160,37 @@ def test_update_model_instance_cpu():
 
 
 def test_update_model_amp_False():
-    """ Evaluate remove amp if amp==False and amp is in current config
-    """
+    """Evaluate remove amp if amp==False and amp is in current config"""
+    # add amp if not already in the config
+    if gpu_accelerator_status(config, "auto_mixed_precision") == False:
+        gpu_accelerator_add(config, gpu_accelerator_amp)
 
-    model_update(client, model_name, max_batch_size=None, 
-                instances= None, 
-                trt=None, amp=False
+    model_update(
+        client, model_name, max_batch_size=None, instances=None, trt=None, amp=False
     )
     config = model_config(client, model_name)
-    assert gpu_accelerator_status(config, "auto_mixed_precision") ==False
-    # load the test model to reset the config
+    assert gpu_accelerator_status(config, "auto_mixed_precision") == False
+    # re-load the test model to reset the config for next tests
     try:
         load_model(client, model_name)
     except InferenceServerException as e:
         print("model loading failed:" + str(e), flush=True)
 
+
 def test_update_model_trt_None():
-    """ Evaluate remove trt if trt is None and trt is in current config
-    """
-    model_update(client, model_name, max_batch_size=None, instances=None, trt=None, amp=False
+    """Evaluate remove trt if trt is None and trt is in current config"""
+    # add both trt and amp if not already in the config
+    if gpu_accelerator_status(config, "auto_mixed_precision") == False:
+        gpu_accelerator_add(config, gpu_accelerator_amp)
+    if gpu_accelerator_status(config, "tensorrt") == False:
+        gpu_accelerator_add(config, gpu_accelerator_trt("FP16"))
+
+    model_update(
+        client, model_name, max_batch_size=None, instances=None, trt=None, amp=False
     )
     config = model_config(client, model_name)
-    assert gpu_accelerator_status(config, "tensorrt") ==False
-    # load the test model to reset the config
+    assert gpu_accelerator_status(config, "tensorrt") == False
+    # re-load the test model to reset the config for next tests
     try:
         load_model(client, model_name)
     except InferenceServerException as e:
@@ -127,29 +198,54 @@ def test_update_model_trt_None():
 
 
 def test_update_model_amp_True_trt_None():
-    """ Evaluate if amp is True, add only if trt is None
-    """
-    model_update(client, model_name, max_batch_size=None, instances=None, trt=None, amp=True
+    """Evaluate if amp is True, add only if trt is None"""
+    # add trt if not already in the config
+    if gpu_accelerator_status(config, "tensorrt") == False:
+        gpu_accelerator_add(config, gpu_accelerator_trt("FP16"))
+
+    model_update(
+        client, model_name, max_batch_size=None, instances=None, trt=None, amp=True
     )
     config = model_config(client, model_name)
-    assert gpu_accelerator_status(config, "auto_mixed_precision") ==True
-    # load the test model to reset the config
+    assert gpu_accelerator_status(config, "auto_mixed_precision") == True
+    # re-load the test model to reset the config for next tests
     try:
         load_model(client, model_name)
     except InferenceServerException as e:
         print("model loading failed:" + str(e), flush=True)
 
-def test_update_model_trt_NotNone():
-    """ Evaluate if trt is not none add trt, remove amp if necessary
-    """   
-    model_update(client, model_name, max_batch_size=None, instances=None, trt="FP16", amp=False
+
+def test_update_model_trt_NotNone_FP16():
+    """Evaluate if trt is not none add trt = "FP16", remove amp if necessary"""
+    # add amp if not already in the config
+    if gpu_accelerator_status(config, "auto_mixed_precision") == False:
+        gpu_accelerator_add(config, gpu_accelerator_amp)
+
+    model_update(
+        client, model_name, max_batch_size=None, instances=None, trt="FP16", amp=False
     )
     config = model_config(client, model_name)
     assert gpu_accelerator_status(config, "tensorrt") == True
-    # load the test model to reset the config
+    # re-load the test model to reset the config for next tests
     try:
         load_model(client, model_name)
     except InferenceServerException as e:
         print("model loading failed:" + str(e), flush=True)
 
 
+def test_update_model_trt_NotNone_FP32():
+    """Evaluate if trt is not none add trt = "FP16", remove amp if necessary"""
+    # add amp if not already in the config
+    if gpu_accelerator_status(config, "auto_mixed_precision") == False:
+        gpu_accelerator_add(config, gpu_accelerator_amp)
+
+    model_update(
+        client, model_name, max_batch_size=None, instances=None, trt="FP32", amp=False
+    )
+    config = model_config(client, model_name)
+    assert gpu_accelerator_status(config, "tensorrt") == True
+    # rre-load the test model to reset the config for next tests
+    try:
+        load_model(client, model_name)
+    except InferenceServerException as e:
+        print("model loading failed:" + str(e), flush=True)
