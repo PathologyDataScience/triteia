@@ -173,8 +173,10 @@ def test_update_model_instance_cpu():
 
 def test_update_model_amp_False():
     """Evaluate remove amp if amp==False and amp is in current config"""
-    # add amp if not already in the config
-    check_add_accelerator("auto_mixed_precision")
+    # Before doing this test, add amp if not already in the config
+    model_update(
+        client, model_name, max_batch_size=None, instances=None, trt=None, amp=True
+    )
 
     model_update(
         client, model_name, max_batch_size=None, instances=None, trt=None, amp=False
@@ -190,10 +192,10 @@ def test_update_model_amp_False():
 
 def test_update_model_trt_None():
     """Evaluate remove trt if trt is None and trt is in current config"""
-    # add both trt and amp if not already in the config
-
-    check_add_accelerator("auto_mixed_precision")
-    check_add_accelerator("tensorrt")
+    # Before this test, add trt if not already in the config
+    model_update(
+        client, model_name, max_batch_size=None, instances=None, trt="FP16", amp=False
+    )
 
     model_update(
         client, model_name, max_batch_size=None, instances=None, trt=None, amp=False
@@ -209,8 +211,10 @@ def test_update_model_trt_None():
 
 def test_update_model_amp_True_trt_None():
     """Evaluate if amp is True, add only if trt is None"""
-    # add trt if not already in the config
-    check_add_accelerator("tensorrt")
+    # Before this test, make amp False and add trt if not already in the config
+    model_update(
+        client, model_name, max_batch_size=None, instances=None, trt="FP16", amp=False
+    )
 
     model_update(
         client, model_name, max_batch_size=None, instances=None, trt=None, amp=True
@@ -227,7 +231,9 @@ def test_update_model_amp_True_trt_None():
 def test_update_model_trt_NotNone_FP16():
     """Evaluate if trt is not none add trt = "FP16", remove amp if necessary"""
     # add amp if not already in the config
-    check_add_accelerator("auto_mixed_precision")
+    model_update(
+        client, model_name, max_batch_size=None, instances=None, trt=None, amp=True
+    )
 
     model_update(
         client, model_name, max_batch_size=None, instances=None, trt="FP16", amp=False
@@ -244,7 +250,9 @@ def test_update_model_trt_NotNone_FP16():
 def test_update_model_trt_NotNone_FP32():
     """Evaluate if trt is not none add trt = "FP16", remove amp if necessary"""
     # add amp if not already in the config
-    check_add_accelerator("auto_mixed_precision")
+    model_update(
+        client, model_name, max_batch_size=None, instances=None, trt=None, amp=True
+    )
 
     model_update(
         client, model_name, max_batch_size=None, instances=None, trt="FP32", amp=False
