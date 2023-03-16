@@ -6,6 +6,15 @@ A simple python client for efficient inference with the NVIDIA Triton inference 
 
 This package can be installed using `pip install`. The build and dependencies are defined in pyproject.toml. Editable install is supported.
 
+Using the whole slide image reader requires installation of `histomcs_stream` and `large_image` with tiff and openslide tile sources using a Python wheel
+
+```
+sudo apt update
+sudo apt install -y python3-openslide openslide-tools
+pip install histomics_stream 'large_image[tiff,openslide]' \
+  scikit_image --find-links https://girder.github.io/large_image_wheels
+```
+
 ## Testing
 
 Testing and code formatting is automated using tox and pytest and can be run using `python -m tox run`. Running this will evaluate the tests in the environments defined in `tox.ini` and will format the source using Black. Following testing, a coverage.html file will be located in .tox/coverage.
