@@ -230,7 +230,7 @@ def test_update_model_amp_True_trt_None():
 
 def test_update_model_trt_NotNone_FP16():
     """Evaluate if trt is not none add trt = "FP16", remove amp if necessary"""
-    # add amp if not already in the config
+    # Before this test, add amp if not already in the config
     model_update(
         client, model_name, max_batch_size=None, instances=None, trt=None, amp=True
     )
@@ -249,7 +249,7 @@ def test_update_model_trt_NotNone_FP16():
 
 def test_update_model_trt_NotNone_FP32():
     """Evaluate if trt is not none add trt = "FP16", remove amp if necessary"""
-    # add amp if not already in the config
+    # Before this test, add amp if not already in the config
     model_update(
         client, model_name, max_batch_size=None, instances=None, trt=None, amp=True
     )
