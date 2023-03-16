@@ -1,5 +1,5 @@
 from functools import partial
-from model import model_config, model_metadata
+from simple_triton.model import model_config, model_metadata
 import multiprocessing
 import multiprocessing.queues
 from multiprocessing import Process
