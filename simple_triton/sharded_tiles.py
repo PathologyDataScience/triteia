@@ -1,10 +1,6 @@
 from copy import deepcopy
 import large_image_source_tiff as large_image
-import multiprocessing
-import multiprocessing.queues
 import numpy as np
-from simple_triton.inference import InferenceRunner
-from simple_triton.submitter import TimedQueue
 
 
 def _byteify(string):
@@ -72,88 +68,6 @@ def _hs_index(study, indices):
         if len(filtered["slides"][slide]["tiles"]) > 0
     }
     return filtered
-
-
-def histomics_stream_inference(
-    study, model_name, url="localhost:8001", batch=64, workers=32, limit=10
-):
-    """Inference on the tiles defined in a histomics stream study.
-
-    This shards a study over multiple workers with each worker loading tiles
-    and managing the submission and retrieval of different batches of tiles.
-
-    Parameters
-    ----------
-    study : dict
-        A histomics_stream study object containing the slides defined in paths, and analysis
-        plan defined by tile size, tile overlap, and magnification/reading parameters. Can
-        contain multiple slides. This study is sharded over multiple workers.
-    model_name : str
-        The name of the model to use for inference. This model should be
-        loaded on triton prior to inference.
-    url : str
-        The url for the triton server grpc port. Default value is `localhost:8001`.
-    batch : int
-        The number of tiles to process in a batch. Default value is `64` tiles.
-    workers : int
-        The number of workers to use for reading tiles from disk and submitting and
-        receiving inference results. Each worker will receive a shard of tiles and
-        will read them using a ShardedTiles iterator. Default value `32`.
-    limit : int
-        The maximum number of batches pending inference allowed for each worker.
-
-    Returns
-    -------
-    features : list of np.ndarray
-        Per-tile inference results
-    tile_info : dict
-        A dictionary of file, magnification, and position data for each tile produced
-        by histomics_stream.
-    performance : dict
-        A dictionary of time performance data on reading, inference, and inter-process
-        communication.
-
-    See Also
-    --------
-    ShardedTiles
-    """
-
-    # create input, output queues
-    qout = TimedQueue()
-
-    # Start consumers
-    shards = []
-    for w in range(workers):
-        shard = ShardedTiles(study, batch, w, workers)
-        shards.append(
-            InferenceRunner(url, model_name, shard, qout, limit, verbose=False)
-        )
-    for s in shards:
-        s.start()
-
-    # collecct results
-    batches = []
-    N = workers
-    while N:
-        output, t_put, t_get = qout.get()
-        if output is None:
-            N -= 1
-        else:
-            output["times"]["qout_put"] = t_put
-            output["times"]["qout_get"] = t_get
-            batches.append(output)
-
-    # separate results
-    features = [
-        [b["result"][i] for b in batches] for i in range(len(batches[0]["result"]))
-    ]
-    tile_info = {
-        k: np.concatenate([b["metadata"][k] for b in batches])
-        for k in batches[0]["metadata"].keys()
-    }
-    times = {k: [b["times"][k] for b in batches] for k in batches[0]["times"].keys()}
-
-    return features, tile_info, times
 
 
 class ShardedTiles(object):
