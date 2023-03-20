@@ -502,11 +502,11 @@ class InferenceRunner(Process):
 
         # create requests object
         req = Requests(self.url, self.limit)
-        
+
         # loop until iterator is exhausted
-        while True:            
+        while True:
             if not stop:
-                #draw samples, preprocess, and submit for inference up to limit
+                # draw samples, preprocess, and submit for inference up to limit
                 for i in range(self.limit - len(req.pending)):
                     try:
                         t_put = time.time()
@@ -525,17 +525,17 @@ class InferenceRunner(Process):
                         req.insert(request, self.timeout)
                     else:
                         break
-             
+
             # check pending requests
             completed = req.check(block=False)
-            
+
             # put completed post-processed requests into queue
             for inference in completed:
-                
+
                 # apply postprocessing function
                 # if len(inference["result"]):
                 # TBD
-                
+
                 # remove inputs
                 del inference["inputs"]
 
