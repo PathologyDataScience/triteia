@@ -11,9 +11,13 @@ Using the whole slide image reader requires installation of `histomcs_stream` an
 ```
 sudo apt update
 sudo apt install -y python3-openslide openslide-tools
-pip install histomics_stream 'large_image[tiff,openslide]' \
+pip install histomics_stream 'large_image[tiff]' \
   scikit_image --find-links https://girder.github.io/large_image_wheels
 ```
+
+## Example
+
+The example `examples\feature_extraction.ipynb` demonstrates how to extract features from a whole-slide image. This example requires installation of the `mil` library.
 
 ## Testing
 
@@ -37,10 +41,3 @@ docker run --gpus=8 --rm -p 8000:8000 -p 8001:8001 -p 8002:8002 -p 8003:8003 -v/
 ```
 
 The argument `--model-control-mode=explicit` is necessary for the client to load/unload models and to manipulate their configurations while the server is running. The argument `--load-model=*` loads available models from the repository on startup.
-
-## Repository organization
-
-- /simple_triton - source code
-- /tests - tests for source
-- /benchmarking - scripts and notebooks for generating benchmarking results
-- /results - contains outputs of benchmarking experiments
