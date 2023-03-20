@@ -84,7 +84,12 @@ def analyze(times, floatfmt=".2f"):
     # form table
     table = [
         ["total (sec)", np.median(np.array(total)), min(total), max(total)],
-        ["qin (% total)", np.median(np.array(qin_time)), min(qin_time), max(qin_time),],
+        [
+            "qin (% total)",
+            np.median(np.array(qin_time)),
+            min(qin_time),
+            max(qin_time),
+        ],
         [
             "qout (% total)",
             np.median(np.array(qout_time)),
@@ -109,7 +114,12 @@ def analyze(times, floatfmt=".2f"):
             min(retrieval),
             max(retrieval),
         ],
-        ["other (% in-process)", np.median(np.array(other)), min(other), max(other),],
+        [
+            "other (% in-process)",
+            np.median(np.array(other)),
+            min(other),
+            max(other),
+        ],
     ]
 
     # display results
