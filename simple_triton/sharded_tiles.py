@@ -4,12 +4,12 @@ import multiprocessing
 import multiprocessing.queues
 import numpy as np
 from simple_triton.inference import InferenceRunner
-from simple_triton.sharded_tiles import ShardedTiles
 from simple_triton.submitter import TimedQueue
 
 
 def _byteify(string):
-    return bytes(string.encode('utf-8'))
+    return bytes(string.encode("utf-8"))
+
 
 def _hs_study_meta(study):
     return {
