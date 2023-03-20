@@ -1,4 +1,4 @@
-from inference import InferenceRunner
+from simple_triton.inference import InferenceRunner
 import multiprocessing
 import multiprocessing.queues
 import numpy as np
@@ -63,14 +63,14 @@ class TimedQueue(multiprocessing.queues.Queue):
 
 
 # analyze and display time performance
-def analyze(results, floatfmt=".2f"):
+def analyze(times, floatfmt=".2f"):
     # calculate times
-    total = [r["times"]["qout_get"] - r["times"]["qin_put"] for r in results]
-    in_process = [r["times"]["qout_put"] - r["times"]["qin_get"] for r in results]
-    qin_time = [r["times"]["qin_get"] - r["times"]["qin_put"] for r in results]
-    qout_time = [r["times"]["qout_get"] - r["times"]["qout_put"] for r in results]
-    completion = [r["times"]["completed"] - r["times"]["submitted"] for r in results]
-    retrieval = [r["times"]["retrieved"] - r["times"]["completed"] for r in results]
+    total = np.subtract(times["qout_get"], times["qin_put"])
+    in_process = np.subtract(times["qout_put"], times["qin_get"])
+    qin_time = np.subtract(times["qin_get"], times["qin_put"])
+    qout_time = np.subtract(times["qout_get"], times["qout_put"])
+    completion = np.subtract(times["completed"], times["submitted"])
+    retrieval = np.subtract(times["retrieved"], times["completed"])
     other = [i - (c + r) for (i, c, r) in zip(in_process, completion, retrieval)]
 
     # convert to percentages

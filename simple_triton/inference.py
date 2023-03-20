@@ -1,5 +1,5 @@
 from functools import partial
-from model import model_config, model_metadata
+from simple_triton.model import model_config, model_metadata
 import multiprocessing
 import multiprocessing.queues
 from multiprocessing import Process
@@ -427,7 +427,8 @@ class InferenceRunner(Process):
     def __init__(
         self,
         url,
-        qin,
+        model,
+        dataset,
         qout,
         limit=10,
         rest=1e-2,
@@ -442,12 +443,14 @@ class InferenceRunner(Process):
         ----------
         url : string
             The inference server url.
-        qin : multiprocessing.Queue
-            Input queue containing samples for inference. Each sample is a
-            2-tuple or 3-tuple containing the model name (str), a list of numpy
-            arrays for the model inputs (list of np.ndarray), and an optional
-            dictionary of sample metadata that will stay linked to the
-            inference request and result.
+        model : string
+            The model name.
+        dataset : object
+            An iterator producing batched samples and metadata. Each batch
+            is a 2-tuple containing a list of numpy arrays for the model
+            inputs (list of np.ndarray), and an optional dictionary of
+            sample metadata that will stay linked to the inference request
+            and result.
         qout : multiprocessing.Queue
             Output queue receiving completed inference requests and process
             summary information on process completion.
@@ -475,13 +478,20 @@ class InferenceRunner(Process):
 
         # capture input arguments
         self.url = url
-        self.qin = qin
+        self.model = model
+        self.dataset = dataset
         self.qout = qout
         self.limit = limit
         self.timeout = timeout
         self.rest = rest
-        self.pre = pre
-        self.post = post
+        if pre is None:
+            self.pre = lambda x: x
+        else:
+            self.pre = pre
+        if post is None:
+            self.post = lambda x: x
+        else:
+            self.post = post
 
         # initialize list to hold performance data
         self.time_inference = []
@@ -493,49 +503,47 @@ class InferenceRunner(Process):
         # create requests object
         req = Requests(self.url, self.limit)
 
-        # loop until exit signal received from calling process
+        # loop until iterator is exhausted
         while True:
-            # fill input queue with requests up to limit
             if not stop:
+                # draw samples, preprocess, and submit for inference up to limit
                 for i in range(self.limit - len(req.pending)):
-                    # pull sample
-                    sample, t_put, t_get = self.qin.get()
-
-                    # check if stop signal, otherwise pack dictionary
-                    if sample is None:
+                    try:
+                        t_put = time.time()
+                        sample, metadata = next(self.dataset)
+                        t_get = time.time()
+                    except StopIteration as e:
                         stop = True
-                        break
-                    else:
+                    if not stop:
+                        sample = self.pre(sample)
                         request = {
-                            "model_name": sample[0],
-                            "inputs": sample[1],
+                            "model_name": self.model,
+                            "inputs": [sample],
+                            "metadata": metadata,
                             "times": {"qin_put": t_put, "qin_get": t_get},
                         }
-
-                    # add metadata if present
-                    if len(request) == 3:
-                        request["metadata"] = sample[2]
-
-                    # apply preprocessing function
-                    # TBD
-
-                    # fill requests if stop signal not received
-                    req.insert(request, self.timeout)
+                        req.insert(request, self.timeout)
+                    else:
+                        break
 
             # check pending requests
             completed = req.check(block=False)
 
             # put completed post-processed requests into queue
             for inference in completed:
-                # # apply postprocessing function
+                # apply postprocessing function
                 # if len(inference["result"]):
                 # TBD
+
+                # remove inputs
+                del inference["inputs"]
 
                 # place in queue
                 self.qout.put(inference)
 
-            # check if done
+            # if done send stop signal
             if len(req.pending) == 0 and stop:
+                self.qout.put(None)
                 break
 
             # sleep
