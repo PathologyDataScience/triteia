@@ -219,7 +219,7 @@ def test_update_model_trt_NotNone_FP32():
     )
     config = model_config(client, model_name)
     assert gpu_accelerator_status(config, "tensorrt") == True
-    # rre-load the test model to reset the config for next tests
+    # re-load the test model to reset the config for next tests
     load_model(client, model_name)
 
 def test_update_model_trt_NotNone_FP32_wrong():
@@ -232,8 +232,17 @@ def test_update_model_trt_NotNone_FP32_wrong():
     except InferenceServerException as e:
         print("model loading failed:" + str(e), flush=True)
 
-assert gpu_accelerator_status(config, "auto_mixed_precision1") == False
+def test_update_amp_incorrect_format():
+    model_update(
+            client, model_name, max_batch_size=None, instances=None, trt=None, amp="Test"
+        )
+    # re-load the test model to reset the config for next tests
+    load_model(client, model_name)
 
+def test_update_trt_incorrect_format():
+    model_update(
+            client, model_name, max_batch_size=None, instances=None, trt="FP0", amp=None
+        )
 
 test_update_model_instance_gpu()
 test_update_model_instance_gpu_wrong()
@@ -270,3 +279,10 @@ test_update_model_trt_NotNone_FP32()
 test_update_model_trt_NotNone_FP32_wrong()
 
 print("test_update_model_trt_NotNone_FP16_wrong")
+
+test_update_amp_incorrect_format()
+
+print("test_update_amp_incorrect_format")
+
+test_update_trt_incorrect_format()
+
