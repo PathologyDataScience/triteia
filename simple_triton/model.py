@@ -1,7 +1,7 @@
 from google.protobuf.json_format import MessageToDict
 import time
 from tritonclient.utils import InferenceServerException
-
+import json
 
 def instance_group(model_name, count, kind="gpu", gpus=None):
     """Generates an instance count dictionary for use in a model config.
@@ -290,7 +290,8 @@ def model_update(
             raise ValueError(
                 "Instances must be an instance_group dict or list of dicts"
             )
-
+    if not isinstance(amp, bool): 
+      raise ValueError("trt must be a bool value")
     # remove amp if amp==False and amp is in current config
     if not amp:
         if gpu_accelerator_status(config, "auto_mixed_precision"):
@@ -299,7 +300,7 @@ def model_update(
     # remove trt if trt is None and trt is in current config
     if trt is None:
         if gpu_accelerator_status(config, "tensorrt"):
-            gpu_accelerator_delete(config, "auto_mixed_precision")
+            gpu_accelerator_delete(config, "tensorrt")
 
     # if amp is True, add only if trt is None
     if amp and trt is None:
@@ -312,7 +313,7 @@ def model_update(
         gpu_accelerator_add(config, gpu_accelerator_trt(trt))
 
     # apply model update
-    load_model(client, model_name, config=config, block=True)
+    load_model(client, model_name, config=json.dumps(config), block=True)
 
 
 def load_model(
@@ -400,7 +401,7 @@ def load_model(
                         print(
                             f"load_model(): {model_name} is not loaded. Loading with provided config."
                         )
-                    client.load_model(model_name, config=config)
+                    ç
                     return
 
             # reload model and with provided config
