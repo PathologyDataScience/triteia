@@ -247,42 +247,31 @@ def test_update_trt_incorrect_format():
 test_update_model_instance_gpu()
 test_update_model_instance_gpu_wrong()
 
-print("test_update_model_instance_gpu_wrong")
 
 test_update_model_instance_cpu()
 test_update_model_instance_cpu_wrong()
-
-print("test_update_model_instance_cpu_wrong")
 
 
 test_update_model_amp_False()
 test_update_model_amp_False_wrong()
 
-print("test_update_model_amp_False_wrong")
-
 test_update_model_trt_None()
 test_update_model_trt_None_wrong()
 
-print("test_update_model_trt_None_wrong")
 
 test_update_model_amp_True_trt_None()
 test_update_model_amp_True_trt_None_wrong()
 
-print("test_update_model_trt_None_wrong")
 
 test_update_model_trt_NotNone_FP16()
 test_update_model_trt_NotNone_FP16_wrong()
 
-print("test_update_model_trt_NotNone_FP16_wrong")
 
 test_update_model_trt_NotNone_FP32()
 test_update_model_trt_NotNone_FP32_wrong()
 
-print("test_update_model_trt_NotNone_FP16_wrong")
 
 test_update_amp_incorrect_format()
-
-print("test_update_amp_incorrect_format")
 
 test_update_trt_incorrect_format()
 
