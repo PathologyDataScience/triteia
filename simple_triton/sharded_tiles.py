@@ -176,16 +176,8 @@ class ShardedTiles(object):
             if (
                 self.large_images is None
             ):  # lazy creation of large_image objects for serialization
-                self.large_images = {
-                    self.tiles[self.i][0]: large_image.open(self.tiles[self.i][0])
-                }
-            else:
-                if (
-                    self.tiles[self.i][0] not in self.large_images
-                ):  # shards can span multiple slides - slide not open yet
-                    self.large_images[self.tiles[self.i][0]] = large_image.open(
-                        self.tiles[self.i][0]
-                    )
+                slides = set([tile[0] for tile in self.tiles])
+                self.large_images = {slide: large_image.open(slide) for slide in slides}
             indices = range(self.i, min(self.i + self.batch, len(self.tiles)))
             pixels = [
                 self.large_images[self.tiles[j][0]].getRegion(**self.tiles[j][1])[0]
