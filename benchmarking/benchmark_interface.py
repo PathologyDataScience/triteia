@@ -1,8 +1,6 @@
-import argparse
 import numpy as np
 import time
 import tritonclient.grpc as grpcclient
-import tritonclient.http as httpclient
 from concurrent.futures import ThreadPoolExecutor
 from queue import Queue
 
