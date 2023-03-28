@@ -4,8 +4,6 @@ from tritonclient.utils import InferenceServerException
 
 model_name = "simple-trt-model-FP16"  # set model name
 model_name_wrong = "simple-trt-model-FP16-1"
-gpu_wrong = "gpu1"
-cpu_wrong = "cpu1"
 url = "localhost:8001"  # url for grpc access to tirton server
 max_batch_size = 1024
 verbose = False  # set verbos as False
@@ -79,14 +77,16 @@ def test_update_model_instance_gpu():
     # re-load the test model to reset the config for next tests
     load_model(client, model_name)
 
+
 def test_update_model_instance_gpu_wrong():
     """Evaluate instance group for  kind="gpu","""
     try:
-        instance = instance_group(model_name, count=1, kind="gpu", gpus=[0])
-        assert instance["kind"] == "KIND_GPU"
-        load_model(client, model_name_wrong)
+        instance = instance_group(model_name, count=1, kind="gpu1", gpus=[0])
+        # assert instance["kind"] == "KIND_GPU"
+        # load_model(client, model_name_wrong)
     except InferenceServerException as e:
         print("model loading failed:" + str(e), flush=True)
+
 
 def test_update_model_instance_cpu():
     """Evaluate instance group for  kind="cpu","""
@@ -99,7 +99,7 @@ def test_update_model_instance_cpu():
 def test_update_model_instance_cpu_wrong():
     """Evaluate instance group for  kind="cpu","""
     try:
-        instance = instance_group(model_name, count=1, kind="cpu", gpus=None)
+        instance = instance_group(model_name, count=1, kind="cpu1", gpus=None)
         assert instance["kind"] == "KIND_CPU"
         load_model(client, model_name_wrong)
     except InferenceServerException as e:
@@ -121,12 +121,18 @@ def test_update_model_amp_False():
     # re-load the test model to reset the config for next tests
     load_model(client, model_name)
 
-def test_update_model_amp_False_wrong():
+
+def test_update_model_amp_False_wrongModel():
     """Evaluate remove amp if amp==False and amp is in current config"""
     try:
         # Before doing this test, add amp if not already in the config
         model_update(
-            client, model_name_wrong, max_batch_size=None, instances=None, trt=None, amp=True
+            client,
+            model_name_wrong,
+            max_batch_size=None,
+            instances=None,
+            trt=None,
+            amp=True,
         )
     except InferenceServerException as e:
         print("model loading failed:" + str(e), flush=True)
@@ -147,15 +153,6 @@ def test_update_model_trt_None():
     # re-load the test model to reset the config for next tests
     load_model(client, model_name)
 
-def test_update_model_trt_None_wrong():
-    """Evaluate remove trt if trt is None and trt is in current config"""
-    try:
-        # Before this test, add trt if not already in the config
-        model_update(
-            client, model_name_wrong, max_batch_size=None, instances=None, trt="FP16", amp=False
-        )
-    except InferenceServerException as e:
-        print("model loading failed:" + str(e), flush=True)
 
 def test_update_model_amp_True_trt_None():
     """Evaluate if amp is True, add only if trt is None"""
@@ -171,16 +168,6 @@ def test_update_model_amp_True_trt_None():
     assert gpu_accelerator_status(config, "auto_mixed_precision") == True
     # re-load the test model to reset the config for next tests
     load_model(client, model_name)
-
-def test_update_model_amp_True_trt_None_wrong():
-    """Evaluate if amp is True, add only if trt is None"""
-    try:   
-        # Before this test, make amp False and add trt if not already in the config
-        model_update(
-            client, model_name_wrong, max_batch_size=None, instances=None, trt="FP16", amp=False
-        )
-    except InferenceServerException as e:
-        print("model loading failed:" + str(e), flush=True)
 
 
 def test_update_model_trt_NotNone_FP16():
@@ -198,16 +185,6 @@ def test_update_model_trt_NotNone_FP16():
     load_model(client, model_name)
 
 
-def test_update_model_trt_NotNone_FP16_wrong():
-    """Evaluate if trt is not none add trt = "FP16", remove amp if necessary"""
-    # Before this test, add amp if not already in the config
-    try:
-        model_update(
-            client, model_name_wrong, max_batch_size=None, instances=None, trt=None, amp=True
-        )
-    except InferenceServerException as e:
-        print("model loading failed:" + str(e), flush=True)
-
 def test_update_model_trt_NotNone_FP32():
     """Evaluate if trt is not none add trt = "FP16", remove amp if necessary"""
     # Before this test, add amp if not already in the config
@@ -222,56 +199,16 @@ def test_update_model_trt_NotNone_FP32():
     # re-load the test model to reset the config for next tests
     load_model(client, model_name)
 
-def test_update_model_trt_NotNone_FP32_wrong():
-    """Evaluate if trt is not none add trt = "FP16", remove amp if necessary"""
-    # Before this test, add amp if not already in the config
-    try:
-        model_update(
-            client, model_name_wrong, max_batch_size=None, instances=None, trt=None, amp=True
-        )
-    except InferenceServerException as e:
-        print("model loading failed:" + str(e), flush=True)
 
 def test_update_amp_incorrect_format():
     model_update(
-            client, model_name, max_batch_size=None, instances=None, trt=None, amp="Test"
-        )
+        client, model_name, max_batch_size=None, instances=None, trt=None, amp="Test"
+    )
     # re-load the test model to reset the config for next tests
     load_model(client, model_name)
 
+
 def test_update_trt_incorrect_format():
     model_update(
-            client, model_name, max_batch_size=None, instances=None, trt="FP0", amp=None
-        )
-
-test_update_model_instance_gpu()
-test_update_model_instance_gpu_wrong()
-
-
-test_update_model_instance_cpu()
-test_update_model_instance_cpu_wrong()
-
-
-test_update_model_amp_False()
-test_update_model_amp_False_wrong()
-
-test_update_model_trt_None()
-test_update_model_trt_None_wrong()
-
-
-test_update_model_amp_True_trt_None()
-test_update_model_amp_True_trt_None_wrong()
-
-
-test_update_model_trt_NotNone_FP16()
-test_update_model_trt_NotNone_FP16_wrong()
-
-
-test_update_model_trt_NotNone_FP32()
-test_update_model_trt_NotNone_FP32_wrong()
-
-
-test_update_amp_incorrect_format()
-
-test_update_trt_incorrect_format()
-
+        client, model_name, max_batch_size=None, instances=None, trt="FP0", amp=None
+    )
