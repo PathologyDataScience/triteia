@@ -4,6 +4,10 @@ import multiprocessing.queues
 import numpy as np
 from tabulate import tabulate
 import time
+import tritonclient.grpc as grpcclient
+from tritonclient.utils import InferenceServerException
+from model import load_model, model_config, model_update
+import json
 
 
 class SimulatedProducer(object):
@@ -127,37 +131,51 @@ def analyze(times, floatfmt=".2f"):
 
 
 if __name__ == "__main__":
-    # parameters
+    # server and experiment parameters
     N = 100  # total number of inferences to perform
-    count = 0  # postion of input inference and out request in the list
     limit = 10  # limit on number of pending requests per worker
-    workers = 1  # total number of Submitter workers
+    workers = 4  # total number of Submitter workers
     url = "localhost:8001"  # url for grpc access to tirton server
-    model_version = "1"  # set model version
     verbose = False  # set verbos as False
-    input_dtype = "TYPE_FP16"  # set input data type
-    output_dtype = "TYPE_FP32"  # set input data type
-    model_name = "simple-trt-model-FP16"  # set model name
-    model_name_test = "simple-trt-model-FP16-test"  # set model name
-    model_path_input = (
-        "models/simple-trt-model-FP16-input/1/model.savedmodel"  # set model path
-    )
-    model_path_test = (
-        "models/simple-trt-model-FP16-test/1/model.savedmodel"  # set model path
-    )
-    batch_size = 1024
-    dimension_input = 1024
-    dimension_output = 1
 
-    import tritonclient.grpc as grpcclient
+    # model configuration parameters
+    # input_dtype = "TYPE_FP16"  # set input data type
+    # output_dtype = "TYPE_FP32"  # set input data type
+    model_name = "simple-trt-model-FP16-test"  # set model name
+    batch_size = 1024
+    trt = "FP16"
+    amp = False
+    # dimension_input = 1024
+    # dimension_output = 1
+    instances = {"count": 4, "kind": "KIND_CPU", "gpus": None}
+    optimization = '{"execution_accelerators":{"gpu_execution_accelerator" : [\
+           {"name" : "tensorrt", "parameters": {"precision_mode": "FP16"}}]}}'
 
     # create GRPC client
     try:
         client = grpcclient.InferenceServerClient(url=url, verbose=verbose)
-    except Exception as e:
-        print("context creation failed: " + str(e), flush=True)
+    except InferenceServerException as e:
+        print("client creation failed: " + str(e), flush=True)
 
-    # start timer
+    # load the test model
+    try:
+        load_model(client, model_name)
+    except InferenceServerException as e:
+        print("model loading failed:" + str(e), flush=True)
+
+    # query the model to check the input/output size and type
+    config = model_config(client, model_name)
+    input_dimension = [int(d) for d in config["input"][0]["dims"]][1:]
+    output_dimension = [int(d) for d in config["output"][0]["dims"]]
+    input_dtype = config["input"][0]["dataType"]
+    output_dtype = config["output"][0]["dataType"]
+
+    # apply an update to the model configuration, changing resources
+    config_model_updated = model_update(
+        client, model_name, batch_size, instances, trt, amp=False
+    )
+
+    # start experiment timer
     start = time.time()
 
     # create input, output queues
@@ -173,7 +191,7 @@ if __name__ == "__main__":
         w.start()
 
     # initialize producer
-    producer = iter(SimulatedProducer(batch_size, dimension_input, np.float16))
+    producer = iter(SimulatedProducer(batch_size, input_dimension, np.float16))
 
     # enqueue tasks
     print("Enqueuing inference jobs")
