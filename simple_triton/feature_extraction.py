@@ -111,6 +111,38 @@ def feature_extractor(repository, model, name, t=(224, 224), pool="avg"):
         Dimensionality of model output.
     """
 
+    def rename(model, input_name="input_1", output_name="output_1"):
+        # renames feature extraction model input, ouput names to input_1, output_1
+
+        def nested_replace(inbound, name, replacement):
+            if isinstance(inbound, list):
+                inbound = [nested_replace(l, name, replacement) for l in inbound]
+            else:
+                if inbound == name:
+                    inbound = replacement
+            return inbound
+
+        config = model.get_config()
+        replace = config["layers"][0]["name"]
+        config["layers"][0]["name"] = input_name
+        config["layers"][0]["config"]["name"] = input_name
+        config["layers"][1]["inbound_nodes"] = nested_replace(
+            config["layers"][1]["inbound_nodes"], replace, input_name
+        )
+        config["input_layers"] = nested_replace(
+            config["input_layers"], replace, input_name
+        )
+        replace = config["layers"][-1]["name"]
+        config["layers"][-1]["name"] = output_name
+        config["layers"][-1]["config"]["name"] = output_name
+        config["output_layers"] = nested_replace(
+            config["output_layers"], replace, output_name
+        )
+        new = tf.keras.Model().from_config(config)
+        for n, o in zip(new.layers, model.layers):
+            n.set_weights(o.get_weights())
+        return new
+
     # fail if name exists in model repository
     if os.path.exists(os.path.join(repository, name)):
         raise ValueError(f"Model with name {name} already exists in repository.")
@@ -206,6 +238,9 @@ def feature_extractor(repository, model, name, t=(224, 224), pool="avg"):
     os.mkdir(path)
     path = os.path.join(path, "model.savedmodel")
     os.mkdir(path)
+
+    # rename model inputs and outputs
+    model = rename(model)
 
     # save model
     model.save(path)
