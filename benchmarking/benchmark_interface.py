@@ -120,8 +120,6 @@ def infer(client, sample, timeout=None):
             "max_batch_size": model_config(client, model_name)["maxBatchSize"],
         }
         model_dicts[model_name] = model_dict
-
-        inputs = _client_inputs(sample["inputs"], model_dict)
         # create InputData objects based on data shape
         inputs = _client_inputs(sample["inputs"], model_dict)
 
