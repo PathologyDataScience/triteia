@@ -16,6 +16,7 @@ N = 100
 LIMIT = 10
 WORKERS = 4
 
+
 class SimulatedProducer(object):
     """A simulated producer that emits numpy arrays with specified batch size
     and feature dimensions.
@@ -49,7 +50,6 @@ class SimulatedProducer(object):
         return output
 
 
-
 def infer(client, inputs):
     """
     Run a single inference request on the Triton Inference Server.
@@ -61,11 +61,17 @@ def infer(client, inputs):
     Returns:
         The outputs of the model.
     """
-    inputs = [grpcclient.InferInput(name, shape, datatype) for name, (shape, datatype) in inputs.items()]
+    inputs = [
+        grpcclient.InferInput(name, shape, datatype)
+        for name, (shape, datatype) in inputs.items()
+    ]
     for input_ in inputs:
         input_.set_data_from_numpy(next(SimulatedProducer()))
 
-    outputs = [grpcclient.InferRequestedOutput(name) for name in client.get_model_metadata(MODEL_NAME).outputs]
+    outputs = [
+        grpcclient.InferRequestedOutput(name)
+        for name in client.get_model_metadata(MODEL_NAME).outputs
+    ]
     result = client.infer(MODEL_NAME, inputs, outputs=outputs)
 
     return {output.name: output.as_numpy() for output in result.as_numpy_iterator()}
@@ -110,17 +116,13 @@ def measure_throughput():
         raise ValueError(f"Unsupported protocol: {PROTOCOL}")
 
     # Warm up the server by running a single inference request
-    inputs = {
-        "input": ((BATCH_SIZE, 3, 224, 224), "FP16")
-    }
+    inputs = {"input": ((BATCH_SIZE, 3, 224, 224), "FP16")}
     infer(client, inputs)
 
     # Create the queue of pending inference requests
     queue = Queue(maxsize=LIMIT)
     for i in range(N):
-        queue.put({
-            "input": ((BATCH_SIZE, 3, 224, 224), "FP16")
-        })
+        queue.put({"input": ((BATCH_SIZE, 3, 224, 224), "FP16")})
 
     # Start the workers to submit inference requests to the server
     with ThreadPoolExecutor(max_workers=WORKERS) as executor:
