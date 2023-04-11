@@ -292,8 +292,8 @@ def model_update(
             raise ValueError(
                 "Instances must be an instance_group dict or list of dicts"
             )
-  
-    if not isinstance(amp, bool): 
+
+    if not isinstance(amp, bool):
         raise ValueError("trt must be a bool value")
     # remove amp if amp==False and amp is in current config
     if not amp:
