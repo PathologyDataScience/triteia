@@ -157,7 +157,7 @@ class ConfigBuilder(object):
         https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#datatypes
         """
 
-        #check for valid inputs
+        # check for valid inputs
         if not isinstance(name, str):
             raise ValueError("name must be str")
         if not isinstance(name, str):
@@ -177,11 +177,7 @@ class ConfigBuilder(object):
                 "name": name,
             }
             self.config["inputs"].append(
-                {
-                    "name": name,
-                    "datatype": datatype,
-                    "dims": dims
-                }
+                {"name": name, "datatype": datatype, "dims": dims}
             )
 
     def max_batch_size(self, samples):
@@ -203,7 +199,7 @@ class ConfigBuilder(object):
         """Adds an instance group to the config.
 
         The instance group specifies the number of model instances hosted on each
-        CPU and GPU. By default, 1 model instance will be hosted on each available 
+        CPU and GPU. By default, 1 model instance will be hosted on each available
         GPU. Specific GPUs can be set using the `gpus` argument. Each call adds to
         the existing instance group specification.
 
@@ -212,7 +208,7 @@ class ConfigBuilder(object):
         count : int
             The number of model instances to run concurrently.
         kind : str {"cpu", "gpu"}
-            Default value of "gpu" specifies that `count` models be hosted on each 
+            Default value of "gpu" specifies that `count` models be hosted on each
             available gpu.
         gpus : list of int
             If specified, `count` instances will be hosted on each of the listed
@@ -237,7 +233,7 @@ class ConfigBuilder(object):
         if gpus is not None:
             if not isinstance(gpus, list):
                 raise ValueError("argument 'gpus' must be list of int.")
-            if not all([isinstance(inst, int) for inst in gpus])
+            if not all([isinstance(inst, int) for inst in gpus]):
                 raise ValueError("elements of 'gpus' must be int.")
 
         # set model name, count, and kind
@@ -276,7 +272,7 @@ class ConfigBuilder(object):
     def add_trt(self, precision="FP16"):
         """Add an TensorRT accelerator to the config.
 
-        This analyzes the model using TensorRT (TRT) to optimize inference 
+        This analyzes the model using TensorRT (TRT) to optimize inference
         via quantization, layer and tensor fusion, and kernel tuning.
         TRT can be applied to produce either an FP32 or FP16 model.
 
@@ -287,13 +283,10 @@ class ConfigBuilder(object):
         """
 
         if precision.upper() not in {"FP16", "FP32"}:
-            raise ValueError(
-                "precision must be one of 'FP16', 'FP32'."
-            )
+            raise ValueError("precision must be one of 'FP16', 'FP32'.")
         if self._gpu_accelerator_status(self.config, "auto_mixed_precision"):
             self._gpu_accelerator_delete(self.config, "auto_mixed_precision")
         self._gpu_accelerator_add(self.config, _gpu_accelerator_trt(precision))
-
 
     def remove_trt(self):
         """Remove a TensorRT accelerator from the config."""
