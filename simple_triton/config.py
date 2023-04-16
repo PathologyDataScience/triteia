@@ -76,7 +76,7 @@ class ConfigBuilder(object):
                 raise ValueError("config must be a dict")
             self.config = config
         else:
-            self.config = model_config(client, model_name)["config"]
+            self.config = model_config(client, model_name)
         self.response_cache(False)
 
     def _gpu_accelerator_status(self, accelerator):
@@ -105,7 +105,7 @@ class ConfigBuilder(object):
     def _gpu_accelerator_delete(self, accelerator):
         """Delete a gpuExecutionAccelerator and cleanup empty parents"""
 
-        if gpu_accelerator_status(self.config, accelerator):
+        if self._gpu_accelerator_status(accelerator):
             gpuexecacc = self.config["optimization"]["executionAccelerators"][
                 "gpuExecutionAccelerator"
             ]
@@ -135,8 +135,8 @@ class ConfigBuilder(object):
 
     def _gpu_accelerator_add(self, accelerator):
         """Adds a gpu accelerator to the config"""
-        if gpu_accelerator_status(self.config, accelerator["name"]):
-            gpu_accelerator_delete(self.config, accelerator["name"])
+        if self._gpu_accelerator_status(accelerator["name"]):
+            self._gpu_accelerator_delete(accelerator["name"])
         if "optimization" not in self.config:
             self.config["optimization"] = {}
         if "executionAccelerators" not in self.config["optimization"]:
@@ -152,6 +152,7 @@ class ConfigBuilder(object):
             "gpuExecutionAccelerator"
         ].append(accelerator)
 
+    @staticmethod
     def _gpu_accelerator_trt(precision="FP16"):
         """Returns a TensorRT accelerator"""
         if precision.upper() == "FP16" or precision.upper() == "FP32":
@@ -164,6 +165,7 @@ class ConfigBuilder(object):
                 "precision must be one of None, numpy.float16, numpy.float32"
             )
 
+    @staticmethod
     def _gpu_accelerator_amp():
         """Returns an amp acccelerator"""
         return {"name": "auto_mixed_precision"}
@@ -216,13 +218,13 @@ class ConfigBuilder(object):
         inputs = [i["name"] for i in self.config["input"]]
         if name in inputs:
             index = inputs.index(name)
-            self.config["inputs"][index]["datatype"] = datatype
-            self.config["inputs"][index]["dims"] = dims
+            self.config["input"][index]["dataType"] = datatype
+            self.config["input"][index]["dims"] = dims
         else:
             inputs = {
                 "name": name,
             }
-            self.config["inputs"].append(
+            self.config["input"].append(
                 {"name": name, "datatype": datatype, "dims": dims}
             )
 
@@ -289,14 +291,14 @@ class ConfigBuilder(object):
 
         # assign
         if "instanceGroup" not in self.config:
-            config["instanceGroup"] = [instance]
+            self.config["instanceGroup"] = [instance]
         else:
-            config["instanceGroup"].append(instance)
+            self.config["instanceGroup"].append(instance)
 
     def remove_instance_groups(self):
         """Removes all instance groups from config."""
         if "instanceGroup" in self.config:
-            del config["instanceGroup"]
+            del self.config["instanceGroup"]
 
     def add_mixed_precision(self):
         """Add an automatic mixed-precision accelerator to the config.
@@ -306,14 +308,14 @@ class ConfigBuilder(object):
         used simultaneously with TensorRT accelerator.
         """
 
-        if self._gpu_accelerator_status(self.config, "tensorrt"):
-            self._gpu_accelerator_delete(self.config, "tensorrt")
-        self._gpu_accelerator_add(self.config, _gpu_accelerator_amp())
+        if self._gpu_accelerator_status("tensorrt"):
+            self._gpu_accelerator_delete("tensorrt")
+        self._gpu_accelerator_add(self._gpu_accelerator_amp())
 
     def remove_mixed_precision(self):
         """Remove an automatic mixed-precision accelerator from the config."""
-        if self._gpu_accelerator_status(self.config, "auto_mixed_precision"):
-            self._gpu_accelerator_delete(self.config, "auto_mixed_precision")
+        if self._gpu_accelerator_status("auto_mixed_precision"):
+            self._gpu_accelerator_delete("auto_mixed_precision")
 
     def add_trt(self, precision="FP16"):
         """Add an TensorRT accelerator to the config.
@@ -330,11 +332,11 @@ class ConfigBuilder(object):
 
         if precision.upper() not in {"FP16", "FP32"}:
             raise ValueError("precision must be one of 'FP16', 'FP32'.")
-        if self._gpu_accelerator_status(self.config, "auto_mixed_precision"):
-            self._gpu_accelerator_delete(self.config, "auto_mixed_precision")
-        self._gpu_accelerator_add(self.config, _gpu_accelerator_trt(precision))
+        if self._gpu_accelerator_status("auto_mixed_precision"):
+            self._gpu_accelerator_delete("auto_mixed_precision")
+        self._gpu_accelerator_add(self._gpu_accelerator_trt(precision))
 
     def remove_trt(self):
         """Remove a TensorRT accelerator from the config."""
-        if self._gpu_accelerator_status(self.config, "tensorrt"):
-            self._gpu_accelerator_delete(self.config, "tensorrt")
+        if self._gpu_accelerator_status("tensorrt"):
+            self._gpu_accelerator_delete("tensorrt")
