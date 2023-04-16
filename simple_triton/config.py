@@ -11,26 +11,72 @@ class ConfigBuilder(object):
 
     Parameters
     ----------
+    config : dict
+        An initial configuration. If `None`, a client and name of a
+        hosted model must be provided to obtain an initial configuration.
+        Default value is `None`.
     client : tritonclient.grpc.InferenceServerClient
-        A remote-procedure call client for the triton server.
+        A remote-procedure call client for the triton server. If `config`
+        is `None`, this client must be provided to query a config from
+        the server. Default value is `None`.
     model_name : string
-        The name of the model to query as registered in triton.
+        The name of the model to query as hosted in triton. Must be
+        provided if `config` is None.
 
     Attributes
     ----------
+    config : dict
+        A model configuration. Can be used to alter the configuration of
+        a hosted model by reloading.
 
     Methods
     -------
+    response_cache(enable=False)
+        Sets caching of inference results on-server.
+    add_input(name, datatype, dims)
+        Add or modifies a model input given input name and dims.
+    max_batch_size(samples)
+        Set the maximum batch size.
+    add_instance_group(count=1, kind="gpu", gpus=None)
+        Add an instance group defining the model hardware resources and
+        instances.
+    remove_instance_groups()
+        Remove all instance groups and default to 1 instance per GPU.
+    add_mixed_precision()
+        Enable automatic mixed precision for half-float operations.
+    remove_mixed_precision
+        Disable automatic mixed precision for half-float operations.
+    add_trt(precision="FP16")
+        Enable TensorRT optimization.
+    remove_trt(self, precision="FP16")
+        Disable TensorRT optimization.
+
+    Notes
+    -----
+    This class does not build a configuration from scratch. It is
+    typically used to modify an auto-generated configuration produced
+    by Triton when a model is loaded. When launching Triton we
+    reccomend using `--model-control-mode=explicit` to enable the
+    configuration of loaded models to be modified without restart, and
+    `--strict-model-config=false` which relaxes the requirements of a
+    valid configuration, so that not every setting has to be provided
+    by the client or user.
 
     References
     ----------
     The ModelConfig protobuf https://github.com/triton-inference-server/common/blob/main/protobuf/model_config.proto
     """
 
-    def __init__(self, client, model_name):
-        """Initialize config as hosted. Disable response cache by default"""
-        self.model_name = model_name
-        self.config = model_config(client, model_name)["config"]
+    def __init__(self, config=None, client=None, model_name=None):
+        """Initialize from provided config or as hosted. Disable
+        response cache by default
+        """
+        if config is not None:
+            if not isinstance(config, dict):
+                raise ValueError("config must be a dict")
+            self.config = config
+        else:
+            self.config = model_config(client, model_name)["config"]
         self.response_cache(False)
 
     def _gpu_accelerator_status(self, accelerator):
@@ -237,7 +283,7 @@ class ConfigBuilder(object):
                 raise ValueError("elements of 'gpus' must be int.")
 
         # set model name, count, and kind
-        instance = {"name": self.model_name, "count": count, "kind": kind}
+        instance = {"name": self.config["name"], "count": count, "kind": kind}
         if gpus is not None:
             instance["gpus"] = gpus
 
@@ -252,7 +298,7 @@ class ConfigBuilder(object):
         if "instanceGroup" in self.config:
             del config["instanceGroup"]
 
-    def add_amp(self):
+    def add_mixed_precision(self):
         """Add an automatic mixed-precision accelerator to the config.
 
         This enables the model to perform half-precision operations to
@@ -264,7 +310,7 @@ class ConfigBuilder(object):
             self._gpu_accelerator_delete(self.config, "tensorrt")
         self._gpu_accelerator_add(self.config, _gpu_accelerator_amp())
 
-    def remove_amp(self):
+    def remove_mixed_precision(self):
         """Remove an automatic mixed-precision accelerator from the config."""
         if self._gpu_accelerator_status(self.config, "auto_mixed_precision"):
             self._gpu_accelerator_delete(self.config, "auto_mixed_precision")
