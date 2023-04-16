@@ -15,10 +15,11 @@ import json
 
 class Benchmark:
     """A class to benchmark inference server requests.
-        
-        The class takes as input args performs histomic stream study, load model
+
+    The class takes as input args performs histomic stream study, load model
     """
-    def __init__(self,args_dict):
+
+    def __init__(self, args_dict):
         self.args_dict = args_dict
 
     def create_hs_study(self):
@@ -62,9 +63,11 @@ class Benchmark:
         """
         # slide paramters
         url = self.args_dict["url"]  # url for grpc access to triton server
-        keras_name =   ".tensorflow" #args_dict["model_name"].split('.')[0] 
-        if (self.args_dict["model_name"] == 'ConvNeXtXLarge'):   
-            self.args_dict["model_name"] =self.args_dict["model_name"]+keras_name  # set model_name
+        keras_name = ".tensorflow"  # args_dict["model_name"].split('.')[0]
+        if self.args_dict["model_name"] == "ConvNeXtXLarge":
+            self.args_dict["model_name"] = (
+                self.args_dict["model_name"] + keras_name
+            )  # set model_name
         model_name = self.args_dict["model_name"]
         maxBatchSize = self.args_dict["maxbatchsize"]  # set max batch size
         verbose = self.args_dict["verbose"]  # set verbose
@@ -99,9 +102,10 @@ class Benchmark:
         # inference parameters
         batch = self.args_dict["batch"]
         model_name = self.args_dict["model_name"]
-        limit = self.args_dict["limit"]  # limit on number of pending requests per worker
+        limit = self.args_dict[
+            "limit"
+        ]  # limit on number of pending requests per worker
         workers = self.args_dict["workers"]  # total number of Submitter workers
-        
 
         # start timer
         start = time.time()
@@ -120,7 +124,6 @@ class Benchmark:
         analyze(self.times)
         return elapsed_time
 
-
     def client_noGPU(object):
         """Run client with no GPUs
 
@@ -137,10 +140,7 @@ class Benchmark:
 
 
 def install():
-    # install large_image with tile sources
-    # Correct this part
-    #     subprocess.check_call([sys.executable, "-m", "pip", f"install", "histomics_stream 'large_image[tiff]' \
-    #   scikit_image --find-links https://girder.github.io/large_image_wheels --use-feature=2020-resolver"])
+    # install large_image with tile sources as prereq
     # install simple_triton
     subprocess.check_call([sys.executable, "-m", "pip", "install", f"../simple_triton"])
     subprocess.check_call([sys.executable, "-m", "pip", "install", "ray"])
