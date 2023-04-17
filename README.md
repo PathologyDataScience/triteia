@@ -27,7 +27,7 @@ Testing requires running a Triton server on the local machine. Tests are run usi
 
 ### Running Triton server
 
-Download the `densenet_onnx` test model to your host model repository folder:
+Generate your own model using `feature_extraction.feature_extractor()` or download the `densenet_onnx` test model to your host model repository folder:
 
 ```
 mkdir -p host_model_repository/densenet_onnx/1
@@ -37,7 +37,7 @@ wget -O host_model_repository/densenet_onnx/1/model.onnx https://contentmamluswe
 Run Triton as a container and provide your host model repository path to the volume `-v` option:
 
 ```
-docker run --gpus=8 --rm -p 8000:8000 -p 8001:8001 -p 8002:8002 -p 8003:8003 -v/host_model_repository:/models nvcr.io/nvidia/tritonserver:23.01-py3 tritonserver --model-repository=/models --model-control-mode=explicit --exit-on-error=false --load-model=*
+docker run --gpus=8 --rm -p 8000:8000 -p 8001:8001 -p 8002:8002 -p 8003:8003 -v/home/lac5440/models:/models nvcr.io/nvidia/tritonserver:22.05-py3 tritonserver --model-repository=/models --model-control-mode=explicit --exit-on-error=false --strict-model-config=false --load-model=*
 ```
 
-The argument `--model-control-mode=explicit` is necessary for the client to load/unload models and to manipulate their configurations while the server is running. The argument `--load-model=*` loads available models from the repository on startup.
+The argument `--model-control-mode=explicit` is necessary for the client to load/unload models and to manipulate their configurations while the server is running. The argument `--strict-model-config=false` allows Triton to automatically generate model configurations for models found in the repository. The argument `--load-model=*` loads available models from the repository on startup.

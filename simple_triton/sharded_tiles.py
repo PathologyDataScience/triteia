@@ -7,35 +7,40 @@ def _byteify(string):
     return bytes(string.encode("utf-8"))
 
 
-def _hs_study_meta(study):
+def _txr_keys(dictionary, keys):
     return {
-        "version": _byteify(study["version"]),
-        "tile_height": study["tile_height"],
-        "tile_width": study["tile_width"],
-        "overlap_height": study["overlap_height"],
-        "overlap_width": study["overlap_width"],
+        k: _byteify(dictionary[k]) if isinstance(dictionary[k], str) else dictionary[k]
+        for k in keys
+        if k in dictionary.keys()
     }
+
+
+def _hs_study_meta(study):
+    keys = ["version", "tile_height", "tile_width", "overlap_height", "overlap_width"]
+    return _txr_keys(study, keys)
 
 
 def _hs_slide_meta(slide, study):
-    return {
-        "filename": _byteify(slide["filename"]),
-        "slide_name": _byteify(slide["slide_name"]),
-        "slide_group": _byteify(slide["slide_name"]),
-        "target_magnification": slide["target_magnification"],
-        "scan_magnification": slide["target_magnification"],
-        "read_magnification": slide["read_magnification"],
-        "returned_magnification": slide["returned_magnification"],
-        "level": slide["level"],
-        "slide_width": slide["slide_width"],
-        "slide_height": slide["slide_height"],
-        "chunk_width": study["tile_width"],
-        "chunk_height": study["tile_height"],
-        "slide_height_tiles": slide["slide_height_tiles"],
-        "slide_width_tiles": slide["slide_width_tiles"],
-        "mask_height": slide["mask_height"],
-        "mask_width": slide["mask_width"],
-    }
+    slide_keys = [
+        "filename",
+        "slide_name",
+        "slide_group",
+        "chunk_width",
+        "chunk_height",
+        "target_magnification",
+        "scan_magnification",
+        "read_magnification",
+        "returned_magnification",
+        "level",
+        "slide_width",
+        "slide_height",
+        "slide_height_tiles",
+        "slide_width_tiles",
+        "mask_height",
+        "mask_width",
+    ]
+    study_keys = ["chunk_width", "chunk_height"]
+    return {**_txr_keys(slide, slide_keys), **_txr_keys(study, study_keys)}
 
 
 def _hs_tile_meta(tile, study):
