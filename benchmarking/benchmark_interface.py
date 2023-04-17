@@ -1,143 +1,212 @@
-import numpy as np
-import time
+import argparse
 import tritonclient.grpc as grpcclient
-from concurrent.futures import ThreadPoolExecutor
-from queue import Queue
-
-# Define the model and server parameters
-MODEL_NAME = "densenet_onnx"
-MODEL_VERSION = -1  # use the latest version
-BATCH_SIZE = 1024
-PROTOCOL = "grpc"
-TRITON_SERVER_URL = "localhost:8001"
-
-# Define the experiment parameters
-N = 100
-LIMIT = 10
-WORKERS = 4
+from mil.io.utils import study
+from google.protobuf.json_format import MessageToDict
+from simple_triton.feature_extraction import feature_extractor
+from simple_triton.model import model_config
+import tritonclient.grpc as grpcclient
+from simple_triton.feature_extraction import histomics_stream_inference
+from simple_triton.submitter import analyze
+import time
+import subprocess
+import sys
+import json
 
 
-class SimulatedProducer(object):
-    """A simulated producer that emits numpy arrays with specified batch size
-    and feature dimensions.
+class Benchmark:
+    """A class to benchmark inference server requests.
 
-    Data is uniformly distributed and so compression ratio will be low.
+    The class takes as input args performs histomic stream study, load model
     """
 
-    def __init__(self, B=1024, D=[1024], dtype=np.float16):
-        """Constructor.
+    def __init__(self, args_dict):
+        self.args_dict = args_dict
 
-        Parameters
-        ----------
-        B : int
-            Batch size. Default value is 1024.
-        D : list of int
-            Feature dimensions. Default value is [1024].
-        dtype : numpy.dtype
-            A numpy dtype for the emited data. Default value is float16.
+    def create_hs_study(self):
+        """Create a histomic stream study.
+
+        Parameters used in this cell are for reading
+        from the whole-slide image (magnification, tile size, tile overlap, mask file).
+
+        Args:
+        args_dict (dict): The inputs to the model from argparse.
+        tile (int): tile default value is 224.
+        wsi_path (string): path for .svs file
+        mask_path (string): path for png file
         """
+        # slide parameters
+        tile = self.args_dict["tile"]
+        wsi_path = self.args_dict["wsi_path"]
+        mask_path = self.args_dict["mask_path"]
 
-        self.B = B  # batch size
-        self.D = D  # dimensions
-        self.dtype = dtype  # datatype as float16 or float32
+        # create a histomic-stream study from a wsi/mask pair
+        self.hs_study = study(
+            (wsi_path, mask_path),
+            t=(tile, tile),
+            chunk=(tile, tile),
+            target=20,
+            source="exact",
+        )
 
-    def __iter__(self):
-        self.i = 0
-        return self
+    def create_load_model(self):
+        """The function feature_extractor can be used to create feature extraction
+        models in the model repository. Note - this cell will take time as the model
+        is downloaded, saved, and loaded into triton.
 
-    def __next__(self):
-        output = self.dtype(np.random.uniform(size=(self.B, *self.D)))
-        return output
+        Parameters in this stage include the inference server (address), the model (model name,
+        maximum batch size).
 
-
-def infer(client, inputs):
-    """
-    Run a single inference request on the Triton Inference Server.
-
-    Args:
+        Args:
         client (tritonclient.grpc.InferenceServerClient):
-        inputs (dict): The inputs to the model.
+        args_dict (dict): The inputs to the model from argparse.
+        maxBatchSize (int): max batch size to for config
+        """
+        # slide paramters
+        url = self.args_dict["url"]  # url for grpc access to triton server
+        keras_name = ".tensorflow"  # args_dict["model_name"].split('.')[0]
+        if self.args_dict["model_name"] == "ConvNeXtXLarge":
+            self.args_dict["model_name"] = (
+                self.args_dict["model_name"] + keras_name
+            )  # set model_name
+        model_name = self.args_dict["model_name"]
+        maxBatchSize = self.args_dict["maxbatchsize"]  # set max batch size
+        verbose = self.args_dict["verbose"]  # set verbose
 
-    Returns:
-        The outputs of the model.
-    """
-    inputs = [
-        grpcclient.InferInput(name, shape, datatype)
-        for name, (shape, datatype) in inputs.items()
-    ]
-    for input_ in inputs:
-        input_.set_data_from_numpy(next(SimulatedProducer()))
+        # create triton client
+        client = grpcclient.InferenceServerClient(url=url, verbose=verbose)
 
-    outputs = [
-        grpcclient.InferRequestedOutput(name)
-        for name in client.get_model_metadata(MODEL_NAME).outputs
-    ]
-    result = client.infer(MODEL_NAME, inputs, outputs=outputs)
+        # load tensorflow model with larger batch size
+        config = {"maxBatchSize": maxBatchSize}
+        client.load_model(model_name, config=json.dumps(config))
 
-    return {output.name: output.as_numpy() for output in result.as_numpy_iterator()}
+        # check readiness
+        client.get_model_repository_index()
+
+        # deleting the client in main prevents conflicts with child process clients
+        del client
+
+    def inference_measure_throughput(self):
+        """
+        Run the inference and measure throughput on the Triton Inference Server.
+
+        Parameters here include the number of tiles per batch, the number of workers,
+        and the maximum number of pending inferences per worker.
+
+        Args:
+            client (tritonclient.grpc.InferenceServerClient):
+            args_dict (dict): The inputs to the model from argparse.
+
+        Returns:
+            Inference time
+        """
+        # inference parameters
+        batch = self.args_dict["batch"]
+        model_name = self.args_dict["model_name"]
+        limit = self.args_dict[
+            "limit"
+        ]  # limit on number of pending requests per worker
+        workers = self.args_dict["workers"]  # total number of Submitter workers
+
+        # start timer
+        start = time.time()
+
+        # inference
+        self.features, self.tile_info, self.times = histomics_stream_inference(
+            self.hs_study,
+            model_name,
+            args_dict["url"],
+            batch=batch,
+            workers=workers,
+            limit=limit,
+        )
+
+        elapsed_time = {time.time() - start}
+        analyze(self.times)
+        return elapsed_time
+
+    def client_noGPU(object):
+        """Run client with no GPUs
+
+        If running Triton and the client on the same machine, we want to stop the client tensorflow
+        from consuming GPU resources. By default, TensorFlow maps nearly all available GPU memory.
+        """
+        import os
+
+        os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+
+        import tensorflow as tf
+
+        assert len(tf.config.list_physical_devices("GPU")) == 0
 
 
-def submitter(worker_id, queue, client):
-    """
-    Worker function for submitting inference requests to the Server.
-
-    Args:
-        worker_id (int): The ID of the worker.
-        queue (queue.Queue): The queue of pending inference requests.
-    """
-    while True:
-        batch = []
-        while len(batch) < BATCH_SIZE:
-            try:
-                inputs = queue.get(timeout=1)
-                batch.append(inputs)
-            except:
-                break
-
-        if not batch:
-            break
-
-        results = []
-        for inputs in batch:
-            results.append(infer(client, inputs))
-        queue.task_done()
+def install():
+    # install large_image with tile sources as prereq
+    # install simple_triton
+    subprocess.check_call([sys.executable, "-m", "pip", "install", f"../simple_triton"])
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "ray"])
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "pyarrow"])
+    # install mil
+    subprocess.check_call([sys.executable, "-m", "pip", "install", f"../../mil"])
 
 
-def measure_throughput():
-    """
-    Measure the throughput of the Triton Inference Server with the DenseNet ONNX model using TensorRT, auto mixed
-    precision, GPU, CPU, batch size of 1024, and gRPC protocol. Measure the throughput while enqueuing the inference
-    jobs using multiprocessing and multi-workers.
-    """
-    # Initialize the client for communicating with the Triton Inference Server
-    if PROTOCOL == "grpc":
-        client = grpcclient.InferenceServerClient(url=TRITON_SERVER_URL)
-    else:
-        raise ValueError(f"Unsupported protocol: {PROTOCOL}")
+def check_readiness():
+    """check readiness of models"""
+    # create triton client
+    url = "localhost:8001"  # url for grpc access to tirton server
+    client = grpcclient.InferenceServerClient(url=url, verbose=True)
+    # check readiness
+    client.get_model_repository_index()
+    del client
 
-    # Warm up the server by running a single inference request
-    inputs = {"input": ((BATCH_SIZE, 3, 224, 224), "FP16")}
-    infer(client, inputs)
 
-    # Create the queue of pending inference requests
-    queue = Queue(maxsize=LIMIT)
-    for i in range(N):
-        queue.put({"input": ((BATCH_SIZE, 3, 224, 224), "FP16")})
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--model-name", required=False, default="ConvNeXtXLarge"
+    )  # For testing, it will be removed
+    parser.add_argument(
+        "--batch", nargs="+", type=int, default=64
+    )  # For testing, it will be removed
+    parser.add_argument("--maxbatchsize", nargs="+", type=int, default=256)
+    parser.add_argument("--models-path", default="/tf/notebooks/models", required=False)
+    parser.add_argument(
+        "--use-amp", action="store_true"
+    )  # automatically creates a default value of False.
+    parser.add_argument(
+        "--use-trt", action="store_true"
+    )  # automatically creates a default value of False.
+    parser.add_argument("--precision", choices=["FP32", "FP16"], required=False)
+    parser.add_argument("--url", default="localhost:8001")
+    parser.add_argument("--magnification", type=int, default=20)
+    parser.add_argument("--tile", type=int, default=224)
+    parser.add_argument("--overlap", type=int, default=0)
+    parser.add_argument("--chunk", type=int, default=224)
+    parser.add_argument("--mask-threshold", default=0.5)
+    parser.add_argument("--limit", type=int, default=10)
+    parser.add_argument("--workers", type=int, default=32)
+    parser.add_argument("-v", "--verbose", default=True)
+    parser.add_argument(
+        "--check-readiness", action="store_true"
+    )  # check readiness of models
+    args = parser.parse_args()
+    args_dict = vars(parser.parse_args())
+    print(args_dict)
+    if args_dict["check_readiness"] == True:
+        check_readiness()
+        exit()  # exit after showing readiness
+    args_dict[
+        "wsi_path"
+    ] = "/tf/notebooks/TCGA-AN-A0G0-01Z-00-DX1.BE0BB5DF-DEDA-48D8-B5D8-2735C767F28F.svs"
+    args_dict[
+        "mask_path"
+    ] = "/tf/notebooks/TCGA-AN-A0G0-01Z-00-DX1.BE0BB5DF-DEDA-48D8-B5D8-2735C767F28F.mask.png"
 
-    # Start the workers to submit inference requests to the server
-    with ThreadPoolExecutor(max_workers=WORKERS) as executor:
-        futures = []
-        for worker_id in range(WORKERS):
-            futures.append(executor.submit(submitter, worker_id, queue, client))
-
-        start_time = time.time()
-
-        # Wait for all the inference requests to complete
-        for future in futures:
-            future.result()
-
-        end_time = time.time()
-
-    # Calculate the throughput in inferences per second
-    throughput = N / (end_time - start_time)
-    print(f"Throughput: {throughput:.2f} inferences/sec")
+    # Install dependencies
+    # install() # uncomment later
+    benchmark = Benchmark(args_dict)
+    benchmark.client_noGPU()
+    benchmark.create_hs_study()
+    benchmark.create_load_model()
+    elapsed_time = benchmark.inference_measure_throughput()
+    # display elapsed time
+    print(f"Total elapsed time:", elapsed_time)
