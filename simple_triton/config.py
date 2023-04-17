@@ -182,8 +182,9 @@ class ConfigBuilder(object):
         enable : bool
             If `True` the response cache will be enabled. Default value is `False`.
         """
-
-        self.config["response_cache"] = {"enable": enable}
+        if not isinstance(enable, bool):
+            raise ValueError("enable must be bool")
+        self.config["responseCache"] = {"enable": enable}
 
     def add_input(self, name, datatype, dims):
         """Add a new input or set the properties of an existing input.
