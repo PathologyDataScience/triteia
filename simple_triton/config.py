@@ -216,6 +216,8 @@ class ConfigBuilder(object):
         if not all([isinstance(i, (int, np.integer)) for i in dims]):
             raise ValueError("elements of dims must be int")
 
+        if not "input" in self.config:
+            self.config["input"] = []
         inputs = [i["name"] for i in self.config["input"]]
         if name in inputs:
             index = inputs.index(name)
@@ -226,7 +228,7 @@ class ConfigBuilder(object):
                 "name": name,
             }
             self.config["input"].append(
-                {"name": name, "datatype": datatype, "dims": dims}
+                {"name": name, "dataType": datatype, "dims": dims}
             )
 
     def max_batch_size(self, samples):
@@ -335,6 +337,8 @@ class ConfigBuilder(object):
             raise ValueError("precision must be one of 'FP16', 'FP32'.")
         if self._gpu_accelerator_status("auto_mixed_precision"):
             self._gpu_accelerator_delete("auto_mixed_precision")
+        if self._gpu_accelerator_status("tensorrt"):
+            self._gpu_accelerator_delete("tensorrt")
         self._gpu_accelerator_add(self._gpu_accelerator_trt(precision))
 
     def remove_trt(self):
