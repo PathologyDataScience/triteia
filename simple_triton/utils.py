@@ -1,3 +1,6 @@
+import tensorflow as tf
+
+
 def reshape_savedmodel(
     path,
     savedmodel,

@@ -27,17 +27,29 @@ Testing requires running a Triton server on the local machine. Tests are run usi
 
 ### Running Triton server
 
-Generate your own model using `feature_extraction.feature_extractor()` or download the `densenet_onnx` test model to your host model repository folder:
+Generate your own model using `feature_extraction.feature_extractor()` or download the `EfficientNetV2S.tensorflow` test model archive to your host model repository folder:
+
+```python
+import pooch
+pooch.retrieve(
+    fname="EfficientNetV2S.tensorflow.zip",
+    url="https://drive.google.com/uc?export=download&id=1Mmm2sRGzdzCEAODjABiiPIiBdg40EPwC&confirm=t&uuid=b11e409a-64b2-4146-b45d-4f229093cb5a&at=ANzk5s7UvBzB7zpqm7AvngovJwS8:1681783040828",
+    known_hash="a6ed53d8343498b4ebfe7ff1a9ccbcabef23d6a164d2a521916774af49996f7e",
+    path=host_model_repository
+)
+```
+
+then unzip the archive and remove the original file
 
 ```
-mkdir -p host_model_repository/densenet_onnx/1
-wget -O host_model_repository/densenet_onnx/1/model.onnx https://contentmamluswest001.blob.core.windows.net/content/14b2744cf8d6418c87ffddc3f3127242/9502630827244d60a1214f250e3bbca7/08aed7327d694b8dbaee2c97b8d0fcba/densenet121-1.2.onnx
+> unzip host_model_repository/EfficientNetV2S.tensorflow.zip
+> rm host_model_repository/EfficientNetV2S.tensorflow.zip
 ```
 
 Run Triton as a container and provide your host model repository path to the volume `-v` option:
 
 ```
-docker run --gpus=8 --rm -p 8000:8000 -p 8001:8001 -p 8002:8002 -p 8003:8003 -v/home/lac5440/models:/models nvcr.io/nvidia/tritonserver:22.05-py3 tritonserver --model-repository=/models --model-control-mode=explicit --exit-on-error=false --strict-model-config=false --load-model=*
+docker run --gpus=8 --rm -p 8000:8000 -p 8001:8001 -p 8002:8002 -p 8003:8003 -v host_model_repository:/models nvcr.io/nvidia/tritonserver:22.05-py3 tritonserver --model-repository=/models --model-control-mode=explicit --exit-on-error=false --strict-model-config=false --load-model=*
 ```
 
 The argument `--model-control-mode=explicit` is necessary for the client to load/unload models and to manipulate their configurations while the server is running. The argument `--strict-model-config=false` allows Triton to automatically generate model configurations for models found in the repository. The argument `--load-model=*` loads available models from the repository on startup.
