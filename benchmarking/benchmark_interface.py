@@ -7,6 +7,7 @@ from simple_triton.model import model_config
 import tritonclient.grpc as grpcclient
 from simple_triton.feature_extraction import histomics_stream_inference
 from simple_triton.submitter import analyze
+from simple_triton.config import ConfigBuilder
 import time
 import subprocess
 import sys
@@ -21,6 +22,8 @@ class Benchmark:
 
     def __init__(self, args_dict):
         self.args_dict = args_dict
+        
+
 
     def create_hs_study(self):
         """Create a histomic stream study.
@@ -63,24 +66,51 @@ class Benchmark:
         """
         # slide paramters
         url = self.args_dict["url"]  # url for grpc access to triton server
-        keras_name = ".tensorflow"  # args_dict["model_name"].split('.')[0]
-        if self.args_dict["model_name"] == "ConvNeXtXLarge":
-            self.args_dict["model_name"] = (
-                self.args_dict["model_name"] + keras_name
-            )  # set model_name
         model_name = self.args_dict["model_name"]
         maxBatchSize = self.args_dict["maxbatchsize"]  # set max batch size
         verbose = self.args_dict["verbose"]  # set verbose
+        count = self.args_dict["gpu_count"] # set gpu count
+        kind = self.args_dict["kind"] # set gpu kind
+        # gpus = self.args_dict["gpu_num"] # set number of gpus
+        
+        config = {"maxBatchSize": maxBatchSize}
+        config = {"name": model_name}
 
         # create triton client
         client = grpcclient.InferenceServerClient(url=url, verbose=verbose)
 
+        config_builder = ConfigBuilder(config=config, client=client, model_name=model_name)
+
+        # Add/remove an automatic mixed-precision accelerator to the config.
+        if self.args_dict["use_amp"] == True:
+            print("amp = True")
+            config_builder.add_mixed_precision()
+        elif self.args_dict["use_amp"] == False:
+            config_builder.remove_instance_groups()
+        # Add an TensorRT accelerator to the config.
+        if self.args_dict["use_trt"] == True:
+            config_builder.add_trt()
+        elif self.args_dict["use_trt"] == False:
+            config_builder.remove_trt
+
+        #  Add an instance group defining the model hardware resources and instances.
+        if kind == 'gpu':
+            start, end, intval = 0, count,1
+            gpus = list(range(start, end,intval))
+            config_builder.add_instance_group(count, kind, gpus)
+        if kind == 'cpu':
+            config_builder.add_instance_group(kind=kind)
+        
+
         # load tensorflow model with larger batch size
-        config = {"maxBatchSize": maxBatchSize}
-        client.load_model(model_name, config=json.dumps(config))
+        config_builder.max_batch_size(maxBatchSize)
+
+        print(config)
+
+        client.load_model(model_name, config=json.dumps(config)) 
 
         # check readiness
-        client.get_model_repository_index()
+        # client.get_model_repository_index()
 
         # deleting the client in main prevents conflicts with child process clients
         del client
@@ -167,7 +197,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--batch", nargs="+", type=int, default=64
     )  # For testing, it will be removed
-    parser.add_argument("--maxbatchsize", nargs="+", type=int, default=256)
+    parser.add_argument("--maxbatchsize",  type=int, default=256)
     parser.add_argument("--models-path", default="/tf/notebooks/models", required=False)
     parser.add_argument(
         "--use-amp", action="store_true"
@@ -175,7 +205,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--use-trt", action="store_true"
     )  # automatically creates a default value of False.
-    parser.add_argument("--precision", choices=["FP32", "FP16"], required=False)
+    parser.add_argument("--precision", choices=["FP32", "FP16"], default="FP16", required=False)
+    parser.add_argument("--kind", choices=["gpu", "cpu"], default="gpu", required=False, help='choice between gpu/cpu')
+    parser.add_argument("--gpu-count",  type=int , default=1, required=False, help='number of gpu (default: int)')
+    parser.add_argument("--gpu-num",   default=[0], type=list, help='list of int. For example, [0, 1]')
     parser.add_argument("--url", default="localhost:8001")
     parser.add_argument("--magnification", type=int, default=20)
     parser.add_argument("--tile", type=int, default=224)
@@ -194,6 +227,12 @@ if __name__ == "__main__":
     if args_dict["check_readiness"] == True:
         check_readiness()
         exit()  # exit after showing readiness
+        # Add keras to model name
+    keras_name = ".tensorflow"  
+    if args_dict["model_name"] == "ConvNeXtXLarge":
+        args_dict["model_name"] = (
+            args_dict["model_name"] + keras_name
+        )  # set model_name
     args_dict[
         "wsi_path"
     ] = "/tf/notebooks/TCGA-AN-A0G0-01Z-00-DX1.BE0BB5DF-DEDA-48D8-B5D8-2735C767F28F.svs"
@@ -202,7 +241,7 @@ if __name__ == "__main__":
     ] = "/tf/notebooks/TCGA-AN-A0G0-01Z-00-DX1.BE0BB5DF-DEDA-48D8-B5D8-2735C767F28F.mask.png"
 
     # Install dependencies
-    # install() # uncomment later
+    # install() # uncomment to install dependencies
     benchmark = Benchmark(args_dict)
     benchmark.client_noGPU()
     benchmark.create_hs_study()
