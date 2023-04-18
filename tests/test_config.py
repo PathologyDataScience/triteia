@@ -1,4 +1,5 @@
 from google.protobuf.json_format import MessageToDict
+import pytest
 import tritonclient.grpc as grpcclient
 from tritonclient.utils import InferenceServerException
 
@@ -33,6 +34,12 @@ CONFIG = {
 BASIC = {"name": MODEL}
 
 
+def test_init():
+    """Verify checking of config type as dict"""
+    with pytest.raises(ValueError):
+        ConfigBuilder(config=1)
+
+
 def test_max_batch_size():
     """Verify max batch size setting properly"""
 
@@ -46,6 +53,8 @@ def test_max_batch_size():
     client.load_model(MODEL, config=json.dumps(builder.config))
     updated = client.get_model_config(MODEL)
     assert MessageToDict(updated)["config"]["maxBatchSize"] == batch
+    with pytest.raises(ValueError):
+        builder.max_batch_size(1.5)
 
 
 def test_response_cache():
@@ -64,6 +73,8 @@ def test_response_cache():
     client.load_model(MODEL, config=json.dumps(builder.config))
     updated = client.get_model_config(MODEL)
     assert MessageToDict(updated)["config"]["responseCache"] == {}
+    with pytest.raises(ValueError):
+        builder.response_cache(1.5)
 
 
 def test_add_instance_group():
@@ -98,6 +109,14 @@ def test_add_instance_group():
         {"count": 1, "gpus": [0], "kind": "KIND_GPU", "name": MODEL},
         {"count": 2, "kind": "KIND_CPU", "name": MODEL},
     ]
+    with pytest.raises(ValueError):
+        builder.add_instance_group(count=1.5)
+    with pytest.raises(ValueError):
+        builder.add_instance_group(count=1, kind="tpu")
+    with pytest.raises(ValueError):
+        builder.add_instance_group(count=1, kind="gpu", gpus=0)
+    with pytest.raises(ValueError):
+        builder.add_instance_group(count=1, kind="gpu", gpus=[0.0, 1])
 
 
 def test_add_mixed_precision():
@@ -176,6 +195,8 @@ def test_add_trt():
             {"name": "tensorrt", "parameters": {"precision_mode": "FP16"}}
         ]
     }
+    with pytest.raises(ValueError):
+        builder.add_trt("half-float")
 
 
 def test_add_input():
