@@ -68,16 +68,14 @@ class ConfigBuilder(object):
     """
 
     def __init__(self, config=None, client=None, model_name=None):
-        """Initialize from provided config or as hosted. Disable
-        response cache by default
-        """
+        """Initialize from provided config or as hosted."""
+
         if config is not None:
             if not isinstance(config, dict):
                 raise ValueError("config must be a dict")
             self.config = config
         else:
             self.config = model_config(client, model_name)
-        self.response_cache(False)
 
     def _gpu_accelerator_status(self, accelerator):
         """Test if a gpuExecutionAccelerator is present."""
