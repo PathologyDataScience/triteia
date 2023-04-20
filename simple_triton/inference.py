@@ -149,7 +149,7 @@ class Requests(object):
 
         model_dict : dict
             A dictionary describing the name, shape, and type of inputs and
-            outputs, as well as maximum batch size.
+            outputs, and the maximum batch size if defined.
 
         See also
         --------
@@ -172,10 +172,11 @@ class Requests(object):
                     raise Exception(
                         f"Model {model_dict['name']} {model_dict['inputs'][i]['name']} has shape {expected}."
                     )
-                # if provided.shape[0] > model_dict["max_batch_size"]:
-                #     raise Exception(
-                #         f"Model {model_dict['name']} has max batch size {model_dict['max_batch_size']}."
-                #     )
+                if "max_batch_size" in model_dict:
+                    if provided.shape[0] > model_dict["max_batch_size"]:
+                        raise Exception(
+                            f"Model {model_dict['name']} has max batch size {model_dict['max_batch_size']}."
+                        )
 
     def _client_inputs(self, inputs, model_dict):
         """Generates tritonclient.grpc.InferInput objects for client.
@@ -383,10 +384,10 @@ class Requests(object):
 
         # check if model_dict has been previously generated for model_name
         if model_name not in self.model_dicts.keys():
-            model_dict = {
-                **model_metadata(self.client, model_name),
-                "max_batch_size": model_config(self.client, model_name)["maxBatchSize"],
-            }
+            model_dict = model_metadata(self.client, model_name)
+            config = model_config(self.client, model_name)
+            if "maxBatchSize" in config:
+                model_dict["max_batch_size"] = config["maxBatchSize"]
             self.model_dicts[model_name] = model_dict
         else:
             model_dict = self.model_dicts[model_name]
