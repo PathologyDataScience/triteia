@@ -6,7 +6,7 @@ from tabulate import tabulate
 import time
 import tritonclient.grpc as grpcclient
 from tritonclient.utils import InferenceServerException
-from model import load_model, model_config, model_update
+from simple_triton.model import load_model, model_config
 import json
 
 
