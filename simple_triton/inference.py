@@ -151,8 +151,8 @@ class Requests(object):
         inputs : list of numpy.ndarray
             A list of numpy arrays to input for model inference.
         model_dict : dict
-            A model configuration dictionary describing the name, shape, and 
-            type of inputs and outputs, and the maximum batch size if defined.
+            A dictionary describing the name, shape, and type of inputs and
+            outputs, and the maximum batch size if defined.
         strict_types : bool
             Enforce strict types on model inputs. _client_inputs will
             cast inputs to the correct type, so this is not necessary.
@@ -257,8 +257,8 @@ class Requests(object):
         inputs : list of numpy.ndarray
             A list of numpy arrays to input for model inference.
         model_dict : dict
-            A model configuration dictionary describing the name, shape, and 
-            type of inputs and outputs, and the maximum batch size if defined.
+            A dictionary describing the name, shape, and type of inputs and
+            outputs, as well as maximum batch size.
 
         Outputs
         -------
@@ -295,8 +295,8 @@ class Requests(object):
         Parameters
         ----------
         model_dict : dict
-            A model configuration dictionary describing the name, shape, and 
-            type of inputs and outputs, and the maximum batch size if defined.
+            A dictionary describing the name, shape, and type of inputs and
+            outputs, as well as maximum batch size.
 
         Outputs
         -------
@@ -389,7 +389,8 @@ class Requests(object):
                             retry.append(request)
 
                         else:
-                            # add request to output list
+                            # indicate failure and add request to output list
+                            request["success"] = False
                             completed.append(request)
 
                     # inference generated a result
@@ -401,6 +402,7 @@ class Requests(object):
                             request["result"][j] = results.as_numpy(output["name"])
 
                         # add request to output list
+                        request["success"] = True
                         completed.append(request)
 
             return completed, delete, retry
