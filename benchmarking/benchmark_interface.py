@@ -196,49 +196,9 @@ class Benchmark:
         for gpu in gpus:
             tf.config.experimental.set_memory_growth(gpu, True)
 
-        from numba import cuda
-
-        cuda.select_device('"0"')
-        cuda.close()
-
-    def run_tensorflow(self):
-        import tensorflow as tf
-        import multiprocessing
-        import numpy as np
-
-        n_input = 10000
-        n_classes = 1000
-
-        # Create model
-        def multilayer_perceptron(x, weight):
-            # Hidden layer with RELU activation
-            layer_1 = tf.matmul(x, weight)
-            return layer_1
-
-        # Store layers weight & bias
-        weights = tf.Variable(tf.random_normal([n_input, n_classes]))
-
-        x = tf.placeholder("float", [None, n_input])
-        y = tf.placeholder("float", [None, n_classes])
-        pred = multilayer_perceptron(x, weights)
-
-        cost = tf.reduce_mean(
-            tf.nn.softmax_cross_entropy_with_logits(logits=pred, labels=y)
-        )
-        optimizer = tf.train.AdamOptimizer(learning_rate=0.001).minimize(cost)
-
-        init = tf.global_variables_initializer()
-
-        with tf.Session() as sess:
-            sess.run(init)
-
-            for i in range(100):
-                batch_x = np.random.rand(10, 10000)
-                batch_y = np.random.rand(10, 1000)
-
 
 def install():
-    # install large_image with tile sources as prereq
+    # install large_image with tile sources as prereq, check feature_extraction.ipynb in examples directory.
     # install simple_triton
     subprocess.check_call([sys.executable, "-m", "pip", "install", f"../simple_triton"])
     subprocess.check_call([sys.executable, "-m", "pip", "install", "ray"])
@@ -260,38 +220,38 @@ def check_readiness():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--model-name", required=False, default="ConvNeXtXLarge"
+        "--model-name", required=False, default="ConvNeXtXLarge", help="Set model name, usage: --model-name=ConvNeXtXLarge, default: ConvNeXtXLarge"
     )  # For testing, it will be removed
     parser.add_argument(
-        "--batch", nargs="+", type=int, default=64
+        "--batch", type=int, default=64, help="Set inference batch size usage: --batch=64, default: 64"
     )  # For testing, it will be removed
-    parser.add_argument("--maxbatchsize", type=int, default=256)
+    parser.add_argument("--maxbatchsize", type=int, default=256, help="Set max batch size, usage: --maxbatchsize=256, default: 256")
     parser.add_argument("--models-path", default="/tf/notebooks/models", required=False)
     parser.add_argument(
-        "--use-amp", action="store_true"
+        "--use-amp", action="store_true", help="Use auto matic mixed precision, usage: --use-amp, default: False"
     )  # automatically creates a default value of False.
     parser.add_argument(
-        "--use-trt", action="store_true"
+        "--use-trt", action="store_true", help="Use tensorRT, usage: --use-trt, default: False"
     )  # automatically creates a default value of False.
     parser.add_argument(
-        "--precision", choices=["FP32", "FP16"], default="FP16", required=False
+        "--precision", choices=["FP32", "FP16"], default="FP16", required=False, help="choose between Precision FP16 or FP32 , default: FP16"
     )
     parser.add_argument(
         "--kind",
         choices=["gpu", "cpu"],
         default="gpu",
         required=False,
-        help="choice between gpu/cpu",
+        help="choice between gpu or cpu, usage: --kind=gpu  default: gpu"
     )
     parser.add_argument(
         "--gpu-count",
         type=int,
         default=1,
         required=False,
-        help="number of gpu (default: int)",
+        help="number of instances for a gpu (default: 1), usage: --gpu-count=1",
     )
     parser.add_argument(
-        "--gpu-num", default=1, type=int, help="list of int. For example, [0, 1]"
+        "--gpu-num", default=1, type=int, help="Number of GPUs to use, default: 1"
     )
     parser.add_argument("--url", default="localhost:8001")
     parser.add_argument("--magnification", type=int, default=20)
