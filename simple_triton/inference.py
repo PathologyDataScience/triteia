@@ -59,31 +59,35 @@ class Requests(object):
         -------
         dtype : numpy.dtype
             The corresponding numpy dtype.
+
+        Notes
+        -----
+        https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#datatypes
         """
 
-        if api_type == "FP32":
+        if api_type == "TYPE_FP32":
             return np.float32
-        elif api_type == "FP16":
+        elif api_type == "TYPE_FP16":
             return np.float16
-        elif api_type == "FLOAT64":
+        elif api_type == "TYPE_FLOAT64":
             return np.float64
-        elif api_type == "UINT8":
+        elif api_type == "TYPE_UINT8":
             return np.uint8
-        elif api_type == "UINT16":
+        elif api_type == "TYPE_UINT16":
             return np.uint16
-        elif api_type == "UINT32":
+        elif api_type == "TYPE_UINT32":
             return np.uint32
-        elif api_type == "UINT64":
+        elif api_type == "TYPE_UINT64":
             return np.uint64
-        elif api_type == "INT8":
+        elif api_type == "TYPE_INT8":
             return np.int8
-        elif api_type == "INT16":
+        elif api_type == "TYPE_INT16":
             return np.int16
-        elif api_type == "INT32":
+        elif api_type == "TYPE_INT32":
             return np.int32
-        elif api_type == "INT64":
+        elif api_type == "TYPE_INT64":
             return np.int64
-        elif api_type == "BOOL":
+        elif api_type == "TYPE_BOOL":
             return np.bool
         else:
             raise ValueError(f"Unrecognized type '{str(api_type)}'")
@@ -103,29 +107,29 @@ class Requests(object):
         """
 
         if dtype == np.float32:
-            return "FP32"
+            return "TYPE_FP32"
         elif dtype == np.float16:
-            return "FP16"
+            return "TYPE_FP16"
         elif dtype == np.float64:
-            return "FLOAT64"
+            return "TYPE_FLOAT64"
         elif dtype == np.uint8:
-            return "UINT8"
+            return "TYPE_UINT8"
         elif dtype == np.uint16:
-            return "UINT16"
+            return "TYPE_UINT16"
         elif dtype == np.uint32:
-            return "UINT32"
+            return "TYPE_UINT32"
         elif dtype == np.uint64:
-            return "UINT64"
+            return "TYPE_UINT64"
         elif dtype == np.int8:
-            return "INT8"
+            return "TYPE_INT8"
         elif dtype == np.int16:
-            return "INT16"
+            return "TYPE_INT16"
         elif dtype == np.int32:
-            return "INT32"
+            return "TYPE_INT32"
         elif dtype == np.int64:
-            return "INT64"
+            return "TYPE_INT64"
         elif dtype == np.bool:
-            return "BOOL"
+            return "TYPE_BOOL"
         else:
             raise ValueError(f"Unrecognized type '{str(dtype)}'")
 
@@ -139,98 +143,107 @@ class Requests(object):
         for i, request in enumerate(self.pending):
             print(f"\t{i}\t{time.time()-request['elapsed_retrieval']}", flush=True)
 
-def _validate_inputs(self, inputs, model_dict):
-    """Validate inputs against model config and metadata.
+    def _validate_inputs(self, inputs, model_dict, strict_types=False):
+        """Validate inputs against model config and metadata.
 
-    Parameters
-    ----------
-    inputs : list of numpy.ndarray
-        A list of numpy arrays to input for model inference.
-    model_dict : dict
-        A dictionary describing the name, shape, and type of inputs and
-        outputs, and the maximum batch size if defined.
+        Parameters
+        ----------
+        inputs : list of numpy.ndarray
+            A list of numpy arrays to input for model inference.
+        model_dict : dict
+            A model configuration dictionary describing the name, shape, and 
+            type of inputs and outputs, and the maximum batch size if defined.
+        strict_types : bool
+            Enforce strict types on model inputs. _client_inputs will
+            cast inputs to the correct type, so this is not necessary.
+            Default value is False.
 
-    See also
-    --------
-    model_metadata
-    """
+        See also
+        --------
+        model_metadata
+        """
 
-    # validate number of inputs
-    if len(inputs) != len(model_dict["inputs"]):
-        raise Exception(
-            (
-                f"Model {model_dict['name']} expects {len(model_dict['inputs'])} "
-                f"inputs, received {len(inputs)}."
+        # validate number of inputs
+        if len(inputs) != len(model_dict["input"]):
+            raise Exception(
+                (
+                    f"Model {model_dict['name']} expects {len(model_dict['input'])} "
+                    f"inputs, received {len(inputs)}."
+                )
             )
-        )
 
-    # if model is batching -> batch dimension implied
-    if "max_batch_size" in model_dict:
-        if model_dict["max_batch_size"] > 0:
-            batching = True
-            batch_size = inputs[0].shape[0]
+        # if model is batching -> batch dimension implied
+        if "maxBatchSize" in model_dict:
+            if model_dict["maxBatchSize"] > 0:
+                batching = True
+                batch_size = inputs[0].shape[0]
+            else:
+                batching = False
         else:
             batching = False
-    else:
-        batching = False
 
-    def _compare_dims(provided, expected):
-        return all([True if e == -1 else p == e for (p, e) in zip(provided, expected)])
-
-    def _int(shape):
-        return [int(s) for s in shape]
-
-    # validate input types
-    for i, (provided, expected) in enumerate(zip(inputs, model_dict["inputs"])):
-        if _np_to_api_types(provided.dtype) != expected["datatype"]:
-            raise Exception(
-                (
-                    f"Model {model_dict['name']} input "
-                    f"{model_dict['inputs'][i]['name']} "
-                    f"expects type {expected['datatype']}, received input with "
-                    f"type {provided.dtype}."
-                )
+        def _compare_dims(provided, expected):
+            return all(
+                [True if e == -1 else p == e for (p, e) in zip(provided, expected)]
             )
 
-    # validate input shapes
-    for i, (provided, expected) in enumerate(zip(inputs, model_dict["inputs"])):
-        if batching:  # check uniform batch sizing and max_batch_size limit
-            offset = 1
-        else:
-            offset = 0
-        if len(provided.shape) != len(expected["shape"]) + offset or not _compare_dims(
-            provided.shape[offset:], _int(expected["shape"])
-        ):
-            if batching:
-                output = [-1, *_int(expected["shape"])]
+        def _int(shape):
+            return [int(s) for s in shape]
+
+        # validate input types
+        if strict_types:
+            for i, (provided, expected) in enumerate(zip(inputs, model_dict["input"])):
+                if self._np_to_api_types(provided.dtype) != expected["dataType"]:
+                    raise Exception(
+                        (
+                            f"Model {model_dict['name']} input "
+                            f"{model_dict['input'][i]['name']} "
+                            f"expects type {expected['dataType']}, received input with "
+                            f"type {provided.dtype}."
+                        )
+                    )
+
+        # validate input shapes
+        for i, (provided, expected) in enumerate(zip(inputs, model_dict["input"])):
+            if batching:  # check uniform batch sizing and max_batch_size limit
+                offset = 1
             else:
-                output = _int(expected["shape"])
-            raise Exception(
-                (
-                    f"Model {model_dict['name']} input "
-                    f"{model_dict['inputs'][i]['name']} "
-                    f"expects shape {output}, received input with "
-                    f"shape {list(provided.shape)}."
+                offset = 0
+            if len(provided.shape) != len(
+                expected["dims"]
+            ) + offset or not _compare_dims(
+                provided.shape[offset:], _int(expected["dims"])
+            ):
+                if batching:
+                    output = [-1, *_int(expected["dims"])]
+                else:
+                    output = _int(expected["dims"])
+                raise Exception(
+                    (
+                        f"Model {model_dict['name']} input "
+                        f"{model_dict['input'][i]['name']} "
+                        f"expects shape {output}, received input with "
+                        f"shape {list(provided.shape)}."
+                    )
                 )
-            )
 
-    # validate batching
-    if batching:
-        for i, (provided, expected) in enumerate(zip(inputs, model_dict["inputs"])):
-            if provided.shape[0] != batch_size:
-                raise Exception(
-                    (
-                        f"Non-uniform batch size of inputss. Expected {batch_size}, "
-                        f"found {provided.shape[0]}."
+        # validate batching
+        if batching:
+            for i, (provided, expected) in enumerate(zip(inputs, model_dict["input"])):
+                if provided.shape[0] != batch_size:
+                    raise Exception(
+                        (
+                            f"Non-uniform batch size of inputss. Expected {batch_size}, "
+                            f"found {provided.shape[0]}."
+                        )
                     )
-                )
-            if provided.shape[0] > model_dict["max_batch_size"]:
-                raise Exception(
-                    (
-                        f"Model {model_dict['name']} max batch size "
-                        f"{model_dict['max_batch_size']} exceeded."
+                if provided.shape[0] > model_dict["maxBatchSize"]:
+                    raise Exception(
+                        (
+                            f"Model {model_dict['name']} max batch size "
+                            f"{model_dict['maxBatchSize']} exceeded."
+                        )
                     )
-                )
 
     def _client_inputs(self, inputs, model_dict):
         """Generates tritonclient.grpc.InferInput objects for client.
@@ -244,8 +257,8 @@ def _validate_inputs(self, inputs, model_dict):
         inputs : list of numpy.ndarray
             A list of numpy arrays to input for model inference.
         model_dict : dict
-            A dictionary describing the name, shape, and type of inputs and
-            outputs, as well as maximum batch size.
+            A model configuration dictionary describing the name, shape, and 
+            type of inputs and outputs, and the maximum batch size if defined.
 
         Outputs
         -------
@@ -260,15 +273,15 @@ def _validate_inputs(self, inputs, model_dict):
 
         # create InferInput objects for each model input
         infer_inputs = []
-        for provided, expected in zip(inputs, model_dict["inputs"]):
+        for provided, expected in zip(inputs, model_dict["input"]):
             # create InferInput object
             iio = grpcclient.InferInput(
-                expected["name"], provided.shape, expected["datatype"]
+                expected["name"], provided.shape, expected["dataType"].split("TYPE_")[1]
             )
 
             # add numpy data to input
-            if self._np_to_api_types(provided.dtype) != expected["datatype"]:
-                provided = provided.astype(self._api_to_np_types(expected["datatype"]))
+            if self._np_to_api_types(provided.dtype) != expected["dataType"]:
+                provided = provided.astype(self._api_to_np_types(expected["dataType"]))
             iio.set_data_from_numpy(provided)
 
             # add to infer_input list
@@ -282,8 +295,8 @@ def _validate_inputs(self, inputs, model_dict):
         Parameters
         ----------
         model_dict : dict
-            A dictionary describing the name, shape, and type of inputs and
-            outputs, as well as maximum batch size.
+            A model configuration dictionary describing the name, shape, and 
+            type of inputs and outputs, and the maximum batch size if defined.
 
         Outputs
         -------
@@ -294,9 +307,9 @@ def _validate_inputs(self, inputs, model_dict):
 
         import tritonclient.grpc as grpcclient
 
-        # create InferInput objects for each model input
+        # create InferRequestedOutput objects for each model output
         infer_outputs = [
-            grpcclient.InferRequestedOutput(o["name"]) for o in model_dict["outputs"]
+            grpcclient.InferRequestedOutput(o["name"]) for o in model_dict["output"]
         ]
 
         return infer_outputs
@@ -383,7 +396,7 @@ def _validate_inputs(self, inputs, model_dict):
                     else:
                         # convert responses to numpy arrays
                         for j, output in enumerate(
-                            self.model_dicts[request["model_name"]]["outputs"]
+                            self.model_dicts[request["model_name"]]["output"]
                         ):
                             request["result"][j] = results.as_numpy(output["name"])
 
@@ -438,10 +451,7 @@ def _validate_inputs(self, inputs, model_dict):
 
         # check if model_dict has been previously generated for model_name
         if model_name not in self.model_dicts.keys():
-            model_dict = model_metadata(self.client, model_name)
-            config = model_config(self.client, model_name)
-            if "maxBatchSize" in config:
-                model_dict["max_batch_size"] = config["maxBatchSize"]
+            model_dict = model_config(self.client, model_name)
             self.model_dicts[model_name] = model_dict
         else:
             model_dict = self.model_dicts[model_name]
