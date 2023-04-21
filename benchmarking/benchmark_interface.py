@@ -22,8 +22,6 @@ class Benchmark:
 
     def __init__(self, args_dict):
         self.args_dict = args_dict
-        
-
 
     def create_hs_study(self):
         """Create a histomic stream study.
@@ -69,17 +67,19 @@ class Benchmark:
         model_name = self.args_dict["model_name"]
         maxBatchSize = self.args_dict["maxbatchsize"]  # set max batch size
         verbose = self.args_dict["verbose"]  # set verbose
-        count = self.args_dict["gpu_count"] # set gpu count
-        kind = self.args_dict["kind"] # set gpu kind
-        # gpus = self.args_dict["gpu_num"] # set number of gpus
-        
+        count = self.args_dict["gpu_count"]  # set gpu count
+        kind = self.args_dict["kind"]  # set gpu kind
+        gpus = self.args_dict["gpu_num"]  # set number of gpus
+
         config = {"maxBatchSize": maxBatchSize}
         config = {"name": model_name}
 
         # create triton client
         client = grpcclient.InferenceServerClient(url=url, verbose=verbose)
 
-        config_builder = ConfigBuilder(config=config, client=client, model_name=model_name)
+        config_builder = ConfigBuilder(
+            config=config, client=client, model_name=model_name
+        )
 
         # Add/remove an automatic mixed-precision accelerator to the config.
         if self.args_dict["use_amp"] == True:
@@ -94,23 +94,22 @@ class Benchmark:
             config_builder.remove_trt
 
         #  Add an instance group defining the model hardware resources and instances.
-        if kind == 'gpu':
-            start, end, intval = 0, count,1
-            gpus = list(range(start, end,intval))
+        if kind == "gpu":
+            start, end, intval = 0, gpus, 1
+            gpus = list(range(start, end, intval))
             config_builder.add_instance_group(count, kind, gpus)
-        if kind == 'cpu':
+        if kind == "cpu":
             config_builder.add_instance_group(kind=kind)
-        
 
         # load tensorflow model with larger batch size
         config_builder.max_batch_size(maxBatchSize)
 
         print(config)
 
-        client.load_model(model_name, config=json.dumps(config)) 
+        client.load_model(model_name, config=json.dumps(config))
 
         # check readiness
-        # client.get_model_repository_index()
+        client.get_model_repository_index()
 
         # deleting the client in main prevents conflicts with child process clients
         del client
@@ -154,7 +153,7 @@ class Benchmark:
         analyze(self.times)
         return elapsed_time
 
-    def client_noGPU(object):
+    def client_noGPU(self):
         """Run client with no GPUs
 
         If running Triton and the client on the same machine, we want to stop the client tensorflow
@@ -167,6 +166,75 @@ class Benchmark:
         import tensorflow as tf
 
         assert len(tf.config.list_physical_devices("GPU")) == 0
+
+    def cache_clear(self):
+        import functools
+
+        @functools.lru_cache(maxsize=None)
+        def fib(n):
+            if n < 2:
+                return n
+            return fib(n - 1) + fib(n - 2)
+
+        def gfg():
+            fib.cache_clear()
+
+        fib(30)
+
+        # Before Clearing
+        print(fib.cache_info())
+
+        gfg()
+
+        # After Clearing
+        print(fib.cache_info())
+
+    def gpu_mem_clear(self):
+        import tensorflow as tf
+
+        gpus = tf.config.experimental.list_physical_devices("GPU")
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, True)
+
+        from numba import cuda
+
+        cuda.select_device('"0"')
+        cuda.close()
+
+    def run_tensorflow(self):
+        import tensorflow as tf
+        import multiprocessing
+        import numpy as np
+
+        n_input = 10000
+        n_classes = 1000
+
+        # Create model
+        def multilayer_perceptron(x, weight):
+            # Hidden layer with RELU activation
+            layer_1 = tf.matmul(x, weight)
+            return layer_1
+
+        # Store layers weight & bias
+        weights = tf.Variable(tf.random_normal([n_input, n_classes]))
+
+        x = tf.placeholder("float", [None, n_input])
+        y = tf.placeholder("float", [None, n_classes])
+        pred = multilayer_perceptron(x, weights)
+
+        cost = tf.reduce_mean(
+            tf.nn.softmax_cross_entropy_with_logits(logits=pred, labels=y)
+        )
+        optimizer = tf.train.AdamOptimizer(learning_rate=0.001).minimize(cost)
+
+        init = tf.global_variables_initializer()
+
+        with tf.Session() as sess:
+            sess.run(init)
+
+            for i in range(100):
+                batch_x = np.random.rand(10, 10000)
+                batch_y = np.random.rand(10, 1000)
 
 
 def install():
@@ -197,7 +265,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--batch", nargs="+", type=int, default=64
     )  # For testing, it will be removed
-    parser.add_argument("--maxbatchsize",  type=int, default=256)
+    parser.add_argument("--maxbatchsize", type=int, default=256)
     parser.add_argument("--models-path", default="/tf/notebooks/models", required=False)
     parser.add_argument(
         "--use-amp", action="store_true"
@@ -205,10 +273,26 @@ if __name__ == "__main__":
     parser.add_argument(
         "--use-trt", action="store_true"
     )  # automatically creates a default value of False.
-    parser.add_argument("--precision", choices=["FP32", "FP16"], default="FP16", required=False)
-    parser.add_argument("--kind", choices=["gpu", "cpu"], default="gpu", required=False, help='choice between gpu/cpu')
-    parser.add_argument("--gpu-count",  type=int , default=1, required=False, help='number of gpu (default: int)')
-    parser.add_argument("--gpu-num",   default=[0], type=list, help='list of int. For example, [0, 1]')
+    parser.add_argument(
+        "--precision", choices=["FP32", "FP16"], default="FP16", required=False
+    )
+    parser.add_argument(
+        "--kind",
+        choices=["gpu", "cpu"],
+        default="gpu",
+        required=False,
+        help="choice between gpu/cpu",
+    )
+    parser.add_argument(
+        "--gpu-count",
+        type=int,
+        default=1,
+        required=False,
+        help="number of gpu (default: int)",
+    )
+    parser.add_argument(
+        "--gpu-num", default=1, type=int, help="list of int. For example, [0, 1]"
+    )
     parser.add_argument("--url", default="localhost:8001")
     parser.add_argument("--magnification", type=int, default=20)
     parser.add_argument("--tile", type=int, default=224)
@@ -228,11 +312,9 @@ if __name__ == "__main__":
         check_readiness()
         exit()  # exit after showing readiness
         # Add keras to model name
-    keras_name = ".tensorflow"  
+    keras_name = ".tensorflow"
     if args_dict["model_name"] == "ConvNeXtXLarge":
-        args_dict["model_name"] = (
-            args_dict["model_name"] + keras_name
-        )  # set model_name
+        args_dict["model_name"] = args_dict["model_name"] + keras_name  # set model_name
     args_dict[
         "wsi_path"
     ] = "/tf/notebooks/TCGA-AN-A0G0-01Z-00-DX1.BE0BB5DF-DEDA-48D8-B5D8-2735C767F28F.svs"
@@ -243,9 +325,12 @@ if __name__ == "__main__":
     # Install dependencies
     # install() # uncomment to install dependencies
     benchmark = Benchmark(args_dict)
+    benchmark.cache_clear()
     benchmark.client_noGPU()
+    benchmark.gpu_mem_clear()
     benchmark.create_hs_study()
     benchmark.create_load_model()
     elapsed_time = benchmark.inference_measure_throughput()
+
     # display elapsed time
     print(f"Total elapsed time:", elapsed_time)
