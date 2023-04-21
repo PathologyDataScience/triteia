@@ -46,6 +46,8 @@ def histomics_stream_inference(
     performance : dict
         A dictionary of time performance data on reading, inference, and inter-process
         communication.
+    failed : list
+        A list of failed inference requests.
 
     See Also
     --------
