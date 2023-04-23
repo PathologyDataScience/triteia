@@ -5,6 +5,7 @@ from multiprocessing import Process
 import numpy as np
 import os
 from simple_triton.model import TritonModel
+from simple_triton.utils import create_client
 import time
 from tritonclient.utils import InferenceServerException
 
@@ -39,6 +40,7 @@ class Requests(object):
         self.model_dicts = {}
         self.pending = []
         self.retries = retries
+        self.client = create_client(url, verbose)
         self.url = url
         self.verbose = verbose
 
@@ -261,13 +263,13 @@ class Requests(object):
             A list of InferInput objects populated with data.
         """
 
-        import tritonclient.grpc as grpcclient
-
         # validate inputs against model expectations
         self._validate_inputs(inputs, model_dict)
 
         # create InferInput objects for each model input
         infer_inputs = []
+        import tritonclient.grpc as grpcclient
+
         for provided, expected in zip(inputs, model_dict["input"]):
             # create InferInput object
             iio = grpcclient.InferInput(
@@ -300,9 +302,9 @@ class Requests(object):
             results.
         """
 
+        # create InferRequestedOutput objects for each model output
         import tritonclient.grpc as grpcclient
 
-        # create InferRequestedOutput objects for each model output
         infer_outputs = [
             grpcclient.InferRequestedOutput(o["name"]) for o in model_dict["output"]
         ]
@@ -380,11 +382,8 @@ class Requests(object):
 
                         # make another attempt if retry limit has not been reached
                         if request["attempts"] < self.retries:
-                            # add request to list of retries to be processed
                             retry.append(request)
-
-                        else:
-                            # indicate failure and add request to output list
+                        else:  # indicate failure and add request to output list
                             request["success"] = False
                             completed.append(request)
 
@@ -472,15 +471,13 @@ class Requests(object):
         sample["attempts"] = sample["attempts"] + 1
 
         # submit request
-        client = create_client(self.url)
-        client.async_infer(
+        self.client.async_infer(
             model_name=model_name,
             inputs=inputs,
             callback=partial(self._callback, sample["result"]),
             outputs=outputs,
             client_timeout=timeout,
         )
-        client.close()
 
         # append request to list
         self.pending.append(sample)

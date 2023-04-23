@@ -1,4 +1,5 @@
 from google.protobuf.json_format import MessageToDict
+import json
 from simple_triton.utils import create_client
 import time
 from tritonclient.utils import InferenceServerException
@@ -31,7 +32,9 @@ class TritonModel(object):
     get_config(verbose=False)
         Retrieve the configuration for a loaded model.
     is_idle(idle=1.0)
-        Check is model is idle based on time since last inference.
+        Check if model is idle based on time since last inference.
+    is_loaded()
+        Check if model is loaded on the server.
     get_metadata(verbose=False)
         Retrieve metadata for a loaded model.
     load(config=None, retries=5, wait=0.01, block=False, timeout=1.0, verbose=False)
@@ -108,6 +111,18 @@ class TritonModel(object):
             return delta > idle
         else:  # model has zero inferences
             return True
+
+    def is_loaded(self):
+        """Queries server to test if model is loaded and ready.
+
+        Returns
+        -------
+        status : bool
+            Returns True is model is loaded and ready.
+        """
+
+        client = create_client(self.url)
+        return client.is_model_ready(self.model_name)
 
     def get_metadata(self, verbose):
         """Queries model metadata to retrieve model input/output signature.
@@ -200,7 +215,7 @@ class TritonModel(object):
                             print(
                                 f"load_model(): {self.model_name} is not loaded. Loading with provided config."
                             )
-                        client.load_model(self.model_name, config=config)
+                        client.load_model(self.model_name, config=json.dumps(config))
                         return
 
                 # reload model and with provided config
@@ -211,9 +226,9 @@ class TritonModel(object):
                         )
 
                     # check if model is idle and can be unloaded
-                    if self.idle(client, self.model_name):
+                    if self.is_idle():
                         client.unload_model(self.model_name)
-                        client.load_model(self.model_name, config=config)
+                        client.load_model(self.model_name, config=json.dumps(config))
                         return
 
                     # if not idle, either increment attempts or check timeout
@@ -264,7 +279,7 @@ class TritonModel(object):
                 # model is loaded
                 if client.is_model_ready(self.model_name):
                     # check if model is idle and can be unloaded
-                    if self.idle(client, self.model_name):
+                    if self.is_idle():
                         client.unload_model(self.model_name)
                         return
 
