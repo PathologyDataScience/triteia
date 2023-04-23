@@ -272,7 +272,7 @@ class ConfigBuilder(object):
 
         self._add_io(name, datatype, dims, key="output")
 
-    def remove_inputs(self):
+    def remove_outputs(self):
         """Removes all outputs from config."""
 
         self._remove_io(key="output")
