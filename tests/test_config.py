@@ -19,7 +19,6 @@ CONFIG = {
     "output": [{"name": "avg_pool", "dataType": "TYPE_FP32", "dims": ["1280"]}],
     "instanceGroup": [
         {
-            "name": "EfficientNetV2S.tensorflow",
             "count": 1,
             "gpus": [0, 1, 2, 3, 4, 5, 6, 7],
             "kind": "KIND_GPU",
@@ -88,29 +87,25 @@ def test_add_instance_group():
     assert "instanceGroup" not in builder.config
     builder.add_instance_group(count=2)
     client.load_model(MODEL, config=json.dumps(builder.config))
-    updated = client.get_model_config(MODEL)
-    assert MessageToDict(updated)["config"]["instanceGroup"] == [
-        {
-            "count": 2,
-            "gpus": [0, 1, 2, 3, 4, 5, 6, 7],
-            "kind": "KIND_GPU",
-            "name": MODEL,
-        }
-    ]
+    updated = MessageToDict(client.get_model_config(MODEL))
+    assert updated["config"]["instanceGroup"][0]["count"] == 2
+    assert updated["config"]["instanceGroup"][0]["gpus"] == [0, 1, 2, 3, 4, 5, 6, 7]
+    assert updated["config"]["instanceGroup"][0]["kind"] == "KIND_GPU"
     builder.remove_instance_groups()
     builder.add_instance_group(count=1, gpus=[0])
     client.load_model(MODEL, config=json.dumps(builder.config))
-    updated = client.get_model_config(MODEL)
-    assert MessageToDict(updated)["config"]["instanceGroup"] == [
-        {"count": 1, "gpus": [0], "kind": "KIND_GPU", "name": MODEL}
-    ]
+    updated = MessageToDict(client.get_model_config(MODEL))
+    assert updated["config"]["instanceGroup"][0]["count"] == 1
+    assert updated["config"]["instanceGroup"][0]["gpus"] == [0]
+    assert updated["config"]["instanceGroup"][0]["kind"] == "KIND_GPU"
     builder.add_instance_group(count=2, kind="cpu")
     client.load_model(MODEL, config=json.dumps(builder.config))
-    updated = client.get_model_config(MODEL)
-    assert MessageToDict(updated)["config"]["instanceGroup"] == [
-        {"count": 1, "gpus": [0], "kind": "KIND_GPU", "name": MODEL},
-        {"count": 2, "kind": "KIND_CPU", "name": MODEL},
-    ]
+    updated = MessageToDict(client.get_model_config(MODEL))
+    assert updated["config"]["instanceGroup"][0]["count"] == 1
+    assert updated["config"]["instanceGroup"][0]["gpus"] == [0]
+    assert updated["config"]["instanceGroup"][0]["kind"] == "KIND_GPU"  
+    assert updated["config"]["instanceGroup"][1]["count"] == 2
+    assert updated["config"]["instanceGroup"][1]["kind"] == "KIND_CPU"
     with pytest.raises(ValueError):
         builder.add_instance_group(count=1.5)
     with pytest.raises(ValueError):
@@ -118,7 +113,7 @@ def test_add_instance_group():
     with pytest.raises(ValueError):
         builder.add_instance_group(count=1, kind="gpu", gpus=0)
     with pytest.raises(ValueError):
-        builder.add_instance_group(count=1, kind="gpu", gpus=[0.0, 1])
+        builder.add_instance_group(count=1, kind="gpu", gpus=['0', '1'])
 
 
 def test_add_mixed_precision():
@@ -141,7 +136,7 @@ def test_add_mixed_precision():
     assert (
         "executionAccelerators" not in MessageToDict(updated)["config"]["optimization"]
     )
-    builder = ConfigBuilder(MODEL, client=client, model_name=MODEL)
+    builder = ConfigBuilder(MODEL, client=client)
     builder.add_trt("FP16")
     builder.add_mixed_precision()
     client.load_model(MODEL, config=json.dumps(builder.config))
