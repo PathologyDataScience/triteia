@@ -39,7 +39,7 @@ BASIC = {"name": MODEL}
 def test_init():
     """Verify checking of config type as dict"""
     with pytest.raises(ValueError):
-        ConfigBuilder(config=1)
+        ConfigBuilder(MODEL, config=1)
 
 
 def test_max_batch_size():
@@ -48,7 +48,7 @@ def test_max_batch_size():
     # use fast loading of one instance / one gpu
     client = grpcclient.InferenceServerClient(url=URL, verbose=False)
     batch = 512
-    builder = ConfigBuilder(config=BASIC)
+    builder = ConfigBuilder(MODEL, config=BASIC)
     builder.max_batch_size(batch)
     builder.remove_instance_groups()
     builder.add_instance_group(count=1, gpus=[0])
@@ -64,7 +64,7 @@ def test_response_cache():
 
     # use fast loading of one instance / one gpu
     client = grpcclient.InferenceServerClient(url=URL, verbose=False)
-    builder = ConfigBuilder(config=BASIC)
+    builder = ConfigBuilder(MODEL, config=BASIC)
     builder.response_cache(True)
     builder.remove_instance_groups()
     builder.add_instance_group(count=1, gpus=[0])
@@ -83,7 +83,7 @@ def test_add_instance_group():
     """Verify response cache setting properly"""
 
     client = grpcclient.InferenceServerClient(url=URL, verbose=False)
-    builder = ConfigBuilder(config=BASIC)
+    builder = ConfigBuilder(MODEL, config=BASIC)
     builder.remove_instance_groups()
     assert "instanceGroup" not in builder.config
     builder.add_instance_group(count=2)
@@ -126,7 +126,7 @@ def test_add_mixed_precision():
 
     # use fast loading of one instance / one gpu
     client = grpcclient.InferenceServerClient(url=URL, verbose=False)
-    builder = ConfigBuilder(config=BASIC)
+    builder = ConfigBuilder(MODEL, config=BASIC)
     builder.add_mixed_precision()
     builder.remove_instance_groups()
     builder.add_instance_group(count=1, gpus=[0])
@@ -141,7 +141,7 @@ def test_add_mixed_precision():
     assert (
         "executionAccelerators" not in MessageToDict(updated)["config"]["optimization"]
     )
-    builder = ConfigBuilder(client=client, model_name=MODEL)
+    builder = ConfigBuilder(MODEL, client=client, model_name=MODEL)
     builder.add_trt("FP16")
     builder.add_mixed_precision()
     client.load_model(MODEL, config=json.dumps(builder.config))
@@ -156,7 +156,7 @@ def test_add_trt():
 
     # use fast loading of one instance / one gpu
     client = grpcclient.InferenceServerClient(url=URL, verbose=False)
-    builder = ConfigBuilder(config=BASIC)
+    builder = ConfigBuilder(MODEL, config=BASIC)
     builder.add_trt("FP16")
     builder.remove_instance_groups()
     builder.add_instance_group(count=1, gpus=[0])
@@ -185,7 +185,7 @@ def test_add_trt():
     assert (
         "executionAccelerators" not in MessageToDict(updated)["config"]["optimization"]
     )
-    builder = ConfigBuilder(config=BASIC)
+    builder = ConfigBuilder(MODEL, config=BASIC)
     builder.add_mixed_precision()
     builder.add_trt("FP16")
     client.load_model(MODEL, config=json.dumps(builder.config))
@@ -205,7 +205,7 @@ def test_add_input():
     """Verify input setting properly."""
 
     # offline comparison of config
-    builder = ConfigBuilder(config=BASIC)
+    builder = ConfigBuilder(MODEL, config=BASIC)
     builder.add_input("input_1", "TYPE_FP32", [-1, -1, 3])
     assert builder.config["input"] == [
         {"name": "input_1", "dataType": "TYPE_FP32", "dims": [-1, -1, 3]}
