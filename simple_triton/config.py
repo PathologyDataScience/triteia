@@ -1,5 +1,5 @@
 import numpy as np
-from simple_triton.model import model_config
+from simple_triton.model import TritonModel
 
 
 class ConfigBuilder(object):
@@ -16,13 +16,12 @@ class ConfigBuilder(object):
         The name of the model to query as hosted in triton or stored in
         the model repository.
     config : dict
-        An initial configuration. If `None`, a client must be provided
-        to obtain a configuration from the loaded model. Default value
-        is `None`.
-    client : tritonclient.grpc.InferenceServerClient
-        A remote-procedure call client for the triton server. If `config`
-        is `None`, this client must be provided to query a config from
-        the server. Default value is `None`.
+        An initial configuration. If `None`, an rpc server url must be 
+        provided to obtain a configuration from the loaded model. Default 
+        value is `None`.
+    url : string
+        The url for the remote-procedure call port of the Triton server.
+        Default value is "localhost:8001".
 
     Attributes
     ----------
@@ -74,7 +73,7 @@ class ConfigBuilder(object):
     The ModelConfig protobuf https://github.com/triton-inference-server/common/blob/main/protobuf/model_config.proto
     """
 
-    def __init__(self, model_name, config=None, client=None):
+    def __init__(self, model_name, config=None, url="localhost:8001"):
         """Initialize from provided config or as hosted."""
 
         if config is not None:
@@ -82,7 +81,8 @@ class ConfigBuilder(object):
                 raise ValueError("config must be a dict")
             self.config = config
         else:
-            self.config = model_config(client, model_name)
+            model = TritonModel(model_name, url)
+            self.config = TritonModel.get_config()
         self.config["name"] = model_name
 
     def _gpu_accelerator_status(self, accelerator):

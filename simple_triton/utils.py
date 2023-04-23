@@ -1,4 +1,31 @@
 import tensorflow as tf
+import tritonclient.grpc as grpcclient
+from tritonclient.utils import InferenceServerException
+
+
+def create_client(url="localhost:8001", vebose=False):
+    """Create a grpcclient.
+    
+    Parameters
+    ----------
+    url : string
+        The url for the remote-procedure call port of the Triton server.
+        Default value is "localhost:8001".
+    verbose : bool
+        If True the client will emit status messages to stdout. Default
+        is False.
+    
+    Returns
+    -------
+    client : grpcclient.InferenceServerClient
+        A client 
+    """
+
+    try:
+        self.client = grpcclient.InferenceServerClient(url=url, verbose=verbose)
+    except Exception as e:
+        print("context creation failed: " + str(e), flush=True)
+    return client
 
 
 def reshape_savedmodel(

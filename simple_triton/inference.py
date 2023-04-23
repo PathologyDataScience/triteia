@@ -1,10 +1,10 @@
 from functools import partial
-from simple_triton.model import model_config, model_metadata
 import multiprocessing
 import multiprocessing.queues
 from multiprocessing import Process
 import numpy as np
 import os
+from simple_triton.model import TritonModel
 import time
 from tritonclient.utils import InferenceServerException
 
@@ -17,35 +17,30 @@ class Requests(object):
     new requests.
     """
 
-    def __init__(self, url, limit, retries=5, verbose=False):
+    def __init__(self, url="localhost:8001", limit=10, retries=5, verbose=False):
         """Construct
 
         Parameters
         ----------
         url : string
-            A url for the triton GRPC port used to submit requests.
+            The url for the remote-procedure call port of the Triton server.
+            Default value is "localhost:8001".
         limit : int
-            The maximum number of concurrent pending requests to allow.
+            The maximum number of concurrent pending requests to allow. Default
+            value is 10.
         retries : int
-            The maximum number of attempts for each request.
+            The maximum number of attempts for each request. Default value is 5.
         verbose : bool
             True updates console with inference progress and exceptions.
             Default value is False.
         """
 
-        import tritonclient.grpc as grpcclient
-
-        # create GRPC client
-        try:
-            self.client = grpcclient.InferenceServerClient(url=url, verbose=verbose)
-        except Exception as e:
-            print("context creation failed: " + str(e), flush=True)
-
         self.limit = limit
-        self.retries = retries
-        self.verbose = verbose
         self.model_dicts = {}
         self.pending = []
+        self.retries = retries
+        self.url = url
+        self.verbose = verbose
 
     def _api_to_np_types(self, api_type):
         """Converts triton API type string to numpy dtype.
@@ -453,7 +448,8 @@ class Requests(object):
 
         # check if model_dict has been previously generated for model_name
         if model_name not in self.model_dicts.keys():
-            model_dict = model_config(self.client, model_name)
+            model = TritonModel(model_name, self.url)
+            model_dict = model.get_config()
             self.model_dicts[model_name] = model_dict
         else:
             model_dict = self.model_dicts[model_name]
@@ -476,13 +472,15 @@ class Requests(object):
         sample["attempts"] = sample["attempts"] + 1
 
         # submit request
-        self.client.async_infer(
+        client = create_client(self.url)
+        client.async_infer(
             model_name=model_name,
             inputs=inputs,
             callback=partial(self._callback, sample["result"]),
             outputs=outputs,
             client_timeout=timeout,
         )
+        client.close()
 
         # append request to list
         self.pending.append(sample)
