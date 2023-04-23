@@ -12,17 +12,17 @@ class ConfigBuilder(object):
 
     Parameters
     ----------
+    model_name : string
+        The name of the model to query as hosted in triton or stored in
+        the model repository.
     config : dict
-        An initial configuration. If `None`, a client and name of a
-        hosted model must be provided to obtain an initial configuration.
-        Default value is `None`.
+        An initial configuration. If `None`, a client must be provided
+        to obtain a configuration from the loaded model. Default value
+        is `None`.
     client : tritonclient.grpc.InferenceServerClient
         A remote-procedure call client for the triton server. If `config`
         is `None`, this client must be provided to query a config from
         the server. Default value is `None`.
-    model_name : string
-        The name of the model to query as hosted in triton. Must be
-        provided if `config` is None.
 
     Attributes
     ----------
@@ -35,7 +35,13 @@ class ConfigBuilder(object):
     response_cache(enable=False)
         Sets caching of inference results on-server.
     add_input(name, datatype, dims)
-        Add or modifies a model input given input name and dims.
+        Add or modify a model input given input name and dims.
+    add_output(name, datatype, dims)
+        Add or modify a model output given output name and dims.
+    remove_inputs()
+        Remove all inputs.
+    remove_outputs()
+        Remove all outputs.
     max_batch_size(samples)
         Set the maximum batch size.
     add_instance_group(count=1, kind="gpu", gpus=None)
@@ -54,21 +60,21 @@ class ConfigBuilder(object):
 
     Notes
     -----
-    This class does not build a configuration from scratch. It is
-    typically used to modify an auto-generated configuration produced
-    by Triton when a model is loaded. When launching Triton we
-    reccomend using `--model-control-mode=explicit` to enable the
-    configuration of loaded models to be modified without restart, and
-    `--strict-model-config=false` which relaxes the requirements of a
-    valid configuration, so that not every setting has to be provided
-    by the client or user.
+    This class is not typically used to build a configuration from
+    scratch. Most often it will be used to modify an auto-generated
+    configuration produced by Triton when a model is loaded. When
+    launching Triton we recommend using `--model-control-mode=explicit`
+    to enable the configuration of loaded models to be modified without
+    restart, and `--strict-model-config=false` which relaxes the
+    requirements of a valid configuration, so that not every setting
+    needs to be provided by the client or user.
 
     References
     ----------
     The ModelConfig protobuf https://github.com/triton-inference-server/common/blob/main/protobuf/model_config.proto
     """
 
-    def __init__(self, config=None, client=None, model_name=None):
+    def __init__(self, model_name, config=None, client=None):
         """Initialize from provided config or as hosted."""
 
         if config is not None:
@@ -77,6 +83,7 @@ class ConfigBuilder(object):
             self.config = config
         else:
             self.config = model_config(client, model_name)
+        self.config["name"] = model_name
 
     def _gpu_accelerator_status(self, accelerator):
         """Test if a gpuExecutionAccelerator is present."""
@@ -185,6 +192,37 @@ class ConfigBuilder(object):
             raise ValueError("enable must be bool")
         self.config["responseCache"] = {"enable": enable}
 
+    def _add_io(self, name, datatype, dims, key="input"):
+        """Add a new input/output or set the properties of an existing one."""
+
+        # check for valid inputs
+        if not isinstance(name, str):
+            raise ValueError("name must be str")
+        if not isinstance(name, str):
+            raise ValueError("datatype must be str")
+        if not isinstance(dims, (list, np.ndarray)):
+            raise ValueError("dims must be a list or np.ndarray of int")
+        if not all([isinstance(i, (int, np.integer)) for i in dims]):
+            raise ValueError("elements of dims must be int")
+
+        if not key in self.config:
+            self.config[key] = []
+        inputs = [i["name"] for i in self.config[key]]
+        if name in inputs:
+            index = inputs.index(name)
+            self.config[key][index]["dataType"] = datatype
+            self.config[key][index]["dims"] = dims
+        else:
+            inputs = {
+                "name": name,
+            }
+            self.config[key].append({"name": name, "dataType": datatype, "dims": dims})
+
+    def _remove_io(self, key="input"):
+        """Removes all inputs from config."""
+        if key in self.config:
+            del self.config[key]
+
     def add_input(self, name, datatype, dims):
         """Add a new input or set the properties of an existing input.
 
@@ -205,30 +243,39 @@ class ConfigBuilder(object):
         https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#datatypes
         """
 
-        # check for valid inputs
-        if not isinstance(name, str):
-            raise ValueError("name must be str")
-        if not isinstance(name, str):
-            raise ValueError("datatype must be str")
-        if not isinstance(dims, (list, np.ndarray)):
-            raise ValueError("dims must be a list or np.ndarray of int")
-        if not all([isinstance(i, (int, np.integer)) for i in dims]):
-            raise ValueError("elements of dims must be int")
+        self._add_io(name, datatype, dims, key="input")
 
-        if not "input" in self.config:
-            self.config["input"] = []
-        inputs = [i["name"] for i in self.config["input"]]
-        if name in inputs:
-            index = inputs.index(name)
-            self.config["input"][index]["dataType"] = datatype
-            self.config["input"][index]["dims"] = dims
-        else:
-            inputs = {
-                "name": name,
-            }
-            self.config["input"].append(
-                {"name": name, "dataType": datatype, "dims": dims}
-            )
+    def remove_inputs(self):
+        """Removes all inputs from config."""
+
+        self._remove_io(key="input")
+
+    def add_output(self, name, datatype, dims):
+        """Add a new output or set the properties of an existing output.
+
+        Parameters
+        ----------
+        name : str
+            The output name. Used to check if the output already exists. And existing
+            output will be overwritten while a new input will be added.
+        datatype : str
+            A valid triton datatype (see below).
+        dims : array-like
+            A list of integers indicating the model output sizes sans batch. Variable
+            sizes should be indicated with a `-1`.
+
+        Notes
+        -----
+        See Triton for valid `datatype` values:
+        https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#datatypes
+        """
+
+        self._add_io(name, datatype, dims, key="output")
+
+    def remove_inputs(self):
+        """Removes all outputs from config."""
+
+        self._remove_io(key="output")
 
     def max_batch_size(self, samples):
         """Sets the maximum batch size for the config.
@@ -286,8 +333,8 @@ class ConfigBuilder(object):
             if not all([isinstance(inst, int) for inst in gpus]):
                 raise ValueError("elements of 'gpus' must be int.")
 
-        # set model name, count, and kind
-        instance = {"name": self.config["name"], "count": count, "kind": kind}
+        # set count, kind, and optionally GPUs
+        instance = {"count": count, "kind": kind}
         if gpus is not None:
             instance["gpus"] = gpus
 
