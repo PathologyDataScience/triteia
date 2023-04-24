@@ -4,7 +4,7 @@ import numpy as np
 import os
 from simple_triton.inference import InferenceRunner
 from simple_triton.sharded_tiles import ShardedTiles
-from simple_triton.submitter import TimedQueue
+from simple_triton.utils import TimedQueue
 import tensorflow as tf
 
 

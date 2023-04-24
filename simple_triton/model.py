@@ -124,7 +124,7 @@ class TritonModel(object):
         client = create_client(self.url)
         return client.is_model_ready(self.model_name)
 
-    def get_metadata(self, verbose):
+    def get_metadata(self, verbose=False):
         """Queries model metadata to retrieve model input/output signature.
 
         Parameters
@@ -140,7 +140,7 @@ class TritonModel(object):
             outputs, as well as maximum batch size.
         """
 
-        client = create_client(self.url)
+        client = create_client(self.url, verbose)
         metadata = MessageToDict(client.get_model_metadata(self.model_name))
         return metadata
 
