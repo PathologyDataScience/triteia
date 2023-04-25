@@ -1,17 +1,14 @@
 import argparse
-import tritonclient.grpc as grpcclient
 from mil.io.utils import study
 from google.protobuf.json_format import MessageToDict
 from simple_triton.feature_extraction import feature_extractor
 from simple_triton.model import TritonModel
-import tritonclient.grpc as grpcclient
 from simple_triton.feature_extraction import histomics_stream_inference
-from simple_triton.utils import analyze
+from simple_triton.utils import analyze, create_client
 from simple_triton.config import ConfigBuilder
 import time
 import subprocess
 import sys
-import json
 
 
 class Benchmark:
@@ -66,28 +63,29 @@ class Benchmark:
         url = self.args_dict["url"]  # url for grpc access to triton server
         model_name = self.args_dict["model_name"]
         maxBatchSize = self.args_dict["maxbatchsize"]  # set max batch size
-        verbose = self.args_dict["verbose"]  # set verbose
         count = self.args_dict["gpu_count"]  # set gpu count
         kind = self.args_dict["kind"]  # set gpu kind
         gpus = self.args_dict["gpu_num"]  # set number of gpus
+        precision = self.args_dict["precision"]
 
-        config = {"maxBatchSize": maxBatchSize}
-        config = {"name": model_name}
+        model = TritonModel(model_name, url)
 
-        # create triton client
-        client = grpcclient.InferenceServerClient(url=url, verbose=verbose)
+        model.load({"maxBatchSize": maxBatchSize})
 
+        assert model.is_loaded()
+
+        config = model.get_config()
+        
         config_builder = ConfigBuilder(model_name=model_name, config=config, url=url)
 
         # Add/remove an automatic mixed-precision accelerator to the config.
         if self.args_dict["use_amp"] == True:
-            print("amp = True")
             config_builder.add_mixed_precision()
         elif self.args_dict["use_amp"] == False:
             config_builder.remove_instance_groups()
         # Add an TensorRT accelerator to the config.
         if self.args_dict["use_trt"] == True:
-            config_builder.add_trt()
+            config_builder.add_trt(precision)
         elif self.args_dict["use_trt"] == False:
             config_builder.remove_trt
 
@@ -95,22 +93,21 @@ class Benchmark:
         if kind == "gpu":
             start, end, intval = 0, gpus, 1
             gpus = list(range(start, end, intval))
+            config_builder.remove_instance_groups()
             config_builder.add_instance_group(count, kind, gpus)
         if kind == "cpu":
+            config_builder.remove_instance_groups()
             config_builder.add_instance_group(kind=kind)
 
         # load tensorflow model with larger batch size
         config_builder.max_batch_size(maxBatchSize)
+      
+        model.load(config=config_builder.config)
 
-        client.load_model(model_name, config=json.dumps(config_builder.config))
+        print (model.get_config())
 
-        print(config_builder.config)
+        assert model.is_loaded()
 
-        # check readiness
-        client.get_model_repository_index()
-
-        # deleting the client in main prevents conflicts with child process clients
-        del client
 
     def inference_measure_throughput(self):
         """
@@ -212,12 +209,7 @@ def install():
 
 def check_readiness():
     """check readiness of models"""
-    # create triton client
-    url = "localhost:8001"  # url for grpc access to tirton server
-    client = grpcclient.InferenceServerClient(url=url, verbose=True)
-    # check readiness
-    client.get_model_repository_index()
-    del client
+    assert TritonModel.is_loaded()
 
 
 if __name__ == "__main__":
@@ -256,7 +248,7 @@ if __name__ == "__main__":
         choices=["FP32", "FP16"],
         default="FP16",
         required=False,
-        help="choose between Precision FP16 or FP32 , default: FP16",
+        help="Choose between Precision FP16 or FP32 , default: FP16",
     )
     parser.add_argument(
         "--kind",
