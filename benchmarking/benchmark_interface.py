@@ -1,10 +1,8 @@
 import argparse
 from mil.io.utils import study
-from google.protobuf.json_format import MessageToDict
-from simple_triton.feature_extraction import feature_extractor
 from simple_triton.model import TritonModel
 from simple_triton.feature_extraction import histomics_stream_inference
-from simple_triton.utils import analyze, create_client
+from simple_triton.utils import analyze
 from simple_triton.config import ConfigBuilder
 import time
 import subprocess
@@ -235,7 +233,7 @@ if __name__ == "__main__":
     parser.add_argument("--models-path", default="/tf/notebooks/models", required=False)
     parser.add_argument(
         "--use-amp",
-        action="store_true",
+        action="store_false",
         help="Use auto matic mixed precision, usage: --use-amp, default: False",
     )  # automatically creates a default value of False.
     parser.add_argument(
