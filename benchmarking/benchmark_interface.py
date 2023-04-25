@@ -3,10 +3,11 @@ import tritonclient.grpc as grpcclient
 from mil.io.utils import study
 from google.protobuf.json_format import MessageToDict
 from simple_triton.feature_extraction import feature_extractor
-from simple_triton.model import model_config
+from simple_triton.model import TritonModel
 import tritonclient.grpc as grpcclient
 from simple_triton.feature_extraction import histomics_stream_inference
-from simple_triton.submitter import analyze
+from simple_triton.utils import analyze
+from mil.io.utils import study
 from simple_triton.config import ConfigBuilder
 import time
 import subprocess
@@ -78,7 +79,7 @@ class Benchmark:
         client = grpcclient.InferenceServerClient(url=url, verbose=verbose)
 
         config_builder = ConfigBuilder(
-            config=config, client=client, model_name=model_name
+            model_name=model_name, config=config, url=url
         )
 
         # Add/remove an automatic mixed-precision accelerator to the config.
@@ -104,9 +105,13 @@ class Benchmark:
         # load tensorflow model with larger batch size
         config_builder.max_batch_size(maxBatchSize)
 
-        print(config)
+        print(config_builder.config)
 
-        client.load_model(model_name, config=json.dumps(config))
+        client.load_model(model_name, config=json.dumps(config_builder.config))
+
+        print(config_builder.config)
+
+        print(client.get_model_config(model_name))
 
         # check readiness
         client.get_model_repository_index()
@@ -140,7 +145,7 @@ class Benchmark:
         start = time.time()
 
         # inference
-        self.features, self.tile_info, self.times = histomics_stream_inference(
+        self.features, self.tile_info, self.times, self.failed = histomics_stream_inference(
             self.hs_study,
             model_name,
             args_dict["url"],
@@ -223,7 +228,7 @@ if __name__ == "__main__":
         "--model-name", required=False, default="ConvNeXtXLarge", help="Set model name, usage: --model-name=ConvNeXtXLarge, default: ConvNeXtXLarge"
     )  # For testing, it will be removed
     parser.add_argument(
-        "--batch", type=int, default=64, help="Set inference batch size usage: --batch=64, default: 64"
+        "--batch", type=int, default=32, help="Set inference batch size usage: --batch=64, default: 64"
     )  # For testing, it will be removed
     parser.add_argument("--maxbatchsize", type=int, default=256, help="Set max batch size, usage: --maxbatchsize=256, default: 256")
     parser.add_argument("--models-path", default="/tf/notebooks/models", required=False)
