@@ -7,7 +7,6 @@ from simple_triton.model import TritonModel
 import tritonclient.grpc as grpcclient
 from simple_triton.feature_extraction import histomics_stream_inference
 from simple_triton.utils import analyze
-from mil.io.utils import study
 from simple_triton.config import ConfigBuilder
 import time
 import subprocess
@@ -78,9 +77,7 @@ class Benchmark:
         # create triton client
         client = grpcclient.InferenceServerClient(url=url, verbose=verbose)
 
-        config_builder = ConfigBuilder(
-            model_name=model_name, config=config, url=url
-        )
+        config_builder = ConfigBuilder(model_name=model_name, config=config, url=url)
 
         # Add/remove an automatic mixed-precision accelerator to the config.
         if self.args_dict["use_amp"] == True:
@@ -145,7 +142,12 @@ class Benchmark:
         start = time.time()
 
         # inference
-        self.features, self.tile_info, self.times, self.failed = histomics_stream_inference(
+        (
+            self.features,
+            self.tile_info,
+            self.times,
+            self.failed,
+        ) = histomics_stream_inference(
             self.hs_study,
             model_name,
             args_dict["url"],
@@ -225,28 +227,47 @@ def check_readiness():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--model-name", required=False, default="ConvNeXtXLarge", help="Set model name, usage: --model-name=ConvNeXtXLarge, default: ConvNeXtXLarge"
+        "--model-name",
+        required=False,
+        default="ConvNeXtXLarge",
+        help="Set model name, usage: --model-name=ConvNeXtXLarge, default: ConvNeXtXLarge",
     )  # For testing, it will be removed
     parser.add_argument(
-        "--batch", type=int, default=32, help="Set inference batch size usage: --batch=64, default: 64"
+        "--batch",
+        type=int,
+        default=32,
+        help="Set inference batch size usage: --batch=64, default: 64",
     )  # For testing, it will be removed
-    parser.add_argument("--maxbatchsize", type=int, default=256, help="Set max batch size, usage: --maxbatchsize=256, default: 256")
+    parser.add_argument(
+        "--maxbatchsize",
+        type=int,
+        default=256,
+        help="Set max batch size, usage: --maxbatchsize=256, default: 256",
+    )
     parser.add_argument("--models-path", default="/tf/notebooks/models", required=False)
     parser.add_argument(
-        "--use-amp", action="store_true", help="Use auto matic mixed precision, usage: --use-amp, default: False"
+        "--use-amp",
+        action="store_true",
+        help="Use auto matic mixed precision, usage: --use-amp, default: False",
     )  # automatically creates a default value of False.
     parser.add_argument(
-        "--use-trt", action="store_true", help="Use tensorRT, usage: --use-trt, default: False"
+        "--use-trt",
+        action="store_true",
+        help="Use tensorRT, usage: --use-trt, default: False",
     )  # automatically creates a default value of False.
     parser.add_argument(
-        "--precision", choices=["FP32", "FP16"], default="FP16", required=False, help="choose between Precision FP16 or FP32 , default: FP16"
+        "--precision",
+        choices=["FP32", "FP16"],
+        default="FP16",
+        required=False,
+        help="choose between Precision FP16 or FP32 , default: FP16",
     )
     parser.add_argument(
         "--kind",
         choices=["gpu", "cpu"],
         default="gpu",
         required=False,
-        help="choice between gpu or cpu, usage: --kind=gpu  default: gpu"
+        help="choice between gpu or cpu, usage: --kind=gpu  default: gpu",
     )
     parser.add_argument(
         "--gpu-count",
