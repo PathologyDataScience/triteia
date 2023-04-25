@@ -102,13 +102,9 @@ class Benchmark:
         # load tensorflow model with larger batch size
         config_builder.max_batch_size(maxBatchSize)
 
-        print(config_builder.config)
-
         client.load_model(model_name, config=json.dumps(config_builder.config))
 
         print(config_builder.config)
-
-        print(client.get_model_config(model_name))
 
         # check readiness
         client.get_model_repository_index()
@@ -155,10 +151,10 @@ class Benchmark:
             workers=workers,
             limit=limit,
         )
-
+        throughput = (self.tile_info["version"].size) / (time.time() - start)
         elapsed_time = {time.time() - start}
         analyze(self.times)
-        return elapsed_time
+        return throughput
 
     def client_noGPU(self):
         """Run client with no GPUs
@@ -316,7 +312,7 @@ if __name__ == "__main__":
     benchmark.gpu_mem_clear()
     benchmark.create_hs_study()
     benchmark.create_load_model()
-    elapsed_time = benchmark.inference_measure_throughput()
+    throughput = benchmark.inference_measure_throughput()
 
     # display elapsed time
-    print(f"Total elapsed time:", elapsed_time)
+    print(f"Throughput (tiles/sec):", throughput)
