@@ -205,9 +205,10 @@ def install():
     subprocess.check_call([sys.executable, "-m", "pip", "install", f"../../mil"])
 
 
-def check_readiness():
+def check_readiness(args_dict):
     """check readiness of models"""
-    assert TritonModel.is_loaded()
+    model = TritonModel(args_dict["model_name"], args_dict["url"])
+    assert model.is_loaded()
 
 
 if __name__ == "__main__":
@@ -233,7 +234,7 @@ if __name__ == "__main__":
     parser.add_argument("--models-path", default="/tf/notebooks/models", required=False)
     parser.add_argument(
         "--use-amp",
-        action="store_false",
+        action="store_true",
         help="Use auto matic mixed precision, usage: --use-amp, default: False",
     )  # automatically creates a default value of False.
     parser.add_argument(
@@ -275,13 +276,13 @@ if __name__ == "__main__":
     parser.add_argument("--workers", type=int, default=32)
     parser.add_argument("-v", "--verbose", default=True)
     parser.add_argument(
-        "--check-readiness", action="store_true"
+        "--check-readiness", action="store_false"
     )  # check readiness of models
     args = parser.parse_args()
     args_dict = vars(parser.parse_args())
     print(args_dict)
     if args_dict["check_readiness"] == True:
-        check_readiness()
+        check_readiness(args_dict)
         exit()  # exit after showing readiness
         # Add keras to model name
     keras_name = ".tensorflow"
