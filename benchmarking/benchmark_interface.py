@@ -73,7 +73,7 @@ class Benchmark:
         assert model.is_loaded()
 
         config = model.get_config()
-        
+
         config_builder = ConfigBuilder(model_name=model_name, config=config, url=url)
 
         # Add/remove an automatic mixed-precision accelerator to the config.
@@ -99,13 +99,12 @@ class Benchmark:
 
         # load tensorflow model with larger batch size
         config_builder.max_batch_size(maxBatchSize)
-      
+
         model.load(config=config_builder.config)
 
-        print (model.get_config())
+        print(model.get_config())
 
         assert model.is_loaded()
-
 
     def inference_measure_throughput(self):
         """

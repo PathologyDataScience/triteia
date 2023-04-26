@@ -212,7 +212,6 @@ def test_model_idle():
 
 
 def test_load_model_noconfig():
-
     model = TritonModel(MODEL, URL)
     model.load()
     assert model.is_loaded()

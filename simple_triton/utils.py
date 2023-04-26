@@ -10,7 +10,7 @@ from tritonclient.utils import InferenceServerException
 
 def create_client(url="localhost:8001", verbose=False):
     """Create a grpcclient.
-    
+
     Parameters
     ----------
     url : string
@@ -19,11 +19,11 @@ def create_client(url="localhost:8001", verbose=False):
     verbose : bool
         If True the client will emit status messages to stdout. Default
         is False.
-    
+
     Returns
     -------
     client : grpcclient.InferenceServerClient
-        A client 
+        A client
     """
 
     try:
@@ -117,7 +117,12 @@ def analyze(times, floatfmt=".2f"):
             min(retrieval),
             max(retrieval),
         ],
-        ["other (% in-process)", np.median(np.array(other)), min(other), max(other),],
+        [
+            "other (% in-process)",
+            np.median(np.array(other)),
+            min(other),
+            max(other),
+        ],
     ]
 
     # display results

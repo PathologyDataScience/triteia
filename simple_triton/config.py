@@ -16,8 +16,8 @@ class ConfigBuilder(object):
         The name of the model to query as hosted in triton or stored in
         the model repository.
     config : dict
-        An initial configuration. If `None`, an rpc server url must be 
-        provided to obtain a configuration from the loaded model. Default 
+        An initial configuration. If `None`, an rpc server url must be
+        provided to obtain a configuration from the loaded model. Default
         value is `None`.
     url : string
         The url for the remote-procedure call port of the Triton server.

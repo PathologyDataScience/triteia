@@ -18,7 +18,11 @@ CONFIG = {
     ],
     "output": [{"name": "avg_pool", "dataType": "TYPE_FP32", "dims": ["1280"]}],
     "instanceGroup": [
-        {"count": 1, "gpus": [0, 1, 2, 3, 4, 5, 6, 7], "kind": "KIND_GPU",}
+        {
+            "count": 1,
+            "gpus": [0, 1, 2, 3, 4, 5, 6, 7],
+            "kind": "KIND_GPU",
+        }
     ],
     "defaultModelFilename": "model.savedmodel",
     "dynamicBatching": {"preferredBatchSize": [4]},
