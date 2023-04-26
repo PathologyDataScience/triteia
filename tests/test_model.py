@@ -3,53 +3,60 @@ import json
 from multiprocessing import get_context
 import numpy as np
 import pytest
-from simple_triton.model import model_config, model_idle, model_metadata, load_model
+from simple_triton.model import TritonModel
+from simple_triton.utils import create_client
 import sys
 import time
 import tritonclient.grpc as grpcclient
 from tritonclient.utils import InferenceServerException
 
 
-MODEL = "densenet_onnx"
+MODEL = "EfficientNetV2S.tensorflow"
 URL = "localhost:8001"
 CONFIG = {
-    "name": "densenet_onnx",
-    "platform": "onnxruntime_onnx",
+    "name": "EfficientNetV2S.tensorflow",
+    "platform": "tensorflow_savedmodel",
     "versionPolicy": {"latest": {"numVersions": 1}},
+    "maxBatchSize": 1,
     "input": [
-        {"name": "data_0", "dataType": "TYPE_FP32", "dims": ["1", "3", "224", "224"]}
+        {"name": "input_2", "dataType": "TYPE_FP32", "dims": ["224", "224", "3"]}
     ],
-    "output": [
-        {"name": "fc6_1", "dataType": "TYPE_FP32", "dims": ["1", "1000", "1", "1"]}
+    "output": [{"name": "avg_pool", "dataType": "TYPE_FP32", "dims": ["1280"]}],
+    "instanceGroup": [
+        {
+            "name": "EfficientNetV2S.tensorflow",
+            "count": 1,
+            "gpus": [0, 1, 2, 3, 4, 5, 6, 7],
+            "kind": "KIND_GPU",
+        }
     ],
-    "instanceGroup": [{"name": "densenet_onnx", "count": 2, "kind": "KIND_CPU"}],
-    "defaultModelFilename": "model.onnx",
+    "defaultModelFilename": "model.savedmodel",
+    "dynamicBatching": {"preferredBatchSize": [1]},
     "optimization": {
         "inputPinnedMemory": {"enable": True},
         "outputPinnedMemory": {"enable": True},
     },
-    "backend": "onnxruntime",
+    "backend": "tensorflow",
 }
+BASIC = {"name": MODEL}
 METADATA = {
-    "name": "densenet_onnx",
+    "name": "EfficientNetV2S.tensorflow",
     "versions": ["1"],
-    "platform": "onnxruntime_onnx",
+    "platform": "tensorflow_savedmodel",
     "inputs": [
-        {"name": "data_0", "datatype": "FP32", "shape": ["1", "3", "224", "224"]}
+        {"name": "input_2", "datatype": "FP32", "shape": ["-1", "224", "224", "3"]}
     ],
-    "outputs": [
-        {"name": "fc6_1", "datatype": "FP32", "shape": ["1", "1000", "1", "1"]}
-    ],
+    "outputs": [{"name": "avg_pool", "datatype": "FP32", "shape": ["-1", "1280"]}],
 }
 
 
 def attend_model(
     event,
     url="localhost:8001",
-    model_name="densenet_onnx",
-    inputs={"name": "data_0", "datatype": "FP32", "shape": [1, 3, 224, 224]},
-    outputs="fc6_1",
-    interval=10e-1,
+    model_name="EfficientNetV2S.tensorflow",
+    inputs={"name": "input_2", "datatype": "FP32", "shape": [1, 224, 224, 3]},
+    outputs="avg_pool",
+    interval=0.1,
 ):
     """A testing utility used to submit inference requests to a Triton server.
 
@@ -80,7 +87,7 @@ def attend_model(
     """
 
     # create client
-    client = grpcclient.InferenceServerClient(url=url, verbose=False)
+    client = create_client(url)
 
     # define inference callback
     def callback(user_data, result, error):
@@ -97,9 +104,7 @@ def attend_model(
         if event.is_set():
             sys.exit(1)
 
-        # build input and output structures for next inference
-        # do not reuse since triton output caching for repeated inputs is
-        # not understood
+        # build new input and output structures for each inference
         data = np.random.uniform(size=inputs["shape"]).astype(np.float32)
         infer_inputs = [
             grpcclient.InferInput(inputs["name"], inputs["shape"], inputs["datatype"])
@@ -121,70 +126,57 @@ def attend_model(
         time.sleep(max(0, interval - (time.time() - start)))
 
 
-def test_model_config_correct():
-    """Evalute `model_config` for the testing model and verify that the
+def test_get_config_correct():
+    """Evalute `get_config` for the testing model and verify that the
     returned dict is correct"""
 
-    # create client
-    client = grpcclient.InferenceServerClient(url=URL, verbose=False)
-
-    # call model_config on densenet model
-    assert model_config(client, MODEL) == CONFIG
+    model = TritonModel(MODEL, URL)
+    if model.is_loaded():
+        model.unload()
+    model.load(
+        config={"maxBatchSize": 1, "dynamicBatching": {"preferredBatchSize": [1]}}
+    )
+    assert model.get_config() == CONFIG
 
 
 def test_model_config_badurl():
     """Evaluate `model_config` when client url is bad"""
 
-    # create client
-    client = grpcclient.InferenceServerClient(url="missing.net:8001", verbose=False)
-
-    # call model_config on densenet model
     with pytest.raises(InferenceServerException):
-        model_config(client, MODEL)
+        model = TritonModel(MODEL, url="missing.net:8001")
+        model.get_config()
 
 
 def test_model_config_badmodel():
     """Evaluate `model_config` when client model name is bad"""
 
-    # create client
-    client = grpcclient.InferenceServerClient(url=URL, verbose=False)
-
-    # call model_config on densenet model
     with pytest.raises(InferenceServerException):
-        model_config(client, "unloaded")
+        model = TritonModel("unloaded", URL)
+        model.get_config()
 
 
 def test_model_metadata_correct():
     """Evalute `model_metadata` for the testing model and verify that the
     returned dict is correct"""
 
-    # create client
-    client = grpcclient.InferenceServerClient(url=URL, verbose=False)
-
-    # call model_config on densenet model
-    assert model_metadata(client, MODEL) == METADATA
+    model = TritonModel(MODEL, URL)
+    assert model.get_metadata() == METADATA
 
 
 def test_model_metadata_badurl():
     """Evaluate `model_metadata` when client url is bad"""
 
-    # create client
-    client = grpcclient.InferenceServerClient(url="missing.net:8001", verbose=False)
-
-    # call model_config on densenet model
     with pytest.raises(InferenceServerException):
-        model_metadata(client, MODEL)
+        model = TritonModel(MODEL, url="missing.net:8001")
+        model.get_metadata()
 
 
 def test_model_metadata_badmodel():
     """Evaluate `model_metadata` when client model name is bad"""
 
-    # create client
-    client = grpcclient.InferenceServerClient(url=URL, verbose=False)
-
-    # call model_config on densenet model
     with pytest.raises(InferenceServerException):
-        model_metadata(client, "unloaded")
+        model = TritonModel("unloaded", URL)
+        model.get_metadata()
 
 
 def test_model_idle():
@@ -193,7 +185,7 @@ def test_model_idle():
     for various lags to see verify observed transition from busy to idle."""
 
     # create client
-    client = grpcclient.InferenceServerClient(url=URL, verbose=False)
+    client = create_client(URL)
 
     # check idle status
     context = get_context("fork")
@@ -206,80 +198,59 @@ def test_model_idle():
     p.start()
 
     # delay evaluation to allow inferences to start
-    time.sleep(1.0)
+    time.sleep(5.0)
 
     # end subprocess
     event.set()
 
     # calculate idle stats at multiple lags
-    lags = [
-        model_idle(client, MODEL, idle=delta) for delta in np.logspace(-5, 2, num=10)
-    ]
+    model = TritonModel(MODEL, URL)
+    lags = [model.is_idle(idle=delta) for delta in np.logspace(-5, 2, num=10)]
 
     # verify that transition was observed
     assert any(lags) and any([not lag for lag in lags])
 
 
 def test_load_model_noconfig():
-    """Check re-load of model with no config (do nothing)"""
-
-    # create client
-    client = grpcclient.InferenceServerClient(url=URL, verbose=False)
-
-    # load model with empty config
-    load_model(client, MODEL, config=None, verbose=True)
-
-    assert True
+    model = TritonModel(MODEL, URL)
+    model.load()
+    assert model.is_loaded()
 
 
 def test_load_model_new_config():
     """Check that a currently loaded but idle model can be unloaded/loaded with
     a new config."""
 
-    # create client
-    client = grpcclient.InferenceServerClient(url=URL, verbose=False)
+    model = TritonModel(MODEL, URL)
+    model.load(config={"maxBatchSize": 64}, block=True, timeout=2.0, verbose=True)
+    assert model.is_loaded()
 
-    # re-use the original config to update - triton doesn't know
-    config = json.dumps(model_config(client, MODEL))
 
-    # attempt to unload/load model with retry
-    load_model(client, MODEL, config=config, block=True, timeout=2.0, verbose=True)
+def test_load_model_unload():
+    """Check that an unloaded model can be unloaded/loaded with a config."""
 
-    assert True
+    model = TritonModel(MODEL, URL)
+    model.unload()
+    assert not model.is_loaded()
 
 
 def test_load_model_unloaded_noconfig():
     """Check that an unloaded model can be unloaded/loaded with a config."""
 
-    # create client
-    client = grpcclient.InferenceServerClient(url=URL, verbose=False)
-
-    # re-use the original config to update - triton doesn't know
-    config = json.dumps(model_config(client, MODEL))
-
-    # unload model
-    client.unload_model(MODEL)
-
-    # attempt to load model with retry
-    load_model(client, MODEL, config=config, block=True, timeout=2.0, verbose=True)
-
-    assert True
+    model = TritonModel(MODEL, URL)
+    model.unload()
+    model.load(block=True, timeout=2.0, verbose=True)
+    assert model.is_loaded()
 
 
 def test_load_model_unloaded_config():
     """Check that a currently loaded but idle model can be unloaded/loaded with
     a new config."""
 
-    # create client
-    client = grpcclient.InferenceServerClient(url=URL, verbose=False)
-
-    # unload model
-    client.unload_model(MODEL)
-
-    # attempt to load model with retry
-    load_model(client, MODEL, config=None, block=True, timeout=2.0, verbose=True)
-
-    assert True
+    model = TritonModel(MODEL, URL)
+    model.unload()
+    model.load(config={"maxBatchSize": 256}, block=True, timeout=2.0, verbose=True)
+    assert model.is_loaded()
 
 
 def test_load_model_busy_retry():
@@ -287,7 +258,7 @@ def test_load_model_busy_retry():
     mechanism to handle busy status."""
 
     # create client
-    client = grpcclient.InferenceServerClient(url=URL, verbose=False)
+    client = create_client(URL)
 
     # check idle status
     context = get_context("fork")
@@ -300,17 +271,16 @@ def test_load_model_busy_retry():
     p.start()
 
     # delay evaluation to allow inferences to start
-    time.sleep(1.0)
-
-    # provide a trivial config to update
-    config = '"parameters": {"config": {{"max_batch_size": "16"}}}'
+    time.sleep(5.0)
 
     # attempt to unload/load model with retry
+    model = TritonModel(MODEL, URL)
     try:
         with pytest.raises(InferenceServerException):
-            load_model(client, MODEL, config, retries=5, block=False, verbose=True)
+            model.load(
+                config={"maxBatchSize": 16}, retries=5, block=False, verbose=True
+            )
     finally:
-        # end subprocess
         event.set()
 
 
@@ -319,7 +289,7 @@ def test_load_model_busy_timeout():
     mechanism to handle busy status."""
 
     # create client
-    client = grpcclient.InferenceServerClient(url=URL, verbose=False)
+    client = create_client(URL)
 
     # check idle status
     context = get_context("fork")
@@ -332,15 +302,12 @@ def test_load_model_busy_timeout():
     p.start()
 
     # delay evaluation to allow inferences to start
-    time.sleep(1.0)
-
-    # provide a trivial config to update
-    config = '"parameters": {"config": {{"max_batch_size": "16"}}}'
+    time.sleep(5.0)
 
     # attempt to unload/load model with retry
+    model = TritonModel(MODEL, URL)
     try:
         with pytest.raises(InferenceServerException):
-            load_model(client, MODEL, config, block=True, verbose=True)
+            model.load(config={"maxBatchSize": 16}, block=True, verbose=True)
     finally:
-        # end subprocess
         event.set()

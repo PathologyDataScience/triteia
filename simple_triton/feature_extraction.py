@@ -4,7 +4,7 @@ import numpy as np
 import os
 from simple_triton.inference import InferenceRunner
 from simple_triton.sharded_tiles import ShardedTiles
-from simple_triton.submitter import TimedQueue
+from simple_triton.utils import TimedQueue
 import tensorflow as tf
 
 
@@ -46,6 +46,8 @@ def histomics_stream_inference(
     performance : dict
         A dictionary of time performance data on reading, inference, and inter-process
         communication.
+    failed : list
+        A list of failed inference requests.
 
     See Also
     --------
@@ -77,17 +79,24 @@ def histomics_stream_inference(
             output["times"]["qout_get"] = t_get
             batches.append(output)
 
-    # separate results
+    # successful results results
     features = [
-        [b["result"][i] for b in batches] for i in range(len(batches[0]["result"]))
+        [b["result"][i] for b in batches if b["success"]]
+        for i in range(len(batches[0]["result"]))
     ]
     tile_info = {
-        k: np.concatenate([b["metadata"][k] for b in batches])
+        k: np.concatenate([b["metadata"][k] for b in batches if b["success"]])
         for k in batches[0]["metadata"].keys()
     }
-    times = {k: [b["times"][k] for b in batches] for k in batches[0]["times"].keys()}
+    times = {
+        k: [b["times"][k] for b in batches if b["success"]]
+        for k in batches[0]["times"].keys()
+    }
 
-    return features, tile_info, times
+    # failures
+    failed = [b for b in batches if not b["success"]]
+
+    return features, tile_info, times, failed
 
 
 def feature_extractor(repository, model, name, t=(224, 224), pool="avg"):
