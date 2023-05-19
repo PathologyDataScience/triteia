@@ -1,12 +1,55 @@
 import argparse
 from mil.io.utils import study
+import numpy as np
 from simple_triton.model import TritonModel
 from simple_triton.feature_extraction import histomics_stream_inference
 from simple_triton.utils import analyze
 from simple_triton.config import ConfigBuilder
+from simple_triton.feature_extraction import feature_extractor
+import tritonclient.grpc as tritongrpcclient
+from simple_triton.inference import InferenceRunner
+from simple_triton.utils import TimedQueue
+from tqdm import tqdm
+from large_image.cache_util import cachesClear
 import time
 import subprocess
 import sys
+
+
+class SimulatedProducer(object):
+    """A simulated producer that emits numpy arrays with specified batch size
+    and feature dimensions.
+
+    Data is uniformly distributed and so compression ratio will be low.
+    """
+
+    def __init__(self,A=64,B=224, D=[224], C=3, dtype=np.float16):
+        """Constructor.
+
+        Parameters
+        ----------
+        B : int
+            Batch size. Default value is 1024.
+        D : list of int
+            Feature dimensions. Default value is [1024].
+        dtype : numpy.dtype
+            A numpy dtype for the emited data. Default value is float16.
+        """
+
+        self.B = B  # batch size
+        self.D = D  # dimensions
+        self.C = C  
+        self.A = A
+        self.dtype = dtype  # datatype as float16 or float32
+
+    def __iter__(self):
+        self.i = 0
+        return self
+
+    def __next__(self):
+        output = self.dtype(np.random.uniform(size=(self.A, self.B, *self.D, self.C)))
+        return output
+
 
 
 class Benchmark:
@@ -18,7 +61,7 @@ class Benchmark:
     def __init__(self, args_dict):
         self.args_dict = args_dict
 
-    def create_hs_study(self):
+    def create_hs_study(self,Wsi_Path,Mask_Path):
         """Create a histomic stream study.
 
         Parameters used in this cell are for reading
@@ -32,8 +75,10 @@ class Benchmark:
         """
         # slide parameters
         tile = self.args_dict["tile"]
-        wsi_path = self.args_dict["wsi_path"]
-        mask_path = self.args_dict["mask_path"]
+        wsi_path = Wsi_Path
+        mask_path = Mask_Path
+        # wsi_path = self.args_dict["wsi_path"]
+        # mask_path = self.args_dict["mask_path"]
 
         # create a histomic-stream study from a wsi/mask pair
         self.hs_study = study(
@@ -65,6 +110,9 @@ class Benchmark:
         kind = self.args_dict["kind"]  # set gpu kind
         gpus = self.args_dict["gpu_num"]  # set number of gpus
         precision = self.args_dict["precision"]
+        import os
+        tile = 224
+        # dimension = feature_extractor("/models", "convnextsmall", "convnextsmall")
 
         model = TritonModel(model_name, url)
 
@@ -100,11 +148,15 @@ class Benchmark:
         # load tensorflow model with larger batch size
         config_builder.max_batch_size(maxBatchSize)
 
+        config_builder.response_cache(False)
+
         model.load(config=config_builder.config)
 
         print(model.get_config())
 
         assert model.is_loaded()
+
+
 
     def inference_measure_throughput(self):
         """
@@ -120,6 +172,11 @@ class Benchmark:
         Returns:
             Inference time
         """
+        def callback(user_data, result, error):
+            if error:
+                user_data.append(error)
+            else:
+                user_data.append(result)
         # inference parameters
         batch = self.args_dict["batch"]
         model_name = self.args_dict["model_name"]
@@ -127,11 +184,33 @@ class Benchmark:
             "limit"
         ]  # limit on number of pending requests per worker
         workers = self.args_dict["workers"]  # total number of Submitter workers
-
+        iterations = range(self.args_dict["iterations"])
+        tile_size = 0
         # start timer
-        start = time.time()
-
+        throughput = 0
+        num = 1 
+        # model_warmup()
+        input_name = 'input_1'
+        output_name = 'output_1'
+        grpc_url = 'localhost:8001'
+        verbose = False
+        results = []
+        triton_grpc_client = tritongrpcclient.InferenceServerClient(url=grpc_url, verbose=verbose)
+        producer = iter(SimulatedProducer())
+        output = tritongrpcclient.InferRequestedOutput(output_name)
+        requests = []
+        request_count = 50
+        qout = TimedQueue()
+        for i in tqdm(range(request_count)):
+            data = next(producer)  
+            input0 = tritongrpcclient.InferInput(input_name, data.shape, 'FP16')
+            input0.set_data_from_numpy(data)
+            InferenceRunner(grpc_url, model_name, [input0], qout, limit, verbose=False)          
+            time.sleep(0.4)
         # inference
+        time.sleep(1)
+        self.create_hs_study(self.args_dict["wsi_path"+str(1)],self.args_dict["mask_path"+str(1)])
+        print("Warmup Model")
         (
             self.features,
             self.tile_info,
@@ -145,10 +224,42 @@ class Benchmark:
             workers=workers,
             limit=limit,
         )
-        throughput = (self.tile_info["version"].size) / (time.time() - start)
+        print ("Total rounds:",self.args_dict["iterations"])
+        for i in iterations:
+                self.cache_clear()
+                self.gpu_mem_clear()
+  
+                print("wsi_path: ",self.args_dict["wsi_path"+str(i+1)]+"  mask_path: ",self.args_dict["mask_path"+str(i+1)])
+                self.create_hs_study(self.args_dict["wsi_path"+str(i+1)],self.args_dict["mask_path"+str(i+1)])
+                start = time.time()
+                (
+                    self.features,
+                    self.tile_info,
+                    self.times,
+                    self.failed,
+                ) = histomics_stream_inference(
+                    self.hs_study,
+                    model_name,
+                    args_dict["url"],
+                    batch=batch,
+                    workers=workers,
+                    limit=limit,
+                )
+                print("Round:", num)
+                print ("Elapsed Time(sec): ",(time.time() - start))
+                throughput_single = ((self.tile_info["version"].size) / (time.time() - start))
+                print("throughput single inference: ",throughput_single)
+                throughput = throughput + throughput_single 
+                throughput_Avg = throughput/num
+                print("\n")
+                num+=1
+
+        print("throughput Avg: ",throughput_Avg)
         elapsed_time = {time.time() - start}
         analyze(self.times)
-        return throughput
+        return throughput_Avg
+
+
 
     def client_noGPU(self):
         """Run client with no GPUs
@@ -166,7 +277,7 @@ class Benchmark:
 
     def cache_clear(self):
         import functools
-
+        cachesClear()
         @functools.lru_cache(maxsize=None)
         def fib(n):
             if n < 2:
@@ -179,13 +290,13 @@ class Benchmark:
         fib(30)
 
         # Before Clearing
-        print(fib.cache_info())
+        # print(fib.cache_info())
 
         gfg()
 
         # After Clearing
-        print(fib.cache_info())
-
+        # print(fib.cache_info())
+ 
     def gpu_mem_clear(self):
         import tensorflow as tf
 
@@ -216,24 +327,24 @@ if __name__ == "__main__":
         "--model-name",
         required=False,
         default="ConvNeXtXLarge",
-        help="Set model name, usage: --model-name=ConvNeXtXLarge, default: ConvNeXtXLarge",
+        help="Set model name, usage: --model-name=ConvNeXtXLarge or convnextsmall.tensorflow",
     )  # For testing, it will be removed
     parser.add_argument(
         "--batch",
         type=int,
-        default=32,
+        default=64,
         help="Set inference batch size usage: --batch=64, default: 64",
     )  # For testing, it will be removed
     parser.add_argument(
         "--maxbatchsize",
         type=int,
         default=256,
-        help="Set max batch size, usage: --maxbatchsize=256, default: 256",
+        help="Set max batch size, usage: --maxbatchsize=128, default: 128",
     )
     parser.add_argument("--models-path", default="/tf/notebooks/models", required=False)
     parser.add_argument(
         "--use-amp",
-        action="store_true",
+        action="store_false",
         help="Use auto matic mixed precision, usage: --use-amp, default: False",
     )  # automatically creates a default value of False.
     parser.add_argument(
@@ -263,7 +374,7 @@ if __name__ == "__main__":
         help="number of instances for a gpu (default: 1), usage: --gpu-count=1",
     )
     parser.add_argument(
-        "--gpu-num", default=1, type=int, help="Number of GPUs to use, default: 1"
+        "--gpu-num", default=8, type=int, help="Number of GPUs to use, default: 1"
     )
     parser.add_argument("--url", default="localhost:8001")
     parser.add_argument("--magnification", type=int, default=20)
@@ -273,10 +384,13 @@ if __name__ == "__main__":
     parser.add_argument("--mask-threshold", default=0.5)
     parser.add_argument("--limit", type=int, default=10)
     parser.add_argument("--workers", type=int, default=32)
+    parser.add_argument("--fileoutput", default="benchmark.txt")
     parser.add_argument("-v", "--verbose", default=True)
+    parser.add_argument("-i", "--iterations", default=5, type=int, help="Number of Giteration of inference to check variation")
     parser.add_argument(
-        "--check-readiness", action="store_false"
+        "--check-readiness", action="store_true"
     )  # check readiness of models
+
     args = parser.parse_args()
     args_dict = vars(parser.parse_args())
     print(args_dict)
@@ -288,11 +402,35 @@ if __name__ == "__main__":
     if args_dict["model_name"] == "ConvNeXtXLarge":
         args_dict["model_name"] = args_dict["model_name"] + keras_name  # set model_name
     args_dict[
-        "wsi_path"
+        "wsi_path1"
     ] = "/tf/notebooks/TCGA-AN-A0G0-01Z-00-DX1.BE0BB5DF-DEDA-48D8-B5D8-2735C767F28F.svs"
     args_dict[
-        "mask_path"
+        "mask_path1"
     ] = "/tf/notebooks/TCGA-AN-A0G0-01Z-00-DX1.BE0BB5DF-DEDA-48D8-B5D8-2735C767F28F.mask.png"
+    args_dict[
+        "wsi_path2"
+    ] = "/tf/notebooks/TCGA-AN-A0G0-01Z-00-DX1.BE0BB5DF-DEDA-48D8-B5D8-2735C767F28F_2.svs"
+    args_dict[
+        "mask_path2"
+    ] = "/tf/notebooks/TCGA-AN-A0G0-01Z-00-DX1.BE0BB5DF-DEDA-48D8-B5D8-2735C767F28F_2.mask.png"
+    args_dict[
+        "wsi_path3"
+    ] = "/tf/notebooks/TCGA-AN-A0G0-01Z-00-DX1.BE0BB5DF-DEDA-48D8-B5D8-2735C767F28F_3.svs"
+    args_dict[
+        "mask_path3"
+    ] = "/tf/notebooks/TCGA-AN-A0G0-01Z-00-DX1.BE0BB5DF-DEDA-48D8-B5D8-2735C767F28F_3.mask.png"
+    args_dict[
+        "wsi_path4"
+    ] = "/tf/notebooks/TCGA-AN-A0G0-01Z-00-DX1.BE0BB5DF-DEDA-48D8-B5D8-2735C767F28F_4.svs"
+    args_dict[
+        "mask_path4"
+    ] = "/tf/notebooks/TCGA-AN-A0G0-01Z-00-DX1.BE0BB5DF-DEDA-48D8-B5D8-2735C767F28F_4.mask.png"
+    args_dict[
+        "wsi_path5"
+    ] = "/tf/notebooks/TCGA-AN-A0G0-01Z-00-DX1.BE0BB5DF-DEDA-48D8-B5D8-2735C767F28F_5.svs"
+    args_dict[
+        "mask_path5"
+    ] = "/tf/notebooks/TCGA-AN-A0G0-01Z-00-DX1.BE0BB5DF-DEDA-48D8-B5D8-2735C767F28F_5.mask.png"
 
     # Install dependencies
     # install() # uncomment to install dependencies
@@ -300,9 +438,16 @@ if __name__ == "__main__":
     benchmark.cache_clear()
     benchmark.client_noGPU()
     benchmark.gpu_mem_clear()
-    benchmark.create_hs_study()
+    # benchmark.create_hs_study()
     benchmark.create_load_model()
     throughput = benchmark.inference_measure_throughput()
 
     # display elapsed time
     print(f"Throughput (tiles/sec):", throughput)
+    f = open(args_dict["fileoutput"], "a")
+    f.write("model_name: {},  Max Batch Size: {}, gpu-num: {}, instance group count: {}, amp: {}, trt: {}, precision: {}, workers: {}, Limit: {}, throughput: {} \n"
+            .format(args_dict["model_name"], args_dict["maxbatchsize"]
+            , args_dict["gpu_num"], args_dict["gpu_count"]
+            , args_dict["use_amp"], args_dict["use_trt"], args_dict["precision"]
+            , args_dict["workers"], args_dict["limit"], throughput) )
+    f.close()
