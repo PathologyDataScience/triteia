@@ -20,7 +20,7 @@ class SimulatedProducer(object):
     Data is uniformly distributed and so compression ratio will be low.
     """
 
-    def __init__(self,A=64,B=224, D=[224], C=3, dtype=np.float16):
+    def __init__(self, A=64, B=224, D=[224], C=3, dtype=np.float16):
         """Constructor.
 
 
@@ -37,7 +37,7 @@ class SimulatedProducer(object):
 
         self.B = B  # batch size
         self.D = D  # dimensions
-        self.C = C  
+        self.C = C
         self.A = A
         self.dtype = dtype  # datatype as float16 or float32
 
@@ -50,7 +50,6 @@ class SimulatedProducer(object):
         return output
 
 
-
 class Benchmark:
     """A class to benchmark inference server requests.
 
@@ -60,7 +59,7 @@ class Benchmark:
     def __init__(self, args_dict):
         self.args_dict = args_dict
 
-    def create_hs_study(self,Wsi_Path,Mask_Path):
+    def create_hs_study(self, Wsi_Path, Mask_Path):
         """Create a histomic stream study.
 
         Parameters used in this cell are for reading
@@ -76,8 +75,6 @@ class Benchmark:
         tile = self.args_dict["tile"]
         wsi_path = Wsi_Path
         mask_path = Mask_Path
-        # wsi_path = self.args_dict["wsi_path"]
-        # mask_path = self.args_dict["mask_path"]
 
         # create a histomic-stream study from a wsi/mask pair
         self.hs_study = study(
@@ -110,6 +107,7 @@ class Benchmark:
         gpus = self.args_dict["gpu_num"]  # set number of gpus
         precision = self.args_dict["precision"]
         import os
+
         tile = 224
         # dimension = feature_extractor("/models", "convnextsmall", "convnextsmall")
 
@@ -155,8 +153,6 @@ class Benchmark:
 
         assert model.is_loaded()
 
-
-
     def inference_measure_throughput(self):
         """
         Run the inference and measure throughput on the Triton Inference Server.
@@ -171,11 +167,13 @@ class Benchmark:
         Returns:
             Inference time
         """
+
         def callback(user_data, result, error):
             if error:
                 user_data.append(error)
             else:
                 user_data.append(result)
+
         # inference parameters
         batch = self.args_dict["batch"]
         model_name = self.args_dict["model_name"]
@@ -184,13 +182,14 @@ class Benchmark:
         ]  # limit on number of pending requests per worker
         workers = self.args_dict["workers"]  # total number of Submitter workers
         iterations = range(self.args_dict["iterations"])
-        # start timer
         throughput = 0
-        num = 1 
+        num = 1
         throughput_results = []
         elapsed_time_results = []
-        self.create_hs_study(self.args_dict["wsi_path"+str(1)],self.args_dict["mask_path"+str(1)])
-        # warm up Model                                                                                 
+        self.create_hs_study(
+            self.args_dict["wsi_path" + str(1)], self.args_dict["mask_path" + str(1)]
+        )
+        # warm up Model
         print("Warmup Model")
 
         (
@@ -206,46 +205,51 @@ class Benchmark:
             workers=workers,
             limit=limit,
         )
-        #inference for number of iterations
-        print ("Total rounds:",self.args_dict["iterations"])
+        # inference for number of iterations
+        print("Total rounds:", self.args_dict["iterations"])
         for i in iterations:
-                self.cache_clear()
-                self.gpu_mem_clear()
-  
-                print("wsi_path: ",self.args_dict["wsi_path"+str(i+1)]+"  mask_path: ",self.args_dict["mask_path"+str(i+1)])
-                self.create_hs_study(self.args_dict["wsi_path"+str(i+1)],self.args_dict["mask_path"+str(i+1)])
-                start = time.time()
-                (
-                    self.features,
-                    self.tile_info,
-                    self.times,
-                    self.failed,
-                ) = histomics_stream_inference(
-                    self.hs_study,
-                    model_name,
-                    args_dict["url"],
-                    batch=batch,
-                    workers=workers,
-                    limit=limit,
-                )
-                print("Round:", num)
-                elapsed_time = time.time() - start
-                
-                throughput_single = ((self.tile_info["version"].size) / elapsed_time)
-                throughput_results.append(throughput_single)
-                elapsed_time_results.append(elapsed_time)
-                throughput = throughput + throughput_single 
-                throughput_Avg = throughput/num
-                print("throughput single inference: ",throughput_single)
-                print ("Elapsed Time(sec): ",elapsed_time)
-                print("\n")
-                num+=1
+            self.cache_clear()
+            self.gpu_mem_clear()
 
-        print("throughput Avg: ",throughput_Avg)
+            print(
+                "wsi_path: ",
+                self.args_dict["wsi_path" + str(i + 1)] + "  mask_path: ",
+                self.args_dict["mask_path" + str(i + 1)],
+            )
+            self.create_hs_study(
+                self.args_dict["wsi_path" + str(i + 1)],
+                self.args_dict["mask_path" + str(i + 1)],
+            )
+            # start timer
+            start = time.time()
+            (
+                self.features,
+                self.tile_info,
+                self.times,
+                self.failed,
+            ) = histomics_stream_inference(
+                self.hs_study,
+                model_name,
+                args_dict["url"],
+                batch=batch,
+                workers=workers,
+                limit=limit,
+            )
+            print("Round:", num)
+            elapsed_time = time.time() - start
+            throughput_single = (self.tile_info["version"].size) / elapsed_time
+            throughput_results.append(throughput_single)
+            elapsed_time_results.append(elapsed_time)
+            throughput = throughput + throughput_single
+            throughput_Avg = throughput / num
+            print("throughput single inference: ", throughput_single)
+            print("Elapsed Time(sec): ", elapsed_time)
+            print("\n")
+            num += 1
+
+        print("throughput Avg: ", throughput_Avg)
         analyze(self.times)
         return throughput_results, elapsed_time_results
-
-
 
     def client_noGPU(self):
         """Run client with no GPUs
@@ -263,7 +267,9 @@ class Benchmark:
 
     def cache_clear(self):
         import functools
+
         cachesClear()
+
         @functools.lru_cache(maxsize=None)
         def fib(n):
             if n < 2:
@@ -282,7 +288,7 @@ class Benchmark:
 
         # After Clearing
         # print(fib.cache_info())
- 
+
     def gpu_mem_clear(self):
         import tensorflow as tf
 
@@ -341,7 +347,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "--precision",
         choices=["FP32", "FP16"],
-   
         required=False,
         help="Choose between Precision FP16 or FP32 , default: FP16",
     )
@@ -372,7 +377,13 @@ if __name__ == "__main__":
     parser.add_argument("--workers", type=int, default=32)
     parser.add_argument("--fileoutput", default="benchmark.txt")
     parser.add_argument("-v", "--verbose", default=True)
-    parser.add_argument("-i", "--iterations", default=5, type=int, help="Number of Giteration of inference to check variation")
+    parser.add_argument(
+        "-i",
+        "--iterations",
+        default=5,
+        type=int,
+        help="Number of Giteration of inference to check variation",
+    )
     parser.add_argument(
         "--check-readiness", action="store_true"
     )  # check readiness of models
@@ -387,8 +398,6 @@ if __name__ == "__main__":
     keras_name = ".tensorflow"
     if args_dict["model_name"] == "ConvNeXtXLarge":
         args_dict["model_name"] = args_dict["model_name"] + keras_name  # set model_name
-    # if args_dict["use_amp"] == True:
-    #     args_dict["precision"] = "FP16"
     args_dict[
         "wsi_path1"
     ] = "/tf/notebooks/TCGA-AN-A0G0-01Z-00-DX1.BE0BB5DF-DEDA-48D8-B5D8-2735C767F28F.svs"
@@ -426,16 +435,25 @@ if __name__ == "__main__":
     benchmark.cache_clear()
     benchmark.client_noGPU()
     benchmark.gpu_mem_clear()
-    # benchmark.create_hs_study()
     benchmark.create_load_model()
-    throughput,elapsed_time = benchmark.inference_measure_throughput()
+    throughput, elapsed_time = benchmark.inference_measure_throughput()
 
     # display elapsed time
     print(f"Throughput (tiles/sec):", throughput)
     f = open(args_dict["fileoutput"], "a")
-    f.write("model_name: {},  Max Batch Size: {}, gpu-num: {}, instance group count: {}, amp: {}, trt: {}, precision: {}, workers: {}, Limit: {}, throughput: {}, elapsed_time: {} \n"
-            .format(args_dict["model_name"], args_dict["maxbatchsize"]
-            , args_dict["gpu_num"], args_dict["gpu_count"]
-            , args_dict["use_amp"], args_dict["use_trt"], args_dict["precision"]
-            , args_dict["workers"], args_dict["limit"], throughput, elapsed_time) )
+    f.write(
+        "model_name: {},  Max Batch Size: {}, gpu-num: {}, instance group count: {}, amp: {}, trt: {}, precision: {}, workers: {}, Limit: {}, throughput: {}, elapsed_time: {} \n".format(
+            args_dict["model_name"],
+            args_dict["maxbatchsize"],
+            args_dict["gpu_num"],
+            args_dict["gpu_count"],
+            args_dict["use_amp"],
+            args_dict["use_trt"],
+            args_dict["precision"],
+            args_dict["workers"],
+            args_dict["limit"],
+            throughput,
+            elapsed_time,
+        )
+    )
     f.close()
