@@ -6,10 +6,7 @@ from simple_triton.feature_extraction import histomics_stream_inference
 from simple_triton.utils import analyze
 from simple_triton.config import ConfigBuilder
 from simple_triton.feature_extraction import feature_extractor
-import tritonclient.grpc as tritongrpcclient
-from simple_triton.inference import InferenceRunner
 from simple_triton.utils import TimedQueue
-from tqdm import tqdm
 from large_image.cache_util import cachesClear
 import time
 import subprocess
@@ -26,12 +23,14 @@ class SimulatedProducer(object):
     def __init__(self,A=64,B=224, D=[224], C=3, dtype=np.float16):
         """Constructor.
 
-        Parameters
+
         ----------
+        A : int
+            Deafult is 64
         B : int
-            Batch size. Default value is 1024.
+            Batch size. Default value is 224.
         D : list of int
-            Feature dimensions. Default value is [1024].
+            Feature dimensions. Default value is [224].
         dtype : numpy.dtype
             A numpy dtype for the emited data. Default value is float16.
         """
@@ -185,32 +184,15 @@ class Benchmark:
         ]  # limit on number of pending requests per worker
         workers = self.args_dict["workers"]  # total number of Submitter workers
         iterations = range(self.args_dict["iterations"])
-        tile_size = 0
         # start timer
         throughput = 0
         num = 1 
-        # model_warmup()
-        input_name = 'input_1'
-        output_name = 'output_1'
-        grpc_url = 'localhost:8001'
-        verbose = False
-        results = []
-        triton_grpc_client = tritongrpcclient.InferenceServerClient(url=grpc_url, verbose=verbose)
-        producer = iter(SimulatedProducer())
-        output = tritongrpcclient.InferRequestedOutput(output_name)
-        requests = []
-        request_count = 50
-        qout = TimedQueue()
-        for i in tqdm(range(request_count)):
-            data = next(producer)  
-            input0 = tritongrpcclient.InferInput(input_name, data.shape, 'FP16')
-            input0.set_data_from_numpy(data)
-            InferenceRunner(grpc_url, model_name, [input0], qout, limit, verbose=False)          
-            time.sleep(0.4)
-        # inference
-        time.sleep(1)
+        throughput_results = []
+        elapsed_time_results = []
         self.create_hs_study(self.args_dict["wsi_path"+str(1)],self.args_dict["mask_path"+str(1)])
+        # warm up Model                                                                                 
         print("Warmup Model")
+
         (
             self.features,
             self.tile_info,
@@ -224,6 +206,7 @@ class Benchmark:
             workers=workers,
             limit=limit,
         )
+        #inference for number of iterations
         print ("Total rounds:",self.args_dict["iterations"])
         for i in iterations:
                 self.cache_clear()
@@ -246,18 +229,21 @@ class Benchmark:
                     limit=limit,
                 )
                 print("Round:", num)
-                print ("Elapsed Time(sec): ",(time.time() - start))
-                throughput_single = ((self.tile_info["version"].size) / (time.time() - start))
-                print("throughput single inference: ",throughput_single)
+                elapsed_time = time.time() - start
+                
+                throughput_single = ((self.tile_info["version"].size) / elapsed_time)
+                throughput_results.append(throughput_single)
+                elapsed_time_results.append(elapsed_time)
                 throughput = throughput + throughput_single 
                 throughput_Avg = throughput/num
+                print("throughput single inference: ",throughput_single)
+                print ("Elapsed Time(sec): ",elapsed_time)
                 print("\n")
                 num+=1
 
         print("throughput Avg: ",throughput_Avg)
-        elapsed_time = {time.time() - start}
         analyze(self.times)
-        return throughput_Avg
+        return throughput_results, elapsed_time_results
 
 
 
@@ -338,13 +324,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--maxbatchsize",
         type=int,
-        default=256,
+        default=32,
         help="Set max batch size, usage: --maxbatchsize=128, default: 128",
     )
     parser.add_argument("--models-path", default="/tf/notebooks/models", required=False)
     parser.add_argument(
         "--use-amp",
-        action="store_false",
+        action="store_true",
         help="Use auto matic mixed precision, usage: --use-amp, default: False",
     )  # automatically creates a default value of False.
     parser.add_argument(
@@ -355,7 +341,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--precision",
         choices=["FP32", "FP16"],
-        default="FP16",
+   
         required=False,
         help="Choose between Precision FP16 or FP32 , default: FP16",
     )
@@ -401,6 +387,8 @@ if __name__ == "__main__":
     keras_name = ".tensorflow"
     if args_dict["model_name"] == "ConvNeXtXLarge":
         args_dict["model_name"] = args_dict["model_name"] + keras_name  # set model_name
+    # if args_dict["use_amp"] == True:
+    #     args_dict["precision"] = "FP16"
     args_dict[
         "wsi_path1"
     ] = "/tf/notebooks/TCGA-AN-A0G0-01Z-00-DX1.BE0BB5DF-DEDA-48D8-B5D8-2735C767F28F.svs"
@@ -440,14 +428,14 @@ if __name__ == "__main__":
     benchmark.gpu_mem_clear()
     # benchmark.create_hs_study()
     benchmark.create_load_model()
-    throughput = benchmark.inference_measure_throughput()
+    throughput,elapsed_time = benchmark.inference_measure_throughput()
 
     # display elapsed time
     print(f"Throughput (tiles/sec):", throughput)
     f = open(args_dict["fileoutput"], "a")
-    f.write("model_name: {},  Max Batch Size: {}, gpu-num: {}, instance group count: {}, amp: {}, trt: {}, precision: {}, workers: {}, Limit: {}, throughput: {} \n"
+    f.write("model_name: {},  Max Batch Size: {}, gpu-num: {}, instance group count: {}, amp: {}, trt: {}, precision: {}, workers: {}, Limit: {}, throughput: {}, elapsed_time: {} \n"
             .format(args_dict["model_name"], args_dict["maxbatchsize"]
             , args_dict["gpu_num"], args_dict["gpu_count"]
             , args_dict["use_amp"], args_dict["use_trt"], args_dict["precision"]
-            , args_dict["workers"], args_dict["limit"], throughput) )
+            , args_dict["workers"], args_dict["limit"], throughput, elapsed_time) )
     f.close()
