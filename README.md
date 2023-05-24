@@ -177,7 +177,11 @@ pooch.retrieve(
 
 The  `Benchmark` class is used to benchmark inference server requests. The class takes as input args and performs histomic stream study, load model, histomics stream inference.
 
-Benchmark interface takes args as input. Explanation of each args is as follows,
+Benchmark interface takes args as input through commandline. For example
+```
+python /tf/notebooks/simple_triton/benchmarking/benchmark_interface.py  --gpu-num $gpu_num  --use-trt --precision "FP16" --fileoutput $filename   --iterations 5  --maxbatchsize $maxbatchsize  --model-name "ConvNeXtXLarge"
+```
+Explanation of each args is as follows,
 <pre>
 --model-name:       Set model name, usage: `--model-name ConvNeXtXLarge`
 --batch:            Set inference batch size usage: `--batch 64`, default: 64
