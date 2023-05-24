@@ -53,7 +53,7 @@ class SimulatedProducer(object):
 class Benchmark:
     """A class to benchmark inference server requests.
 
-    The class takes as input args performs histomic stream study, load model
+    The class takes as input args and performs histomic stream study, load model, histomics stream inference.
     """
 
     def __init__(self, args_dict):
@@ -319,7 +319,7 @@ if __name__ == "__main__":
         "--model-name",
         required=False,
         default="ConvNeXtXLarge",
-        help="Set model name, usage: --model-name=ConvNeXtXLarge or convnextsmall.tensorflow",
+        help="Set model name, usage: --model-name=ConvNeXtXLarge or convnextsmall",
     )  # For testing, it will be removed
     parser.add_argument(
         "--batch",
@@ -398,6 +398,8 @@ if __name__ == "__main__":
     keras_name = ".tensorflow"
     if args_dict["model_name"] == "ConvNeXtXLarge":
         args_dict["model_name"] = args_dict["model_name"] + keras_name  # set model_name
+    if args_dict["model_name"] == "convnextsmall":
+        args_dict["model_name"] = args_dict["model_name"] + keras_name  # set model_name   
     args_dict[
         "wsi_path1"
     ] = "/tf/notebooks/TCGA-AN-A0G0-01Z-00-DX1.BE0BB5DF-DEDA-48D8-B5D8-2735C767F28F.svs"
