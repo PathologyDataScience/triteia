@@ -331,7 +331,7 @@ if __name__ == "__main__":
         "--maxbatchsize",
         type=int,
         default=32,
-        help="Set max batch size, usage: --maxbatchsize=128, default: 128",
+        help="Set max batch size, usage: --maxbatchsize 64, default: 64",
     )
     parser.add_argument("--models-path", default="/tf/notebooks/models", required=False)
     parser.add_argument(
@@ -375,14 +375,13 @@ if __name__ == "__main__":
     parser.add_argument("--mask-threshold", default=0.5)
     parser.add_argument("--limit", type=int, default=10)
     parser.add_argument("--workers", type=int, default=32)
-    parser.add_argument("--fileoutput", default="benchmark.txt")
     parser.add_argument("-v", "--verbose", default=True)
     parser.add_argument(
         "-i",
         "--iterations",
         default=5,
         type=int,
-        help="Number of Giteration of inference to check variation",
+        help="Number of iterations of inference to check variation",
     )
     parser.add_argument(
         "--check-readiness", action="store_true"
