@@ -17,6 +17,7 @@ See the [user guide](#user-guide) to read about concepts and to get started with
 - [Model control](#control)
 - [Inference runner](#inference)
     - [Data](#data)
+- [Benchmarking](#benchmark)
 - [Bibliography](#bibliography)
 
 
@@ -172,3 +173,37 @@ pooch.retrieve(
     path=host_model_repository
 )
 ```
+## Benchmarking <a name="benchmarking"></a>
+
+The  `Benchmark` class is used to benchmark inference server requests. The class takes as input args and performs histomic stream study, load model, histomics stream inference.
+
+Benchmark interface takes args as input through commandline. For example
+```
+python /tf/notebooks/simple_triton/benchmarking/benchmark_interface.py  --gpu-num $gpu_num  --use-trt --precision "FP16" --fileoutput $filename   --iterations 5  --maxbatchsize $maxbatchsize  --model-name "ConvNeXtXLarge"
+```
+Explanation of each args is as follows,
+<pre>
+--model-name:       Set model name, usage: `--model-name ConvNeXtXLarge`
+--batch:            Set inference batch size usage: `--batch 64`, default: 64
+--maxbatchsize:     Set max batch size, usage: `--maxbatchsize 64`, default: 64
+--use-amp:          Use auto matic mixed precision, usage: `--use-amp`, default: False
+--use-trt:          Use tensorRT, usage: `--use-trt`, default: False
+--precision:        Choose between Precision FP16 or FP32, usage: `--precision "FP16"`, default: FP16
+--kind:             choice between gpu or cpu, usage: `--kind gpu`  default: gpu
+--gpu-count:        number of instances for a gpu (default: 1), usage: `--gpu-count 1`
+--gpu-num:          Number of GPUs to use, usage: `--gpu-num 2`, default: 1
+--url:              url for connecting with Triton Inference Server, usage: `--url: "localhost:8001"`, default=localhost:8001
+--magnification:    Set magnification size, usage: `--magnification 20`, type=int, default=20
+--tile:             Set tile size, usage `--tile 224`, type=int, default=224
+--limit:            In the consumer we limit the number of pending requests to avoid flooding the inference server. 
+                    type=int, usage `--limit 10`, default=10
+--workers:          worker maintains a max queue of inferences. Worker return result via multiprocessing.queue
+                    type=int, usage `--workers 32`, default=32
+--iterations:       Number of iterations of inference to check variation   
+                    type=int, usage `--iterations 5`
+--check-readines:   check readiness of models. usage: `--check-readines`, default: false
+</pre>
+    
+
+
+
