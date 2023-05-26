@@ -17,7 +17,7 @@ See the [user guide](#user-guide) to read about concepts and to get started with
 - [Model control](#control)
 - [Inference runner](#inference)
     - [Data](#data)
-- [Benchmarking](#benchmark)
+- [Benchmarking](#benchmarking)
 - [Bibliography](#bibliography)
 
 
