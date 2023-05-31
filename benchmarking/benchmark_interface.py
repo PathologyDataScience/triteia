@@ -8,46 +8,13 @@ from simple_triton.config import ConfigBuilder
 from simple_triton.feature_extraction import feature_extractor
 from simple_triton.utils import TimedQueue
 from large_image.cache_util import cachesClear
+import tensorflow as tf
 import time
 import subprocess
 import sys
-
-
-class SimulatedProducer(object):
-    """A simulated producer that emits numpy arrays with specified batch size
-    and feature dimensions.
-
-    Data is uniformly distributed and so compression ratio will be low.
-    """
-
-    def __init__(self, A=64, B=224, D=[224], C=3, dtype=np.float16):
-        """Constructor.
-
-
-        ----------
-        A : int
-            Deafult is 64
-        B : int
-            Batch size. Default value is 224.
-        D : list of int
-            Feature dimensions. Default value is [224].
-        dtype : numpy.dtype
-            A numpy dtype for the emited data. Default value is float16.
-        """
-
-        self.B = B  # batch size
-        self.D = D  # dimensions
-        self.C = C
-        self.A = A
-        self.dtype = dtype  # datatype as float16 or float32
-
-    def __iter__(self):
-        self.i = 0
-        return self
-
-    def __next__(self):
-        output = self.dtype(np.random.uniform(size=(self.A, self.B, *self.D, self.C)))
-        return output
+import os
+import functools
+import pooch
 
 
 class Benchmark:
@@ -59,7 +26,7 @@ class Benchmark:
     def __init__(self, args_dict):
         self.args_dict = args_dict
 
-    def create_hs_study(self, Wsi_Path, Mask_Path):
+    def create_hs_study(self, wsi_path, mask_path):
         """Create a histomic stream study.
 
         Parameters used in this cell are for reading
@@ -73,9 +40,6 @@ class Benchmark:
         """
         # slide parameters
         tile = self.args_dict["tile"]
-        wsi_path = Wsi_Path
-        mask_path = Mask_Path
-
         # create a histomic-stream study from a wsi/mask pair
         self.hs_study = study(
             (wsi_path, mask_path),
@@ -106,21 +70,11 @@ class Benchmark:
         kind = self.args_dict["kind"]  # set gpu kind
         gpus = self.args_dict["gpu_num"]  # set number of gpus
         precision = self.args_dict["precision"]
-        import os
-
-        tile = 224
-        # dimension = feature_extractor("/models", "convnextsmall", "convnextsmall")
-
         model = TritonModel(model_name, url)
-
         model.load({"maxBatchSize": maxBatchSize})
-
         assert model.is_loaded()
-
         config = model.get_config()
-
         config_builder = ConfigBuilder(model_name=model_name, config=config, url=url)
-
         # Add/remove an automatic mixed-precision accelerator to the config.
         if self.args_dict["use_amp"] == True:
             config_builder.add_mixed_precision()
@@ -131,7 +85,6 @@ class Benchmark:
             config_builder.add_trt(precision)
         elif self.args_dict["use_trt"] == False:
             config_builder.remove_trt
-
         #  Add an instance group defining the model hardware resources and instances.
         if kind == "gpu":
             start, end, intval = 0, gpus, 1
@@ -141,16 +94,11 @@ class Benchmark:
         if kind == "cpu":
             config_builder.remove_instance_groups()
             config_builder.add_instance_group(kind=kind)
-
         # load tensorflow model with larger batch size
         config_builder.max_batch_size(maxBatchSize)
-
         config_builder.response_cache(False)
-
         model.load(config=config_builder.config)
-
         print(model.get_config())
-
         assert model.is_loaded()
 
     def inference_measure_throughput(self):
@@ -187,11 +135,11 @@ class Benchmark:
         throughput_results = []
         elapsed_time_results = []
         self.create_hs_study(
-            self.args_dict["wsi_path" + str(1)], self.args_dict["mask_path" + str(1)]
+            self.args_dict["wsi_path"],
+            self.args_dict["mask_path"],
         )
         # warm up Model
         print("Warmup Model")
-
         (
             self.features,
             self.tile_info,
@@ -207,18 +155,17 @@ class Benchmark:
         )
         # inference for number of iterations
         print("Total rounds:", self.args_dict["iterations"])
-        for i in iterations:
+        for i in range(self.args_dict["iterations"]):
             self.cache_clear()
             self.gpu_mem_clear()
-
             print(
                 "wsi_path: ",
-                self.args_dict["wsi_path" + str(i + 1)] + "  mask_path: ",
-                self.args_dict["mask_path" + str(i + 1)],
+                self.args_dict["wsi_path"] + "  mask_path: ",
+                self.args_dict["mask_path"],
             )
             self.create_hs_study(
-                self.args_dict["wsi_path" + str(i + 1)],
-                self.args_dict["mask_path" + str(i + 1)],
+                self.args_dict["wsi_path"],
+                self.args_dict["mask_path"],
             )
             # start timer
             start = time.time()
@@ -246,28 +193,20 @@ class Benchmark:
             print("Elapsed Time(sec): ", elapsed_time)
             print("\n")
             num += 1
-
         print("throughput Avg: ", throughput_Avg)
         analyze(self.times)
         return throughput_results, elapsed_time_results
 
-    def client_noGPU(self):
+    def client_nogpu(self):
         """Run client with no GPUs
-
         If running Triton and the client on the same machine, we want to stop the client tensorflow
         from consuming GPU resources. By default, TensorFlow maps nearly all available GPU memory.
         """
-        import os
-
         os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-
-        import tensorflow as tf
-
         assert len(tf.config.list_physical_devices("GPU")) == 0
 
     def cache_clear(self):
-        import functools
-
+        """clearn the cache before running inference"""
         cachesClear()
 
         @functools.lru_cache(maxsize=None)
@@ -280,24 +219,21 @@ class Benchmark:
             fib.cache_clear()
 
         fib(30)
-
         # Before Clearing
-        # print(fib.cache_info())
-
+        print(fib.cache_info())
         gfg()
-
         # After Clearing
-        # print(fib.cache_info())
+        print(fib.cache_info())
 
     def gpu_mem_clear(self):
-        import tensorflow as tf
-
+        """clearn the memory before running inference"""
         gpus = tf.config.experimental.list_physical_devices("GPU")
         for gpu in gpus:
             tf.config.experimental.set_memory_growth(gpu, True)
 
 
 def install():
+    """Install dependencies for running benchmarking interface tool"""
     # install large_image with tile sources as prereq, check feature_extraction.ipynb in examples directory.
     # install simple_triton
     subprocess.check_call([sys.executable, "-m", "pip", "install", f"../simple_triton"])
@@ -330,7 +266,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--maxbatchsize",
         type=int,
-        default=32,
+        default=64,
         help="Set max batch size, usage: --maxbatchsize 64, default: 64",
     )
     parser.add_argument("--models-path", default="/tf/notebooks/models", required=False)
@@ -376,69 +312,61 @@ if __name__ == "__main__":
     parser.add_argument("--limit", type=int, default=10)
     parser.add_argument("--workers", type=int, default=32)
     parser.add_argument("-v", "--verbose", default=True)
+    parser.add_argument("-f", "--fileoutput", default="benchmark.txt")
     parser.add_argument(
         "-i",
         "--iterations",
-        default=5,
+        default=1,
         type=int,
         help="Number of iterations of inference to check variation",
     )
+    # download whole slide image
+    parser.add_argument("-wname", "--wsi-fname", default="TCGA-AN-A0G0-01Z-00-DX1.svs")
+    parser.add_argument("-wurl", "--wsi-url", default="https://drive.google.com/uc?export=download&id=19agE_0cWY582szhOVxp9h3kozRfB4CvV&confirm=t&uuid=6f2d51e7-9366-4e98-abc7-4f77427dd02c&at=ALgDtswlqJJw1KU7P3Z1tZNcE01I:1679111148632")
+    parser.add_argument("-whash", "--wsi-known_hash", default="d046f952759ff6987374786768fc588740eef1e54e4e295a684f3bd356c8528f")
+    # download binary mask image
+    parser.add_argument("-mname", "--mask_fname", default="TCGA-AN-A0G0-01Z-00-DX1.mask.png")
+    parser.add_argument("-murl", "--mask_url", default="https://drive.google.com/uc?export=download&id=17GOOHbL8Bo3933rdIui82akr7stbRfta")
+    parser.add_argument("-mhash", "--mask-known_hash", default="bb657ead9fd3b8284db6ecc1ca8a1efa57a0e9fd73d2ea63ce6053fbd3d65171")
     parser.add_argument(
         "--check-readiness", action="store_true"
     )  # check readiness of models
-
     args = parser.parse_args()
     args_dict = vars(parser.parse_args())
     print(args_dict)
+    #create wholde slide image path
+    args_dict["wsi_path"] = pooch.retrieve( fname=args_dict["wsi_fname"],
+    url=args_dict["wsi_url"],
+    known_hash=args_dict["wsi_known_hash"],
+    path=str(pooch.os_cache("pooch")) + os.sep + "wsi",)
+    print(f"Have", args_dict["wsi_path"])
+    # create binary mask path
+
+    args_dict["mask_path"] = pooch.retrieve(
+    fname=args_dict["mask_fname"],
+    url=args_dict["mask_url"],
+    known_hash=args_dict["mask_known_hash"],
+    path=str(pooch.os_cache("pooch")) + os.sep + "mask",)
+    print(f"Have", args_dict["mask_path"])
+
+
     if args_dict["check_readiness"] == True:
         check_readiness(args_dict)
         exit()  # exit after showing readiness
-        # Add keras to model name
+    # Add keras to model name
     keras_name = ".tensorflow"
     if args_dict["model_name"] == "ConvNeXtXLarge":
         args_dict["model_name"] = args_dict["model_name"] + keras_name  # set model_name
     if args_dict["model_name"] == "convnextsmall":
-        args_dict["model_name"] = args_dict["model_name"] + keras_name  # set model_name   
-    args_dict[
-        "wsi_path1"
-    ] = "/tf/notebooks/TCGA-AN-A0G0-01Z-00-DX1.BE0BB5DF-DEDA-48D8-B5D8-2735C767F28F.svs"
-    args_dict[
-        "mask_path1"
-    ] = "/tf/notebooks/TCGA-AN-A0G0-01Z-00-DX1.BE0BB5DF-DEDA-48D8-B5D8-2735C767F28F.mask.png"
-    args_dict[
-        "wsi_path2"
-    ] = "/tf/notebooks/TCGA-AN-A0G0-01Z-00-DX1.BE0BB5DF-DEDA-48D8-B5D8-2735C767F28F_2.svs"
-    args_dict[
-        "mask_path2"
-    ] = "/tf/notebooks/TCGA-AN-A0G0-01Z-00-DX1.BE0BB5DF-DEDA-48D8-B5D8-2735C767F28F_2.mask.png"
-    args_dict[
-        "wsi_path3"
-    ] = "/tf/notebooks/TCGA-AN-A0G0-01Z-00-DX1.BE0BB5DF-DEDA-48D8-B5D8-2735C767F28F_3.svs"
-    args_dict[
-        "mask_path3"
-    ] = "/tf/notebooks/TCGA-AN-A0G0-01Z-00-DX1.BE0BB5DF-DEDA-48D8-B5D8-2735C767F28F_3.mask.png"
-    args_dict[
-        "wsi_path4"
-    ] = "/tf/notebooks/TCGA-AN-A0G0-01Z-00-DX1.BE0BB5DF-DEDA-48D8-B5D8-2735C767F28F_4.svs"
-    args_dict[
-        "mask_path4"
-    ] = "/tf/notebooks/TCGA-AN-A0G0-01Z-00-DX1.BE0BB5DF-DEDA-48D8-B5D8-2735C767F28F_4.mask.png"
-    args_dict[
-        "wsi_path5"
-    ] = "/tf/notebooks/TCGA-AN-A0G0-01Z-00-DX1.BE0BB5DF-DEDA-48D8-B5D8-2735C767F28F_5.svs"
-    args_dict[
-        "mask_path5"
-    ] = "/tf/notebooks/TCGA-AN-A0G0-01Z-00-DX1.BE0BB5DF-DEDA-48D8-B5D8-2735C767F28F_5.mask.png"
-
+        args_dict["model_name"] = args_dict["model_name"] + keras_name  # set model_name
     # Install dependencies
     # install() # uncomment to install dependencies
     benchmark = Benchmark(args_dict)
     benchmark.cache_clear()
-    benchmark.client_noGPU()
+    benchmark.client_nogpu()
     benchmark.gpu_mem_clear()
     benchmark.create_load_model()
     throughput, elapsed_time = benchmark.inference_measure_throughput()
-
     # display elapsed time
     print(f"Throughput (tiles/sec):", throughput)
     f = open(args_dict["fileoutput"], "a")
