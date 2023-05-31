@@ -198,21 +198,23 @@ class Benchmark:
         return throughput_results, elapsed_time_results
 
     def client_nogpu(self):
-        """Run client with no GPUs
-        """
+        """Run client with no GPUs"""
         os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
         assert len(tf.config.list_physical_devices("GPU")) == 0
 
     def cache_clear(self):
         """clearn the cache before running inference"""
         cachesClear()
+
         @functools.lru_cache(maxsize=None)
         def fib(n):
             if n < 2:
                 return n
             return fib(n - 1) + fib(n - 2)
+
         def gfg():
             fib.cache_clear()
+
         fib(30)
         # Before Clearing
         print(fib.cache_info())
@@ -317,32 +319,53 @@ if __name__ == "__main__":
     )
     # download whole slide image
     parser.add_argument("-wname", "--wsi-fname", default="TCGA-AN-A0G0-01Z-00-DX1.svs")
-    parser.add_argument("-wurl", "--wsi-url", default="https://drive.google.com/uc?export=download&id=19agE_0cWY582szhOVxp9h3kozRfB4CvV&confirm=t&uuid=6f2d51e7-9366-4e98-abc7-4f77427dd02c&at=ALgDtswlqJJw1KU7P3Z1tZNcE01I:1679111148632")
-    parser.add_argument("-whash", "--wsi-known-hash", default="d046f952759ff6987374786768fc588740eef1e54e4e295a684f3bd356c8528f")
+    parser.add_argument(
+        "-wurl",
+        "--wsi-url",
+        default="https://drive.google.com/uc?export=download&id=19agE_0cWY582szhOVxp9h3kozRfB4CvV&confirm=t&uuid=6f2d51e7-9366-4e98-abc7-4f77427dd02c&at=ALgDtswlqJJw1KU7P3Z1tZNcE01I:1679111148632",
+    )
+    parser.add_argument(
+        "-whash",
+        "--wsi-known-hash",
+        default="d046f952759ff6987374786768fc588740eef1e54e4e295a684f3bd356c8528f",
+    )
     # download binary mask image
-    parser.add_argument("-mname", "--mask_fname", default="TCGA-AN-A0G0-01Z-00-DX1.mask.png")
-    parser.add_argument("-murl", "--mask_url", default="https://drive.google.com/uc?export=download&id=17GOOHbL8Bo3933rdIui82akr7stbRfta")
-    parser.add_argument("-mhash", "--mask-known_hash", default="bb657ead9fd3b8284db6ecc1ca8a1efa57a0e9fd73d2ea63ce6053fbd3d65171")
+    parser.add_argument(
+        "-mname", "--mask_fname", default="TCGA-AN-A0G0-01Z-00-DX1.mask.png"
+    )
+    parser.add_argument(
+        "-murl",
+        "--mask_url",
+        default="https://drive.google.com/uc?export=download&id=17GOOHbL8Bo3933rdIui82akr7stbRfta",
+    )
+    parser.add_argument(
+        "-mhash",
+        "--mask-known_hash",
+        default="bb657ead9fd3b8284db6ecc1ca8a1efa57a0e9fd73d2ea63ce6053fbd3d65171",
+    )
     parser.add_argument(
         "--check-readiness", action="store_true"
     )  # check readiness of models
     args = parser.parse_args()
     args_dict = vars(parser.parse_args())
     print(args_dict)
-    #create wholde slide image path
-    args_dict["wsi_path"] = pooch.retrieve( fname=args_dict["wsi_fname"],
-    url=args_dict["wsi_url"],
-    known_hash=args_dict["wsi_known_hash"],
-    path=str(pooch.os_cache("pooch")) + os.sep + "wsi",)
+    # create wholde slide image path
+    args_dict["wsi_path"] = pooch.retrieve(
+        fname=args_dict["wsi_fname"],
+        url=args_dict["wsi_url"],
+        known_hash=args_dict["wsi_known_hash"],
+        path=str(pooch.os_cache("pooch")) + os.sep + "wsi",
+    )
     print(f"Have", args_dict["wsi_path"])
     # create binary mask path
     args_dict["mask_path"] = pooch.retrieve(
-    fname=args_dict["mask_fname"],
-    url=args_dict["mask_url"],
-    known_hash=args_dict["mask_known_hash"],
-    path=str(pooch.os_cache("pooch")) + os.sep + "mask",)
+        fname=args_dict["mask_fname"],
+        url=args_dict["mask_url"],
+        known_hash=args_dict["mask_known_hash"],
+        path=str(pooch.os_cache("pooch")) + os.sep + "mask",
+    )
     print(f"Have", args_dict["mask_path"])
-    #show rediness if check is true 
+    # show rediness if check is true
     if args_dict["check_readiness"] == True:
         check_readiness(args_dict)
         exit()  # exit after showing readiness
