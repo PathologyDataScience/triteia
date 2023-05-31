@@ -175,7 +175,7 @@ pooch.retrieve(
 ```
 ## Benchmarking <a name="benchmarking"></a>
 
-The `benchmark` class is used to benchmark inference server requests. The class takes as input parameters and performs histomic stream study, load model, histomics stream inference.
+The benchmark interface tool is used by users to benchmark inference server requests. The class takes as input parameters and performs histomic stream study, load model, histomics stream inference.
 
 The benchmarking tool offers several advantages for users looking to evaluate the performance of their inference server and optimize its parameters. By using this tool, users can:
 
