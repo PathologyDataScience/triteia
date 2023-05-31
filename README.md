@@ -179,7 +179,7 @@ The benchmark interface tool is used by users to benchmark inference server requ
 
 The benchmarking tool offers several advantages for users looking to evaluate the performance of their inference server and optimize its parameters. By using this tool, users can:
 
-- Flexibility in Resource Allocation: The benchmarking tool allows users to choose the number of GPUs, models, acceleration techniques, optimization methods, workers for multiprocessing, and queue length limits. It enables users to tailor the inference process to their available resources and environment requirements.
+- Flexibility in passing parameter: The benchmarking tool allows users to choose the number of GPUs, models, acceleration techniques, optimization methods, workers for multiprocessing, and queue length limits. It enables users to tailor the inference process to their available resources and environment requirements.
 
 - Performance Analysis: With the benchmarking tool, users can generate performance data by interacting with the Triton inference server and performing inference using Whole Slide Imaging (WSI) images. The tool's primary goal is to measure the throughput for tile inference with both large and small networks, or any other network of choice. In cases where running a large inference job takes days, optimizing parameters can be worthwhile.
 
