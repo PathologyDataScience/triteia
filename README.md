@@ -175,7 +175,7 @@ pooch.retrieve(
 ```
 ## Benchmarking <a name="benchmarking"></a>
 
-The  `Benchmark` class is used to benchmark inference server requests. The class takes as input args and performs histomic stream study, load model, histomics stream inference.
+The  `benchmark_interface` class is used to benchmark inference server requests. The class takes as input args and performs histomic stream study, load model, histomics stream inference.
 
 benchmark_interface takes args as input through command line interface. For example
 ```
