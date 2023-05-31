@@ -318,7 +318,7 @@ if __name__ == "__main__":
     # download whole slide image
     parser.add_argument("-wname", "--wsi-fname", default="TCGA-AN-A0G0-01Z-00-DX1.svs")
     parser.add_argument("-wurl", "--wsi-url", default="https://drive.google.com/uc?export=download&id=19agE_0cWY582szhOVxp9h3kozRfB4CvV&confirm=t&uuid=6f2d51e7-9366-4e98-abc7-4f77427dd02c&at=ALgDtswlqJJw1KU7P3Z1tZNcE01I:1679111148632")
-    parser.add_argument("-whash", "--wsi-known_hash", default="d046f952759ff6987374786768fc588740eef1e54e4e295a684f3bd356c8528f")
+    parser.add_argument("-whash", "--wsi-known-hash", default="d046f952759ff6987374786768fc588740eef1e54e4e295a684f3bd356c8528f")
     # download binary mask image
     parser.add_argument("-mname", "--mask_fname", default="TCGA-AN-A0G0-01Z-00-DX1.mask.png")
     parser.add_argument("-murl", "--mask_url", default="https://drive.google.com/uc?export=download&id=17GOOHbL8Bo3933rdIui82akr7stbRfta")
