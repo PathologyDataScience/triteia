@@ -199,8 +199,6 @@ class Benchmark:
 
     def client_nogpu(self):
         """Run client with no GPUs
-        If running Triton and the client on the same machine, we want to stop the client tensorflow
-        from consuming GPU resources. By default, TensorFlow maps nearly all available GPU memory.
         """
         os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
         assert len(tf.config.list_physical_devices("GPU")) == 0
