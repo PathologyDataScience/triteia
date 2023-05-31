@@ -175,11 +175,11 @@ pooch.retrieve(
 ```
 ## Benchmarking <a name="benchmarking"></a>
 
-The `benchmark` class is used to benchmark inference server requests. The class takes as input parameters and performs histomic stream study, load model, histomics stream inference.
+The benchmark interface tool is used by users to benchmark inference server requests. The class takes as input parameters and performs histomic stream study, load model, histomics stream inference.
 
 The benchmarking tool offers several advantages for users looking to evaluate the performance of their inference server and optimize its parameters. By using this tool, users can:
 
-- Flexibility in Resource Allocation: The benchmarking tool allows users to choose the number of GPUs, models, acceleration techniques, optimization methods, workers for multiprocessing, and queue length limits. It enables users to tailor the inference process to their available resources and environment requirements.
+- Flexibility in passing parameter: The benchmarking tool allows users to choose the number of GPUs, models, acceleration techniques, optimization methods, workers for multiprocessing, and queue length limits. It enables users to tailor the inference process to their available resources and environment requirements.
 
 - Performance Analysis: With the benchmarking tool, users can generate performance data by interacting with the Triton inference server and performing inference using Whole Slide Imaging (WSI) images. The tool's primary goal is to measure the throughput for tile inference with both large and small networks, or any other network of choice. In cases where running a large inference job takes days, optimizing parameters can be worthwhile.
 
@@ -213,6 +213,7 @@ python /tf/notebooks/simple_triton/benchmarking/benchmark_interface.py  --gpu-nu
 Explanation of each args is as follows,
 <pre>
 --model-name:       Set model name, usage: `--model-name ConvNeXtXLarge`
+--fileoutput:       output file name with path for results
 --batch:            Set inference batch size usage: `--batch 64`, default: 64
 --maxbatchsize:     Set max batch size, usage: `--maxbatchsize 64`, default: 64
 --use-amp:          Use auto matic mixed precision, usage: `--use-amp`, default: False
@@ -230,6 +231,12 @@ Explanation of each args is as follows,
                     type=int, usage `--workers 32`, default=32
 --iterations:       Number of iterations of inference to check variation   
                     type=int, usage `--iterations 5`
+--wsi-fname         Name of whole slide image
+--wsi-url           url of whole slide image location
+--wsi-known-hash    hash of whole slide image
+--mask-fname        Name of binary mask image
+--mask-url          url of binary mask image location
+--mask-known-hash   hash of binary mask image
 --check-readines:   check readiness of models. usage: `--check-readines`, default: false
 </pre>
     
