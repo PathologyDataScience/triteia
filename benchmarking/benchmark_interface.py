@@ -33,10 +33,10 @@ class Benchmark:
         from the whole-slide image (magnification, tile size, tile overlap, mask file).
 
         Args:
-        args_dict (dict): The inputs to the model from argparse.
-        tile (int): tile default value is 224.
-        wsi_path (string): path for .svs file
-        mask_path (string): path for png file
+            args_dict (dict): The inputs to the model from argparse.
+            tile (int): tile default value is 224.
+            wsi_path (string): path for .svs file
+            mask_path (string): path for png file
         """
         # slide parameters
         tile = self.args_dict["tile"]
