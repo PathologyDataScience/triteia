@@ -58,9 +58,9 @@ class Benchmark:
         maximum batch size).
 
         Args:
-        client (tritonclient.grpc.InferenceServerClient):
-        args_dict (dict): The inputs to the model from argparse.
-        maxBatchSize (int): max batch size to for config
+            client (tritonclient.grpc.InferenceServerClient):
+            args_dict (dict): The inputs to the model from argparse.
+            maxBatchSize (int): max batch size to for config
         """
         # slide paramters
         url = self.args_dict["url"]  # url for grpc access to triton server
