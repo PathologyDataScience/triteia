@@ -208,16 +208,13 @@ class Benchmark:
     def cache_clear(self):
         """clearn the cache before running inference"""
         cachesClear()
-
         @functools.lru_cache(maxsize=None)
         def fib(n):
             if n < 2:
                 return n
             return fib(n - 1) + fib(n - 2)
-
         def gfg():
             fib.cache_clear()
-
         fib(30)
         # Before Clearing
         print(fib.cache_info())
@@ -341,15 +338,13 @@ if __name__ == "__main__":
     path=str(pooch.os_cache("pooch")) + os.sep + "wsi",)
     print(f"Have", args_dict["wsi_path"])
     # create binary mask path
-
     args_dict["mask_path"] = pooch.retrieve(
     fname=args_dict["mask_fname"],
     url=args_dict["mask_url"],
     known_hash=args_dict["mask_known_hash"],
     path=str(pooch.os_cache("pooch")) + os.sep + "mask",)
     print(f"Have", args_dict["mask_path"])
-
-
+    #show rediness if check is true 
     if args_dict["check_readiness"] == True:
         check_readiness(args_dict)
         exit()  # exit after showing readiness
@@ -359,8 +354,6 @@ if __name__ == "__main__":
         args_dict["model_name"] = args_dict["model_name"] + keras_name  # set model_name
     if args_dict["model_name"] == "convnextsmall":
         args_dict["model_name"] = args_dict["model_name"] + keras_name  # set model_name
-    # Install dependencies
-    # install() # uncomment to install dependencies
     benchmark = Benchmark(args_dict)
     benchmark.cache_clear()
     benchmark.client_nogpu()
