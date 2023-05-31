@@ -213,6 +213,7 @@ python /tf/notebooks/simple_triton/benchmarking/benchmark_interface.py  --gpu-nu
 Explanation of each args is as follows,
 <pre>
 --model-name:       Set model name, usage: `--model-name ConvNeXtXLarge`
+--fileoutput:       output file name with path for results
 --batch:            Set inference batch size usage: `--batch 64`, default: 64
 --maxbatchsize:     Set max batch size, usage: `--maxbatchsize 64`, default: 64
 --use-amp:          Use auto matic mixed precision, usage: `--use-amp`, default: False
@@ -230,6 +231,12 @@ Explanation of each args is as follows,
                     type=int, usage `--workers 32`, default=32
 --iterations:       Number of iterations of inference to check variation   
                     type=int, usage `--iterations 5`
+--wsi-fname         Name of whole slide image
+--wsi-url           url of whole slide image location
+--wsi-known-hash    hash of whole slide image
+--mask-fname        Name of binary mask image
+--mask-url          url of binary mask image location
+--mask-known-hash   hash of binary mask image
 --check-readines:   check readiness of models. usage: `--check-readines`, default: false
 </pre>
     
