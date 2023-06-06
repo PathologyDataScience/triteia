@@ -177,19 +177,18 @@ pooch.retrieve(
 
 The benchmark interface tool is used by users to benchmark inference server requests. The class takes as input parameters and performs histomic stream study, load model, histomics stream inference.
 
-The benchmarking tool offers several advantages for users looking to evaluate the performance of their inference server and optimize its parameters. By using this tool, users can:
+The benchmarking tool offers several advantages for users looking to evaluate the performance of their inference server and optimize its parameters. 
+This tool allows the user to  yaml based config files by passing the features as input through command-line tool. By using this tool, users can:
 
 - Flexibility in passing parameter: The benchmarking tool allows users to choose the number of GPUs, models, acceleration techniques, optimization methods, workers for multiprocessing, and queue length limits. It enables users to tailor the inference process to their available resources and environment requirements.
 
 - Performance Analysis: With the benchmarking tool, users can generate performance data by interacting with the Triton inference server and performing inference using Whole Slide Imaging (WSI) images. The tool's primary goal is to measure the throughput for tile inference with both large and small networks, or any other network of choice. In cases where running a large inference job takes days, optimizing parameters can be worthwhile.
 
-- Iterative Parameter Exploration: The benchmark interface can be run iteratively with varying parameters using a shell script file that interacts with the benchmarking tool. An optimization script combines all the parameters to compare the results for the best throughput and time elapsed. This allows users to fine-tune their inference settings and identify the optimal configuration for their specific use case.
+- Iterative Parameter Exploration: The benchmark interface can be run iteratively with varying parameters using a shell script file that interacts with the benchmarking tool, https://github.com/PathologyDataScience/simple_triton/blob/55-interface-for-benchmarking/benchmarking/ConvNeXtXLarge_amp_Batch64_GPU8_iter5_BatchTest.sh. An optimization script combines all the parameters to compare the results for the best throughput and time elapsed. This allows users to fine-tune their inference settings and identify the optimal configuration for their specific use case.
 
-- Default Configurations: By default, the tool leverages histomicsStream and uses 32 workers for sharding. Each worker contains a large image reader in an iterator, and tiles are extracted from this iterator. Each worker maintains a maximum inference of 10 inferences with 64 tiles per batch and 1 batch per inference. These default settings provide a starting point for benchmarking, but users can modify them as needed.
-
-- Simplified Configuration: The benchmarking interface tool eliminates the need for users to manually create YAML-based configuration files. Instead, users can provide input features through the command-line tool, and the benchmarking interface tool dynamically generates the configuration. This streamlines the benchmarking process and makes it more accessible to users.
+By default, the tool leverages histomicsStream and uses 32 workers for sharding. Each worker contains a large image reader in an iterator, and tiles are extracted from this iterator. Each worker maintains a maximum inference of 10 inferences with 64 tiles per batch and 1 batch per inference. These default settings provide a starting point for benchmarking, but users can modify them as needed. The benchmarking interface tool eliminates the need for users to manually create YAML-based configuration files. Instead, users can provide input features through the command-line tool, and the benchmarking interface tool dynamically generates the configuration. This streamlines the benchmarking process and makes it more accessible to users.
  
-This tool provdes a benefit where users do not have to understand and create store yaml based config files. Benchmarking interface tool creates the config by the features passed as input through command-line tool. Benchmark interface tool supports a number of features such as,
+Benchmark interface tool supports a number of features such as,
 
 <pre>
    - Model                  Loads and unloads models
