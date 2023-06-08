@@ -12,14 +12,14 @@ See the [user guide](#user-guide) to read about concepts and to get started with
     - [Example](#example)
     - [Running the Triton container](#container)
 - [Triton concepts](#concepts)
+    - [Model control](#control)
+    - [Model configuration](#config)
 - [Package overview](#overview)
 - [Model configuration](#config)
 - [Model control](#control)
-- [Inference runner](#inference)
-    - [Data](#data)
-- [Benchmarking](#benchmarking)
-- [Bibliography](#bibliography)
-
+- [Developer guide](#developer-guide)
+    - [Testing](#testing)
+    - [Benchmarking](#benchmarking)
 
 ## Quick start <a name="quick-start"></a>
 
@@ -52,7 +52,7 @@ docker run --gpus=8 --rm -p 8000:8000 -p 8001:8001 -p 8002:8002 -p 8003:8003 -v 
 
 To use shared memory for client/server communication, both the client and server containers must be run with `--ipc=host`. Additionally, the client container should be run with the `--shm-size` option to request an expansion of the default 64MB shared memory. Running the client container with `--network=host` is the easiest configuration to allow the client and server to communicate over the host network.
 
-## Triton concepts <a name="quick-start"></a>
+## Triton concepts <a name="concepts"></a>
 simple-triton is a client for loading and configuring models on the Triton server, and for performing inference by sending data to and receiving results from Triton. Communication between client and server uses the Remote Procedure Call (gRPC) protocol. If the client and server are on the same machine shared memory can be used to accelerate communication. For inference tasks that are preprocessing intensive or I/O bound, simple-triton can be used with multiproccessing to shard work over multiple processes.
 
 Triton accelerates inference through a combination of improving hardware utilization and by decoupling data loading from inference. The latter provides more flexibility in implementing dataloaders that would be difficult to integrate with machine learning frameworks. This is particularly relevant for dealing with whole-slide images and 
@@ -158,7 +158,7 @@ The dimensions of model inputs and outputs can also be altered using `ConfigBuil
 
 # Developer guide <a name="developer-guide"></a>
 
-## Testing
+## Testing <a name="testing"></a>
 
 Testing and code formatting is automated using tox and pytest and can be run using `python -m tox run`. Running this will evaluate the tests in the environments defined in `tox.ini` and will format the source using Black. Following testing, a coverage.html file will be located in .tox/coverage.
 
