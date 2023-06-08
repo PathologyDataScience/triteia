@@ -172,35 +172,13 @@ pooch.retrieve(
 ```
 ## Benchmarking <a name="benchmarking"></a>
 
-The benchmark interface tool is used by users to benchmark inference server requests. The class takes as input parameters and performs histomic stream study, load model, histomics stream inference.
+The benchmark command-line interface tool allows developers and users to identify the most performant parameter values for their inference projects. An exhaustive list of evaluable parameters is provided below, and includes parameters like batch size, precision accelerators, duplicate instances, and multiprocessing workers for data loading and preprocessing. This allows users to quickly tailor parameters to their specific model and dataset given available system resources and environment requirements. For inference jobs that may span days, a few hours of benchmarking can be a worthwhile investment.
 
-The benchmarking tool offers several advantages for users looking to evaluate the performance of their inference server and optimize its parameters. 
-This tool allows the user to  yaml based config files by passing the features as input through command-line tool. By using this tool, users can:
+In contrast to NVIDIA's [Triton Model Anlyzer](https://github.com/triton-inference-server/model_analyzer) that uses randomly generated arrays, the benchmarking tool incorporates a whole-slide image dataloader that introduces real IO bottlenecks for more realistic measurements. We also provide options for enabling accelerators like mixed precision or TensorRT conversion. 
 
-- Flexibility in passing parameter: The benchmarking tool allows users to choose the number of GPUs, models, acceleration techniques, optimization methods, workers for multiprocessing, and queue length limits. It enables users to tailor the inference process to their available resources and environment requirements.
+Users can run benchmarking sessions using yaml based config files or by calling the benchmarking script with command-line arguments. A sample shell script illustrates the use of the benchmarking tool to do a parameter sweep over the number of GPUs, inference request queue limit, and maximum batch size. Each call to the benchmarking tool runs a warmup before making a series of measurements with the desired parameter settings. Caches are cleared between each measurement to ensure that measured throughput reflects real IO conditions, and that the inference results are not cached by Triton.
 
-- Performance Analysis: With the benchmarking tool, users can generate performance data by interacting with the Triton inference server and performing inference using Whole Slide Imaging (WSI) images. The tool's primary goal is to measure the throughput for tile inference with both large and small networks, or any other network of choice. In cases where running a large inference job takes days, optimizing parameters can be worthwhile.
-
-- Iterative Parameter Exploration: The benchmark interface can be run iteratively with varying parameters using a shell script file that interacts with the benchmarking tool, https://github.com/PathologyDataScience/simple_triton/blob/55-interface-for-benchmarking/benchmarking/ConvNeXtXLarge_amp_Batch64_GPU8_iter5_BatchTest.sh. An optimization script combines all the parameters to compare the results for the best throughput and time elapsed. This allows users to fine-tune their inference settings and identify the optimal configuration for their specific use case.
-
-By default, the tool leverages histomicsStream and uses 32 workers for sharding. Each worker contains a large image reader in an iterator, and tiles are extracted from this iterator. Each worker maintains a maximum inference of 10 inferences with 64 tiles per batch and 1 batch per inference. These default settings provide a starting point for benchmarking, but users can modify them as needed. The benchmarking interface tool eliminates the need for users to manually create YAML-based configuration files. Instead, users can provide input features through the command-line tool, and the benchmarking interface tool dynamically generates the configuration. This streamlines the benchmarking process and makes it more accessible to users.
- 
-Benchmark interface tool supports a number of features such as,
-
-<pre>
-   - Model                  Loads and unloads models
-   - GPU                    Set number of gpus
-   - Batch size             Set batch size 
-   - Acceleration           Set Acceleration such as automatic-mixed-precision and Tensor-RT. User can also turn off acceleration
-   - precision              choose between FP16 and FP32
-   - Instance group count   and allow multiple users to share a single GPU, by running multiple workloads in parallel
-   - Workers                worker maintains a max queue of 10 inferences (64 tiles/batch). Worker return result via multiprocessing.queue
-   - Limit                  In the consumer we limit the number of pending requests to avoid flooding the inference server. We could dynamically adjust this limit.                             If the limit is too small, then throughput will be limited as the inference server will be idle.
-   - kind                   Choose between gpu and cpu
-   - iteration              run a number of images in iterator
-</pre>
-
-One challenge in inference is the need for model warm-up to achieve optimal performance with minimal variance in multiple experiment runs. To address this, our benchmarking tool includes a warm-up mechanism that performs a one-time inference before the actual inference with results. While some parameters have default values, certain ones, such as the Model name, must be provided by the user. The tool supports passing single or multiple WSI images as input, but manual input is required as it does not automatically retrieve images from directories or URLs. Additionally, the benchmarking tool relies on a running Triton server, making it a prerequisite for its functionality. For detailed instructions and usage, please refer to the documentation. We appreciate any feedback or contributions to further improve the tool's capabilities.
+In a default setting, the tool shards tile reads for a whole-slide image over 32 workers with each worker using a [large_image reader](https://github.com/girder/large_image) to produce batches of image tiles. Each worker maintains a queue of maximum 10 inference requests with 64 tiles per batch and 1 batch per inference request. These default settings provide a starting point for benchmarking, but users can modify them as needed. The benchmarking interface tool eliminates the need for users to manually create YAML-based configuration files. Instead, users can provide input features through the command-line tool, and the benchmarking interface tool dynamically generates the configuration. This streamlines the benchmarking process and improves accessibility.
 
 benchmark_interface takes args as input through command line interface. For example
 ```
@@ -235,7 +213,3 @@ Explanation of each args is as follows,
 --mask-known-hash   hash of binary mask image
 --check-readines:   check readiness of models. usage: `--check-readines`, default: false
 </pre>
-    
-
-
-
