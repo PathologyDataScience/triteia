@@ -176,13 +176,16 @@ The benchmark command-line interface tool allows developers and users to identif
 
 In contrast to NVIDIA's [Triton Model Anlyzer](https://github.com/triton-inference-server/model_analyzer) that uses randomly generated arrays, the benchmarking tool incorporates a whole-slide image dataloader that introduces real IO bottlenecks for more realistic measurements. We also provide options for enabling accelerators like mixed precision or TensorRT conversion. 
 
-Users can run benchmarking sessions using yaml based config files or by calling the benchmarking script with command-line arguments. A sample shell script illustrates the use of the benchmarking tool to do a parameter sweep over the number of GPUs, inference request queue limit, and maximum batch size. Each call to the benchmarking tool runs a warmup before making a series of measurements with the desired parameter settings. Caches are cleared between each measurement to ensure that measured throughput reflects real IO conditions, and that the inference results are not cached by Triton.
-
 In a default setting, the tool shards tile reads for a whole-slide image over 32 workers with each worker using a [large_image reader](https://github.com/girder/large_image) to produce batches of image tiles. Each worker maintains a queue of maximum 10 inference requests with 64 tiles per batch and 1 batch per inference request. These default settings provide a starting point for benchmarking, but users can modify them as needed. The benchmarking interface tool eliminates the need for users to manually create YAML-based configuration files. Instead, users can provide input features through the command-line tool, and the benchmarking interface tool dynamically generates the configuration. This streamlines the benchmarking process and improves accessibility.
 
-benchmark_interface takes args as input through command line interface. For example
+Users can run benchmarking sessions with command-line arguments. benchmark_interface takes args as input through command line interface. For example
 ```
 python /tf/notebooks/simple_triton/benchmarking/benchmark_interface.py  --gpu-num $gpu_num  --use-trt --precision "FP16" --fileoutput $filename   --iterations 5  --maxbatchsize $maxbatchsize  --model-name "ConvNeXtXLarge"
+
+Users can also run benchmarking sessions using calling the example benchmarking script with command-line arguments. A sample shell script illustrates the use of the benchmarking tool to do a parameter sweep over the number of GPUs, inference request queue limit, and maximum batch size. Each call to the benchmarking tool runs a warmup before making a series of measurements with the desired parameter settings. Caches are cleared between each measurement to ensure that measured throughput reflects real IO conditions, and that the inference results are not cached by Triton.
+
+
+
 ```
 Explanation of each args is as follows,
 <pre>
