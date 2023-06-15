@@ -178,9 +178,17 @@ In contrast to NVIDIA's [Triton Model Anlyzer](https://github.com/triton-inferen
 
 In a default setting, the tool shards tile reads for a whole-slide image over 32 workers with each worker using a [large_image reader](https://github.com/girder/large_image) to produce batches of image tiles. Each worker maintains a queue of maximum 10 inference requests with 64 tiles per batch and 1 batch per inference request. These default settings provide a starting point for benchmarking, but users can modify them as needed. The benchmarking interface tool eliminates the need for users to manually create YAML-based configuration files. Instead, users can provide input features through the command-line tool, and the benchmarking interface tool dynamically generates the configuration. This streamlines the benchmarking process and improves accessibility.
 
-Users can run benchmarking sessions with command-line arguments. benchmark_interface takes args as input through command line interface. For example
+Users can run benchmarking sessions with command-line arguments. benchmark_interface takes args as input through command line interface. 
 ```
 python /tf/notebooks/simple_triton/benchmarking/benchmark_interface.py  --gpu-num $gpu_num  --use-trt --precision "FP16" --fileoutput $filename   --iterations 5  --maxbatchsize $maxbatchsize  --model-name "ConvNeXtXLarge"
+```
+### Output
+
+Output of benchmarking tool generates Throughput (tiles/sec) and elapsed_time(sec) as list corresponding to result for single or multiples input WSI. For example given output shows throughput and elapsed time for three WSI.
+```
+Throughput (tiles/sec): [509.27591936314724, 459.98523782985006, 462.2393752935705] elapsed_time(sec): [11.019566774368286, 12.2003915309906, 12.14089560508728]
+```
+
 
 Users can also run benchmarking sessions using calling the example benchmarking script with command-line arguments. A sample shell script illustrates the use of the benchmarking tool to do a parameter sweep over the number of GPUs, inference request queue limit, and maximum batch size. Each call to the benchmarking tool runs a warmup before making a series of measurements with the desired parameter settings. Caches are cleared between each measurement to ensure that measured throughput reflects real IO conditions, and that the inference results are not cached by Triton.
 
@@ -206,13 +214,7 @@ Explanation of each args is as follows,
                     type=int, usage `--limit 10`, default=10
 --workers:          worker maintains a max queue of inferences. Worker return result via multiprocessing.queue
                     type=int, usage `--workers 32`, default=32
---iterations:       Number of iterations of inference to check variation   
-                    type=int, usage `--iterations 5`
---wsi-fname         Name of whole slide image
---wsi-url           url of whole slide image location
---wsi-known-hash    hash of whole slide image
---mask-fname        Name of binary mask image
---mask-url          url of binary mask image location
---mask-known-hash   hash of binary mask image
+--wsi-path          file name and path for WSI image
+--mask-path         File name and path of binary mask image
 --check-readines:   check readiness of models. usage: `--check-readines`, default: false
 </pre>
