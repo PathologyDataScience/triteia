@@ -1,12 +1,10 @@
 import argparse
 from mil.io.utils import study
-import numpy as np
 from simple_triton.model import TritonModel
 from simple_triton.feature_extraction import histomics_stream_inference
 from simple_triton.utils import analyze
 from simple_triton.config import ConfigBuilder
 from simple_triton.feature_extraction import feature_extractor
-from simple_triton.utils import TimedQueue
 from large_image.cache_util import cachesClear
 import tensorflow as tf
 import time
@@ -14,7 +12,6 @@ import subprocess
 import sys
 import os
 import functools
-import pooch
 
 
 class Benchmark:
@@ -115,11 +112,13 @@ class Benchmark:
         Returns:
             Inference time
         """
+
         def callback(user_data, result, error):
             if error:
                 user_data.append(error)
             else:
                 user_data.append(result)
+
         # inference parameters
         batch = self.args_dict["batch"]
         model_name = self.args_dict["model_name"]
@@ -195,22 +194,23 @@ class Benchmark:
         return throughput_results, elapsed_time_results
 
     def client_nogpu(self):
-        """Run client with no GPUs
-        """
+        """Run client with no GPUs"""
         os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
         assert len(tf.config.list_physical_devices("GPU")) == 0
 
     def cache_clear(self):
-        """clearn the cache before running inference
-        """
+        """clearn the cache before running inference"""
         cachesClear()
+
         @functools.lru_cache(maxsize=None)
         def fib(n):
             if n < 2:
                 return n
             return fib(n - 1) + fib(n - 2)
+
         def gfg():
             fib.cache_clear()
+
         fib(30)
         # Before Clearing
         print(fib.cache_info())
@@ -224,9 +224,9 @@ class Benchmark:
         for gpu in gpus:
             tf.config.experimental.set_memory_growth(gpu, True)
 
+
 def install():
-    """Install dependencies for running benchmarking interface tool
-    """
+    """Install dependencies for running benchmarking interface tool"""
     # install large_image with tile sources as prereq, check feature_extraction.ipynb in examples directory.
     # install simple_triton
     subprocess.check_call([sys.executable, "-m", "pip", "install", f"../simple_triton"])
@@ -235,10 +235,12 @@ def install():
     # install mil
     subprocess.check_call([sys.executable, "-m", "pip", "install", f"../../mil"])
 
+
 def check_readiness(args_dict):
     """check readiness of models"""
     model = TritonModel(args_dict["model_name"], args_dict["url"])
     assert model.is_loaded()
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -330,7 +332,7 @@ if __name__ == "__main__":
     )  # check readiness of models
     args = parser.parse_args()
     args_dict = vars(parser.parse_args())
-    args_dict["iterations"]=len(args_dict["wsi_path"])
+    args_dict["iterations"] = len(args_dict["wsi_path"])
     print(args_dict)
     print(f"Have", args_dict["wsi_path"])
     print(f"Have", args_dict["mask_path"])
@@ -352,7 +354,7 @@ if __name__ == "__main__":
     benchmark.create_load_model()
     throughput, elapsed_time = benchmark.inference_measure_throughput()
     # display elapsed time
-    print(f"Throughput (tiles/sec):", throughput,"elapsed_time(sec):",elapsed_time)
+    print(f"Throughput (tiles/sec):", throughput, "elapsed_time(sec):", elapsed_time)
     f = open(args_dict["fileoutput"], "a")
     f.write(
         "model_name: {},  Max Batch Size: {}, gpu-num: {}, instance group count: {}, amp: {}, trt: {}, precision: {}, workers: {}, Limit: {}, throughput: {}, elapsed_time: {} \n".format(
