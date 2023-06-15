@@ -178,15 +178,16 @@ In contrast to NVIDIA's [Triton Model Anlyzer](https://github.com/triton-inferen
 
 In a default setting, the tool shards tile reads for a whole-slide image over 32 workers with each worker using a [large_image reader](https://github.com/girder/large_image) to produce batches of image tiles. Each worker maintains a queue of maximum 10 inference requests with 64 tiles per batch and 1 batch per inference request. These default settings provide a starting point for benchmarking, but users can modify them as needed. The benchmarking interface tool eliminates the need for users to manually create YAML-based configuration files. Instead, users can provide input features through the command-line tool, and the benchmarking interface tool dynamically generates the configuration. This streamlines the benchmarking process and improves accessibility.
 
-Users can run benchmarking sessions with command-line arguments. benchmark_interface takes args as input through command line interface. For example given output shows throughput and elapsed time for three WSI.
+Users can run benchmarking sessions with command-line arguments. benchmark_interface takes args as input through command line interface. 
+```
+python /tf/notebooks/simple_triton/benchmarking/benchmark_interface.py  --gpu-num $gpu_num  --use-trt --precision "FP16" --fileoutput $filename   --iterations 5  --maxbatchsize $maxbatchsize  --model-name "ConvNeXtXLarge"
+```
+### Output
+
+Output of benchmarking tool generates Throughput (tiles/sec) and elapsed_time(sec) as list corresponding to result for single or multiples input WSI. For example given output shows throughput and elapsed time for three WSI.
 ```
 Throughput (tiles/sec): [509.27591936314724, 459.98523782985006, 462.2393752935705] elapsed_time(sec): [11.019566774368286, 12.2003915309906, 12.14089560508728]
 ```
-python /tf/notebooks/simple_triton/benchmarking/benchmark_interface.py  --gpu-num $gpu_num  --use-trt --precision "FP16" --fileoutput $filename   --iterations 5  --maxbatchsize $maxbatchsize  --model-name "ConvNeXtXLarge"
-
-### Output
-
-Output of benchmarking tool generates Throughput (tiles/sec) and elapsed_time(sec) as list corresponding to result for single or multiples input WSI. For example given out put shows results for three files
 
 
 Users can also run benchmarking sessions using calling the example benchmarking script with command-line arguments. A sample shell script illustrates the use of the benchmarking tool to do a parameter sweep over the number of GPUs, inference request queue limit, and maximum batch size. Each call to the benchmarking tool runs a warmup before making a series of measurements with the desired parameter settings. Caches are cleared between each measurement to ensure that measured throughput reflects real IO conditions, and that the inference results are not cached by Triton.
