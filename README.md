@@ -188,7 +188,8 @@ Output of benchmarking tool generates Throughput (tiles/sec) and elapsed_time(se
 ```
 Throughput (tiles/sec): [509.27591936314724, 459.98523782985006, 462.2393752935705] elapsed_time(sec): [11.019566774368286, 12.2003915309906, 12.14089560508728]
 ```
-
+### Version
+Trtion Inference Server with container 23.04 is used to run the benchmarking tool. URL:https://github.com/triton-inference-server/server/releases/tag/v2.33.0
 
 Users can also run benchmarking sessions using calling the example benchmarking script with command-line arguments. A sample shell script illustrates the use of the benchmarking tool to do a parameter sweep over the number of GPUs, inference request queue limit, and maximum batch size. Each call to the benchmarking tool runs a warmup before making a series of measurements with the desired parameter settings. Caches are cleared between each measurement to ensure that measured throughput reflects real IO conditions, and that the inference results are not cached by Triton.
 
