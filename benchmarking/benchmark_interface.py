@@ -305,15 +305,7 @@ if __name__ == "__main__":
     parser.add_argument("--workers", type=int, default=32)
     parser.add_argument("-v", "--verbose", default=True)
     parser.add_argument("-f", "--fileoutput", default="benchmark.txt")
-    parser.add_argument(
-        "-i",
-        "--iterations",
-        default=1,
-        type=int,
-        help="Number of iterations of inference to check variation",
-    )
     # pass whole slide image
-    #pass whole slide image
     parser.add_argument(
         "-w",
         "--wsi_path",
@@ -338,9 +330,11 @@ if __name__ == "__main__":
     )  # check readiness of models
     args = parser.parse_args()
     args_dict = vars(parser.parse_args())
+    args_dict["iterations"]=len(args_dict["wsi_path"])
     print(args_dict)
     print(f"Have", args_dict["wsi_path"])
     print(f"Have", args_dict["mask_path"])
+
     # show rediness if check is true
     if args_dict["check_readiness"] == True:
         check_readiness(args_dict)
