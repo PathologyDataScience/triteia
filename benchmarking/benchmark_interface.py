@@ -133,8 +133,8 @@ class Benchmark:
         throughput_results = []
         elapsed_time_results = []
         self.create_hs_study(
-            self.args_dict["wsi_path"],
-            self.args_dict["mask_path"],
+            self.args_dict["wsi_path"][0],
+            self.args_dict["mask_path"][0],
         )
         # warm up Model
         print("Warmup Model")
@@ -158,12 +158,12 @@ class Benchmark:
             self.gpu_mem_clear()
             print(
                 "wsi_path: ",
-                self.args_dict["wsi_path"] + "  mask_path: ",
-                self.args_dict["mask_path"],
+                self.args_dict["wsi_path"][i] + "  mask_path: ",
+                self.args_dict["mask_path"][i],
             )
             self.create_hs_study(
-                self.args_dict["wsi_path"],
-                self.args_dict["mask_path"],
+                self.args_dict["wsi_path"][i],
+                self.args_dict["mask_path"][i],
             )
             # start timer
             start = time.time()
@@ -191,7 +191,6 @@ class Benchmark:
             print("Elapsed Time(sec): ", elapsed_time)
             print("\n")
             num += 1
-        print("throughput Avg: ", throughput_Avg)
         analyze(self.times)
         return throughput_results, elapsed_time_results
 
@@ -246,7 +245,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model-name",
         required=False,
-        default="ConvNeXtXLarge",
+        default="convnextsmall",
         help="Set model name, usage: --model-name=ConvNeXtXLarge or convnextsmall",
     )  # For testing, it will be removed
     parser.add_argument(
@@ -275,6 +274,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--precision",
         choices=["FP32", "FP16"],
+        default="FP16",
         required=False,
         help="Choose between Precision FP16 or FP32 , default: FP16",
     )
@@ -312,31 +312,26 @@ if __name__ == "__main__":
         type=int,
         help="Number of iterations of inference to check variation",
     )
-    # download whole slide image
-    parser.add_argument("-wname", "--wsi-fname", default="TCGA-AN-A0G0-01Z-00-DX1.svs")
+    # pass whole slide image
+    #pass whole slide image
     parser.add_argument(
-        "-wurl",
-        "--wsi-url",
-        default="https://drive.google.com/uc?export=download&id=19agE_0cWY582szhOVxp9h3kozRfB4CvV&confirm=t&uuid=6f2d51e7-9366-4e98-abc7-4f77427dd02c&at=ALgDtswlqJJw1KU7P3Z1tZNcE01I:1679111148632",
+        "-w",
+        "--wsi_path",
+        nargs="+",
+        help='<Required> Set flag, usage: python benchmark_interface.py -f "TCGA-AN-A0G0-01Z-00-DX1.BE0BB5DF-DEDA-48D8-B5D8-2735C767F28F.svs","TCGA-AN-A0G0-01Z-00-DX1.BE0BB5DF-DEDA-48D8-B5D8-2735C767F28F_2.svs"',
+        default=[
+            "/tf/notebooks/TCGA-AN-A0G0-01Z-00-DX1.BE0BB5DF-DEDA-48D8-B5D8-2735C767F28F.svs"
+        ],
     )
+    # pass binary mask image
     parser.add_argument(
-        "-whash",
-        "--wsi-known-hash",
-        default="d046f952759ff6987374786768fc588740eef1e54e4e295a684f3bd356c8528f",
-    )
-    # download binary mask image
-    parser.add_argument(
-        "-mname", "--mask_fname", default="TCGA-AN-A0G0-01Z-00-DX1.mask.png"
-    )
-    parser.add_argument(
-        "-murl",
-        "--mask_url",
-        default="https://drive.google.com/uc?export=download&id=17GOOHbL8Bo3933rdIui82akr7stbRfta",
-    )
-    parser.add_argument(
-        "-mhash",
-        "--mask-known_hash",
-        default="bb657ead9fd3b8284db6ecc1ca8a1efa57a0e9fd73d2ea63ce6053fbd3d65171",
+        "-m",
+        "--mask_path",
+        nargs="+",
+        help='<Required> Set flag, usage: python benchmark_interface.py -m "TCGA-AN-A0G0-01Z-00-DX1.BE0BB5DF-DEDA-48D8-B5D8-2735C767F28F.mask.png","TCGA-AN-A0G0-01Z-00-DX1.BE0BB5DF-DEDA-48D8-B5D8-2735C767F28F_2.mask.png"',
+        default=[
+            "/tf/notebooks/TCGA-AN-A0G0-01Z-00-DX1.BE0BB5DF-DEDA-48D8-B5D8-2735C767F28F.mask.png"
+        ],
     )
     parser.add_argument(
         "--check-readiness", action="store_true"
@@ -344,21 +339,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     args_dict = vars(parser.parse_args())
     print(args_dict)
-    # create wholde slide image path
-    args_dict["wsi_path"] = pooch.retrieve(
-        fname=args_dict["wsi_fname"],
-        url=args_dict["wsi_url"],
-        known_hash=args_dict["wsi_known_hash"],
-        path=str(pooch.os_cache("pooch")) + os.sep + "wsi",
-    )
     print(f"Have", args_dict["wsi_path"])
-    # create binary mask path
-    args_dict["mask_path"] = pooch.retrieve(
-        fname=args_dict["mask_fname"],
-        url=args_dict["mask_url"],
-        known_hash=args_dict["mask_known_hash"],
-        path=str(pooch.os_cache("pooch")) + os.sep + "mask",
-    )
     print(f"Have", args_dict["mask_path"])
     # show rediness if check is true
     if args_dict["check_readiness"] == True:
@@ -377,7 +358,7 @@ if __name__ == "__main__":
     benchmark.create_load_model()
     throughput, elapsed_time = benchmark.inference_measure_throughput()
     # display elapsed time
-    print(f"Throughput (tiles/sec):", throughput)
+    print(f"Throughput (tiles/sec):", throughput,"elapsed_time(sec):",elapsed_time)
     f = open(args_dict["fileoutput"], "a")
     f.write(
         "model_name: {},  Max Batch Size: {}, gpu-num: {}, instance group count: {}, amp: {}, trt: {}, precision: {}, workers: {}, Limit: {}, throughput: {}, elapsed_time: {} \n".format(
