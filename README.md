@@ -12,14 +12,11 @@ See the [user guide](#user-guide) to read about concepts and to get started with
     - [Example](#example)
     - [Running the Triton container](#container)
 - [Triton concepts](#concepts)
-- [Package overview](#overview)
-- [Model configuration](#config)
-- [Model control](#control)
-- [Inference runner](#inference)
-    - [Data](#data)
-- [Benchmarking](#benchmarking)
-- [Bibliography](#bibliography)
-
+    - [Model control](#control)
+    - [Model configuration](#config)
+- [Developer guide](#developer-guide)
+    - [Testing](#testing)
+    - [Benchmarking](#benchmarking)
 
 ## Quick start <a name="quick-start"></a>
 
@@ -52,7 +49,7 @@ docker run --gpus=8 --rm -p 8000:8000 -p 8001:8001 -p 8002:8002 -p 8003:8003 -v 
 
 To use shared memory for client/server communication, both the client and server containers must be run with `--ipc=host`. Additionally, the client container should be run with the `--shm-size` option to request an expansion of the default 64MB shared memory. Running the client container with `--network=host` is the easiest configuration to allow the client and server to communicate over the host network.
 
-## Triton concepts <a name="quick-start"></a>
+## Triton concepts <a name="concepts"></a>
 simple-triton is a client for loading and configuring models on the Triton server, and for performing inference by sending data to and receiving results from Triton. Communication between client and server uses the Remote Procedure Call (gRPC) protocol. If the client and server are on the same machine shared memory can be used to accelerate communication. For inference tasks that are preprocessing intensive or I/O bound, simple-triton can be used with multiproccessing to shard work over multiple processes.
 
 Triton accelerates inference through a combination of improving hardware utilization and by decoupling data loading from inference. The latter provides more flexibility in implementing dataloaders that would be difficult to integrate with machine learning frameworks. This is particularly relevant for dealing with whole-slide images and 
@@ -158,7 +155,7 @@ The dimensions of model inputs and outputs can also be altered using `ConfigBuil
 
 # Developer guide <a name="developer-guide"></a>
 
-## Testing
+## Testing <a name="testing"></a>
 
 Testing and code formatting is automated using tox and pytest and can be run using `python -m tox run`. Running this will evaluate the tests in the environments defined in `tox.ini` and will format the source using Black. Following testing, a coverage.html file will be located in .tox/coverage.
 
@@ -175,40 +172,20 @@ pooch.retrieve(
 ```
 ## Benchmarking <a name="benchmarking"></a>
 
-The benchmark interface tool is used by users to benchmark inference server requests. The class takes as input parameters and performs histomic stream study, load model, histomics stream inference.
+The benchmark command-line interface tool allows developers and users to identify the most performant parameter values for their inference projects. An exhaustive list of evaluable parameters is provided below, and includes parameters like batch size, precision accelerators, duplicate instances, and multiprocessing workers for data loading and preprocessing. This allows users to quickly tailor parameters to their specific model and dataset given available system resources and environment requirements. For inference jobs that may span days, a few hours of benchmarking can be a worthwhile investment.
 
-The benchmarking tool offers several advantages for users looking to evaluate the performance of their inference server and optimize its parameters. By using this tool, users can:
+In contrast to NVIDIA's [Triton Model Anlyzer](https://github.com/triton-inference-server/model_analyzer) that uses randomly generated arrays, the benchmarking tool incorporates a whole-slide image dataloader that introduces real IO bottlenecks for more realistic measurements. We also provide options for enabling accelerators like mixed precision or TensorRT conversion. 
 
-- Flexibility in passing parameter: The benchmarking tool allows users to choose the number of GPUs, models, acceleration techniques, optimization methods, workers for multiprocessing, and queue length limits. It enables users to tailor the inference process to their available resources and environment requirements.
+In a default setting, the tool shards tile reads for a whole-slide image over 32 workers with each worker using a [large_image reader](https://github.com/girder/large_image) to produce batches of image tiles. Each worker maintains a queue of maximum 10 inference requests with 64 tiles per batch and 1 batch per inference request. These default settings provide a starting point for benchmarking, but users can modify them as needed. The benchmarking interface tool eliminates the need for users to manually create YAML-based configuration files. Instead, users can provide input features through the command-line tool, and the benchmarking interface tool dynamically generates the configuration. This streamlines the benchmarking process and improves accessibility.
 
-- Performance Analysis: With the benchmarking tool, users can generate performance data by interacting with the Triton inference server and performing inference using Whole Slide Imaging (WSI) images. The tool's primary goal is to measure the throughput for tile inference with both large and small networks, or any other network of choice. In cases where running a large inference job takes days, optimizing parameters can be worthwhile.
-
-- Iterative Parameter Exploration: The benchmark interface can be run iteratively with varying parameters using a shell script file that interacts with the benchmarking tool. An optimization script combines all the parameters to compare the results for the best throughput and time elapsed. This allows users to fine-tune their inference settings and identify the optimal configuration for their specific use case.
-
-- Default Configurations: By default, the tool leverages histomicsStream and uses 32 workers for sharding. Each worker contains a large image reader in an iterator, and tiles are extracted from this iterator. Each worker maintains a maximum inference of 10 inferences with 64 tiles per batch and 1 batch per inference. These default settings provide a starting point for benchmarking, but users can modify them as needed.
-
-- Simplified Configuration: The benchmarking interface tool eliminates the need for users to manually create YAML-based configuration files. Instead, users can provide input features through the command-line tool, and the benchmarking interface tool dynamically generates the configuration. This streamlines the benchmarking process and makes it more accessible to users.
- 
-This tool provdes a benefit where users do not have to understand and create store yaml based config files. Benchmarking interface tool creates the config by the features passed as input through command-line tool. Benchmark interface tool supports a number of features such as,
-
-<pre>
-   - Model                  Loads and unloads models
-   - GPU                    Set number of gpus
-   - Batch size             Set batch size 
-   - Acceleration           Set Acceleration such as automatic-mixed-precision and Tensor-RT. User can also turn off acceleration
-   - precision              choose between FP16 and FP32
-   - Instance group count   and allow multiple users to share a single GPU, by running multiple workloads in parallel
-   - Workers                worker maintains a max queue of 10 inferences (64 tiles/batch). Worker return result via multiprocessing.queue
-   - Limit                  In the consumer we limit the number of pending requests to avoid flooding the inference server. We could dynamically adjust this limit.                             If the limit is too small, then throughput will be limited as the inference server will be idle.
-   - kind                   Choose between gpu and cpu
-   - iteration              run a number of images in iterator
-</pre>
-
-One challenge in inference is the need for model warm-up to achieve optimal performance with minimal variance in multiple experiment runs. To address this, our benchmarking tool includes a warm-up mechanism that performs a one-time inference before the actual inference with results. While some parameters have default values, certain ones, such as the Model name, must be provided by the user. The tool supports passing single or multiple WSI images as input, but manual input is required as it does not automatically retrieve images from directories or URLs. Additionally, the benchmarking tool relies on a running Triton server, making it a prerequisite for its functionality. For detailed instructions and usage, please refer to the documentation. We appreciate any feedback or contributions to further improve the tool's capabilities.
-
-benchmark_interface takes args as input through command line interface. For example
+Users can run benchmarking sessions with command-line arguments. benchmark_interface takes args as input through command line interface. For example
 ```
 python /tf/notebooks/simple_triton/benchmarking/benchmark_interface.py  --gpu-num $gpu_num  --use-trt --precision "FP16" --fileoutput $filename   --iterations 5  --maxbatchsize $maxbatchsize  --model-name "ConvNeXtXLarge"
+
+Users can also run benchmarking sessions using calling the example benchmarking script with command-line arguments. A sample shell script illustrates the use of the benchmarking tool to do a parameter sweep over the number of GPUs, inference request queue limit, and maximum batch size. Each call to the benchmarking tool runs a warmup before making a series of measurements with the desired parameter settings. Caches are cleared between each measurement to ensure that measured throughput reflects real IO conditions, and that the inference results are not cached by Triton.
+
+
+
 ```
 Explanation of each args is as follows,
 <pre>
@@ -239,7 +216,3 @@ Explanation of each args is as follows,
 --mask-known-hash   hash of binary mask image
 --check-readines:   check readiness of models. usage: `--check-readines`, default: false
 </pre>
-    
-
-
-
