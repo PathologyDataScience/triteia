@@ -338,7 +338,7 @@ if __name__ == "__main__":
     parser.add_argument(
     "-i",
     "--iterations",
-    default=3,
+    default=1,
     type=int,
     help="Number of iterations of inference to check variation",
 )
