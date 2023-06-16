@@ -126,8 +126,8 @@ class Benchmark:
             "limit"
         ]  # limit on number of pending requests per worker
         workers = self.args_dict["workers"]  # total number of Submitter workers
-        iterations = range(self.args_dict["iterations"])
         throughput = 0
+        elapsed_time = 0
         num = 1
         throughput_results = []
         elapsed_time_results = []
@@ -151,18 +151,19 @@ class Benchmark:
             limit=limit,
         )
         # inference for number of iterations
-        print("Total rounds:", self.args_dict["iterations"])
+        print("Total iterations:", self.args_dict["iterations"])
         for i in range(self.args_dict["iterations"]):
+            print("Iteration:", num)
             self.cache_clear()
             self.gpu_mem_clear()
             print(
                 "wsi_path: ",
-                self.args_dict["wsi_path"][i] + "  mask_path: ",
-                self.args_dict["mask_path"][i],
+                self.args_dict["wsi_path"][0] + "  mask_path: ",
+                self.args_dict["mask_path"][0],
             )
             self.create_hs_study(
-                self.args_dict["wsi_path"][i],
-                self.args_dict["mask_path"][i],
+                self.args_dict["wsi_path"][0],
+                self.args_dict["mask_path"][0],
             )
             # start timer
             start = time.time()
@@ -179,19 +180,23 @@ class Benchmark:
                 workers=workers,
                 limit=limit,
             )
-            print("Round:", num)
-            elapsed_time = time.time() - start
-            throughput_single = (self.tile_info["version"].size) / elapsed_time
+            elapsed_time_single = time.time() - start
+            # throughput and elapsed time for single inference
+            throughput_single = (self.tile_info["version"].size) / elapsed_time_single
+            # Append to a list
             throughput_results.append(throughput_single)
-            elapsed_time_results.append(elapsed_time)
+            elapsed_time_results.append(elapsed_time_single)
+            # Add throughput and elapsed time for multiple iterations
             throughput = throughput + throughput_single
-            throughput_Avg = throughput / num
+            elapsed_time = elapsed_time + elapsed_time_single
             print("throughput single inference: ", throughput_single)
             print("Elapsed Time(sec): ", elapsed_time)
             print("\n")
             num += 1
+        # Calculate average
+        self.args_dict["throughput"]= throughput / (self.args_dict["iterations"])
+        self.args_dict["elapsed_time"] = elapsed_time / (self.args_dict["iterations"])
         analyze(self.times)
-        return throughput_results, elapsed_time_results
 
     def client_nogpu(self):
         """Run client with no GPUs"""
@@ -306,7 +311,7 @@ if __name__ == "__main__":
     parser.add_argument("--limit", type=int, default=10)
     parser.add_argument("--workers", type=int, default=32)
     parser.add_argument("-v", "--verbose", default=True)
-    parser.add_argument("-f", "--fileoutput", default="benchmark.txt")
+    parser.add_argument("-f", "--fileoutput", default="benchmark_output.txt")
     # pass whole slide image
     parser.add_argument(
         "-w",
@@ -330,9 +335,16 @@ if __name__ == "__main__":
     parser.add_argument(
         "--check-readiness", action="store_true"
     )  # check readiness of models
+    parser.add_argument(
+    "-i",
+    "--iterations",
+    default=3,
+    type=int,
+    help="Number of iterations of inference to check variation",
+)
     args = parser.parse_args()
     args_dict = vars(parser.parse_args())
-    args_dict["iterations"] = len(args_dict["wsi_path"])
+
     print(args_dict)
     print(f"Have", args_dict["wsi_path"])
     print(f"Have", args_dict["mask_path"])
@@ -352,9 +364,9 @@ if __name__ == "__main__":
     benchmark.client_nogpu()
     benchmark.gpu_mem_clear()
     benchmark.create_load_model()
-    throughput, elapsed_time = benchmark.inference_measure_throughput()
+    benchmark.inference_measure_throughput()
     # display elapsed time
-    print(f"Throughput (tiles/sec):", throughput, "elapsed_time(sec):", elapsed_time)
+    print(f"Throughput (tiles/sec):", args_dict["throughput"], "elapsed_time(sec):", args_dict["elapsed_time"])
     f = open(args_dict["fileoutput"], "a")
     f.write(
         "model_name: {},  Max Batch Size: {}, gpu-num: {}, instance group count: {}, amp: {}, trt: {}, precision: {}, workers: {}, Limit: {}, throughput: {}, elapsed_time: {} \n".format(
@@ -367,8 +379,12 @@ if __name__ == "__main__":
             args_dict["precision"],
             args_dict["workers"],
             args_dict["limit"],
-            throughput,
-            elapsed_time,
+            args_dict["throughput"],
+            args_dict["elapsed_time"]
         )
     )
     f.close()
+    with open(args_dict["fileoutput"], "r") as f:
+     print(f.readlines()[-1])
+     f.close()
+
