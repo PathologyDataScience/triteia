@@ -209,7 +209,7 @@ other (% in-process)           1.68   0.72   7.13
 ### Scripting tool
 
 Users can also run benchmarking sessions using calling the example benchmarking script with command-line arguments to run throughput multiple set of features and find the optimal results. A sample shell script in the example folder named "ConvNeXtXLarge_amp_Batch64_GPU8_iter5_BatchTest.sh", illustrates the use of the benchmarking tool to do a parameter sweep over the number of GPUs, and maximum batch size. Users can modofy the script to add/remove set of features and update their value. 
-Each call to the benchmarking tool runs a warmup before making a series of measurements with the desired parameter settings. Caches are cleared between each measurement to ensure that measured throughput reflects real IO conditions, and that the inference results are not cached by Triton. Output of scripting tool is similar to actual output for eachb run. 
+Each call to the benchmarking tool runs a warmup before making a series of measurements with the desired parameter settings. Caches are cleared between each measurement to ensure that measured throughput reflects real IO conditions, and that the inference results are not cached by Triton. Output of scripting tool is similar to actual output for each run. 
 
 
 ```
