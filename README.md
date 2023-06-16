@@ -194,6 +194,7 @@ model_name: convnextsmall.tensorflow,  Max Batch Size: 64, gpu-num: 8, instance 
 
 Output  also shows detailed time taken in sec as median, min, max for values such as total, data loading, results return, in-process, completion,  retrieval and other factors. An example output show,
 
+```
                              median    min    max
 -------------------------  --------  -----  -----
 total (sec)                    4.01   1.37   7.97
@@ -203,6 +204,7 @@ in-process (% total)          42.24  16.05  63.92
 completion (% in-process)     27.59   9.28  96.57
 retrieval (% in-process)      70.85   0.36  89.94
 other (% in-process)           1.68   0.72   7.13
+```
 
 ### Scripting tool
 
