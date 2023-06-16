@@ -1,8 +1,11 @@
 # simple-triton
 
-A simple python client for efficient inference with the NVIDIA Triton inference server.
+A simple Python client for efficient inference with the NVIDIA Triton inference server.
 
 See the [user guide](#user-guide) to read about concepts and to get started with examples. Details on testing and implementation are located in the [developer guide](#developer-guide).
+
+## Supported Triton version
+simple-triton is tested with [Triton version 23.04](https://github.com/triton-inference-server/server/releases/tag/v2.33.0).
 
 # User guide <a name="user-guide"></a>
 
@@ -20,8 +23,7 @@ See the [user guide](#user-guide) to read about concepts and to get started with
 
 ## Quick start <a name="quick-start"></a>
 
-simple-triton is pip-installable. Use of the whole slide image reader requires installation of `histomcs_stream` and `large_image` with tiff and openslide tile sources using a Python wheel
-
+simple-triton is pip installable. Use of the whole slide image reader requires installation of `histomcs_stream` and `large_image` with tiff or openslide tile sources 
 ```
 sudo apt update
 sudo apt install -y python3-openslide openslide-tools
@@ -31,7 +33,7 @@ pip install histomics_stream 'large_image[tiff]' \
 
 ### Example <a name="example"></a>
 
-The notebook `examples\feature_extraction.ipynb` demonstrates how to extract features from a whole-slide image using simple-triton. This example requires installation of the `mil` library and a running Triton container on the client machine.
+The notebook `examples\feature_extraction.ipynb` demonstrates whole-slide image feature extraction. This example requires installation of the `mil` library and a running Triton container on the client machine.
 
 ### Running the Triton container <a name="container"></a>
 
@@ -50,13 +52,13 @@ docker run --gpus=8 --rm -p 8000:8000 -p 8001:8001 -p 8002:8002 -p 8003:8003 -v 
 To use shared memory for client/server communication, both the client and server containers must be run with `--ipc=host`. Additionally, the client container should be run with the `--shm-size` option to request an expansion of the default 64MB shared memory. Running the client container with `--network=host` is the easiest configuration to allow the client and server to communicate over the host network.
 
 ## Triton concepts <a name="concepts"></a>
-simple-triton is a client for loading and configuring models on the Triton server, and for performing inference by sending data to and receiving results from Triton. Communication between client and server uses the Remote Procedure Call (gRPC) protocol. If the client and server are on the same machine shared memory can be used to accelerate communication. For inference tasks that are preprocessing intensive or I/O bound, simple-triton can be used with multiproccessing to shard work over multiple processes.
+simple-triton is a Python client that simplifies the loading and configuration of models on the NVIDIA Triton Inference Server, as well as inference requests. Communication between client and server uses the Remote Procedure Call (gRPC) protocol. If the client and server share memory then shared memory can further accelerate communication. For inference tasks that are preprocessing intensive or I/O bound, simple-triton can be used with a multiprocessing data loader to shard loading, preprocessing, and inference requests over multiple processes.
 
-Triton accelerates inference through a combination of improving hardware utilization and by decoupling data loading from inference. The latter provides more flexibility in implementing dataloaders that would be difficult to integrate with machine learning frameworks. This is particularly relevant for dealing with whole-slide images and 
+The motivation for this project was to accelerate inference-intensive processes like feature extraction from whole-slide images. Machine-learning frameworks like TensorFlow or PyTorch that are primarily intended for model training are not optimal for large inference tasks. Triton provides several advantages over these frameworks including better utilization of hardware. Triton also decouples data loading and preprocessing of inference which improves flexibility in implementing these steps.
 
-The key performance optimizations of Triton that simple-triton exposes are:
-1. Model concurrency - using CUDA streams, multiple instances of a model can be hosted on a single GPU, allowing overlap of host/device data movement with device computation.
-2. Automatic mixed precision - simple-triton can enable the use of mixed precision for TensorFlow models, improving throughput and GPU memory consumption.
+Some key performance optimizations of Triton that available through simple-triton:
+1. Model concurrency - a single GPU can host multiple instances of a model using CUDA streams, allowing overlap of host/device communication and device computation.
+2. Automatic mixed precision - simple-triton can enable mixed precision for TensorFlow models, improving throughput and GPU memory consumption.
 3. TensorRT - take advantage of quantization, layer and tensor fusion, and kernel tuning for select model types.
 4. Shared memory communication - send data to and receive data from Triton using shared memory when the client and server are on the same machine.
 
@@ -68,7 +70,7 @@ from simple_triton.model import TritonModel
 model = TritonModel("EfficientNetV2S.tensorflow", "localhost:8001")
 ```
 
-When loading or unloading models, simple-triton will check that a model is idle
+When unloading a model, simple-triton will check that the model is idle
 
 ```python
 # load model with auto-generated configuration
@@ -93,7 +95,7 @@ model.get_config()
 ```
 
 ## Model configuration <a name="config"></a>
-The `ConfigBuilder` class is used to build a configuration defining model hardware resources, optimizations, and model inputs/outputs. This configuration can be used with the model control functions to alter the hosted model configuration.
+The `ConfigBuilder` class is an interface to define hardware resources, optimizations, and model inputs/outputs for a model. This configuration can be used with the model control functions to alter the configuration of hosted models.
 
 Each model should have a maximum batch size that defines the upper limit on the number of samples in a single request
 
@@ -110,7 +112,7 @@ builder.max_batch_size(0)
 nonbatching_model.load(config=builder.config)
 ```
 
-Triton can cache inference results using (should be disabled for benchmarking)
+Triton also has an inference results cache (should be disabled for benchmarking)
 
 ```python
 # disabe inference result cache
@@ -118,7 +120,7 @@ builder.response_cache(False)
 model.load(config=builder.config)
 ```
 
-Automatic mixed precision or TensorRT optimization can also be enabled easily
+Automatic mixed precision or TensorRT optimization can also be enabled
 
 ```python
 # enable automatic mixed precision
@@ -131,7 +133,7 @@ builder.add_trt("FP16")
 model.load(config=builder.config)
 ```
 
-Assignment of hardware resources is done through *instance groups*. These groups define the CPU and GPU resources, and the number of concurrently hosted models on each resource. By default, Triton will create a single model instance on each GPU on the server machine. 
+Assignment of hardware resources is handled with *instance groups*. Each group defines CPU and GPU resources, and the number of concurrently hosted models on each resource. By default, Triton will create a single model instance on each GPU. 
 
 ```python
 # add a second concurrent model instance on each GPU
@@ -151,7 +153,7 @@ builder.remove_instance_groups()
 model.load(config=builder.config)
 ```
 
-The dimensions of model inputs and outputs can also be altered using `ConfigBuilder` methods. This may be helpful when dealing with models that have variable sized inputs/outputs which can be misinterpreted by Triton during loading.
+The dimensions of model inputs and outputs can also be altered using `ConfigBuilder` methods. This is helpful when dealing with models that have variable-sized inputs/outputs that can be misinterpreted by Triton during loading.
 
 # Developer guide <a name="developer-guide"></a>
 
@@ -172,27 +174,24 @@ pooch.retrieve(
 ```
 ## Benchmarking <a name="benchmarking"></a>
 
-The benchmark command-line interface tool allows developers and users to identify the most performant parameter values for their inference projects. An exhaustive list of evaluable parameters is provided below, and includes parameters like batch size, precision accelerators, duplicate instances, and multiprocessing workers for data loading and preprocessing. This allows users to quickly tailor parameters to their specific model and dataset given available system resources and environment requirements. For inference jobs that may span days, a few hours of benchmarking can be a worthwhile investment.
+We provide a benchmark command-line tool to help users identify the most performant parameters for their inference projects. An exhaustive list of evaluable parameters is provided below and includes batch size, precision accelerators, concurrent instances, and workers for data loading and preprocessing. This allows users to quickly tailor parameters to their specific model and dataset given available system resources and environment requirements. For inference jobs that may span days, a few hours of benchmarking can be a worthwhile investment.
 
-In contrast to NVIDIA's [Triton Model Anlyzer](https://github.com/triton-inference-server/model_analyzer) that uses randomly generated arrays, the benchmarking tool incorporates a whole-slide image dataloader that introduces real IO bottlenecks for more realistic measurements. We also provide options for enabling accelerators like mixed precision or TensorRT conversion. 
+In contrast to NVIDIA's [Triton Model Anlyzer](https://github.com/triton-inference-server/model_analyzer) which uses randomly generated arrays for benchmarking, our tool incorporates a whole-slide image dataloader to introduce real IO conditions for more realistic measurements. We also provide options for enabling accelerators like mixed precision or TensorRT conversion. 
 
-In a default setting, the tool shards tile reads for a whole-slide image over 32 workers with each worker using a [large_image reader](https://github.com/girder/large_image) to produce batches of image tiles. Each worker maintains a queue of maximum 10 inference requests with 64 tiles per batch and 1 batch per inference request. These default settings provide a starting point for benchmarking, but users can modify them as needed. The benchmarking interface tool eliminates the need for users to manually create YAML-based configuration files. Instead, users can provide input features through the command-line tool, and the benchmarking interface tool dynamically generates the configuration. This streamlines the benchmarking process and improves accessibility.
-
-Users can run benchmarking sessions with command-line arguments. benchmark_interface takes args as input through command line interface. 
+With default parameters, the benchmark uses 32 workers to read and batch tiles from a whole-slide image using the [large_image reader](https://github.com/girder/large_image). Each worker maintains a queue of maximum 10 inference requests with 64 tiles per batch and 1 batch per inference request. To explore additional parameters users can provide additional command line arguments or override default values
+ 
 ```
 python /tf/notebooks/simple_triton/benchmarking/benchmark_interface.py  --gpu-num $gpu_num  --use-trt --precision "FP16" --fileoutput $filename   --iterations 5  --maxbatchsize $maxbatchsize  --model-name "ConvNeXtXLarge"
 ```
+
 ### Output
 
-Output of benchmarking tool generates Throughput (tiles/sec) and elapsed_time(sec) as list corresponding to result for single or multiples input WSI. For example given output shows throughput and elapsed time for three WSI.
+A single benchmark run returns throughput (tiles/second) and elapsed_time (seconds) for each input WSI. For example, the output for an experiment with 3 WSIs
 ```
 Throughput (tiles/sec): [509.27591936314724, 459.98523782985006, 462.2393752935705] elapsed_time(sec): [11.019566774368286, 12.2003915309906, 12.14089560508728]
 ```
 
-
 Users can also run benchmarking sessions using calling the example benchmarking script with command-line arguments. A sample shell script illustrates the use of the benchmarking tool to do a parameter sweep over the number of GPUs, inference request queue limit, and maximum batch size. Each call to the benchmarking tool runs a warmup before making a series of measurements with the desired parameter settings. Caches are cleared between each measurement to ensure that measured throughput reflects real IO conditions, and that the inference results are not cached by Triton.
-
-
 
 ```
 Explanation of each args is as follows,

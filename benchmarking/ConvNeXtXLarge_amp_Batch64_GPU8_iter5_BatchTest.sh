@@ -3,7 +3,6 @@
 filename="/tf/notebooks/benchmarking_results/warmup_results/ConvNeXtXLarge/ConvNeXtXLarge_amp_Batch64_GPU8_iter5_BatchTest.txt"
 echo $filename
 echo -e "Benchmark using Model: ConvNeXtXLarge, Batch Test, Optimization: amp, Batch size: (32,64,96,128), GPU size: (8), iterations: 5\n" 
-echo -e "Benchmark using Model: ConvNeXtXLarge, Batch Test, Optimization: amp, Batch size: (32,64,96,128), GPU size: (8), iterations: 5\n" >> $filename
 gpu_num=6
 while [ $gpu_num -ne 8 ]
         do
@@ -30,11 +29,3 @@ while [ $gpu_num -ne 8 ]
                         done
                         echo -e "" >> $filename
         done
-
-# "convnextsmall.tensorflow"
-#"ConvNeXtXLarge"
-# --gpu-count $limit
-# --workers
-# --use-trt --precision "FP16"
-# --maxbatchsize $limit
-# --model-name  "convnext-tiny"
