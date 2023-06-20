@@ -369,7 +369,7 @@ if __name__ == "__main__":
     print(f"Throughput (tiles/sec):", args_dict["throughput"], "elapsed_time(sec):", args_dict["elapsed_time"])
     f = open(args_dict["fileoutput"], "a")
     f.write(
-        "model_name: {},  Max Batch Size: {}, gpu-num: {}, instance group count: {}, amp: {}, trt: {}, precision: {}, workers: {}, Limit: {}, throughput: {}, elapsed_time: {} \n".format(
+        "model_name: {},  Max Batch Size: {}, gpu-num: {}, instance group count: {}, amp: {}, trt: {}, precision: {}, workers: {}, Limit: {}, Iterations: {}, throughput(tiles/sec): {}, elapsed_time(sec): {} \n".format(
             args_dict["model_name"],
             args_dict["maxbatchsize"],
             args_dict["gpu_num"],
@@ -379,9 +379,9 @@ if __name__ == "__main__":
             args_dict["precision"],
             args_dict["workers"],
             args_dict["limit"],
+            args_dict["iterations"]
             args_dict["throughput"],
             args_dict["elapsed_time"]
-        )
     )
     f.close()
     with open(args_dict["fileoutput"], "r") as f:
