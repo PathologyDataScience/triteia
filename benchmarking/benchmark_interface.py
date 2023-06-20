@@ -379,9 +379,10 @@ if __name__ == "__main__":
             args_dict["precision"],
             args_dict["workers"],
             args_dict["limit"],
-            args_dict["iterations"]
+            args_dict["iterations"],
             args_dict["throughput"],
             args_dict["elapsed_time"]
+                )
     )
     f.close()
     with open(args_dict["fileoutput"], "r") as f:
