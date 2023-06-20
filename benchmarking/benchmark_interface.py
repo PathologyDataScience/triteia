@@ -293,7 +293,7 @@ if __name__ == "__main__":
         help="choice between gpu or cpu, usage: --kind=gpu  default: gpu",
     )
     parser.add_argument(
-        "--gpu-count",
+        "--gpu-instance-count",
         type=int,
         default=1,
         required=False,
@@ -369,11 +369,11 @@ if __name__ == "__main__":
     print(f"Throughput (tiles/sec):", args_dict["throughput"], "elapsed_time(sec):", args_dict["elapsed_time"])
     f = open(args_dict["fileoutput"], "a")
     f.write(
-        "model_name: {},  Max Batch Size: {}, gpu-num: {}, instance group count: {}, amp: {}, trt: {}, precision: {}, workers: {}, Limit: {}, Iterations: {}, throughput(tiles/sec): {}, elapsed_time(sec): {} \n".format(
+        "model_name: {},  maxbatchsize: {}, gpu_num: {}, gpu_intance_count: {}, use_amp: {}, use_trt: {}, precision: {}, workers: {}, limit: {}, iterations: {}, throughput(tiles/sec): {}, elapsed_time(sec): {} \n".format(
             args_dict["model_name"],
             args_dict["maxbatchsize"],
             args_dict["gpu_num"],
-            args_dict["gpu_count"],
+            args_dict["gpu_intance_count"],
             args_dict["use_amp"],
             args_dict["use_trt"],
             args_dict["precision"],
