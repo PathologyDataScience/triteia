@@ -181,7 +181,34 @@ In contrast to NVIDIA's [Triton Model Anlyzer](https://github.com/triton-inferen
 With default parameters, the benchmark uses 32 workers to read and batch tiles from a whole-slide image using the [large_image reader](https://github.com/girder/large_image). Each worker maintains a queue of maximum 10 inference requests with 64 tiles per batch and 1 batch per inference request. To explore additional parameters users can provide additional command line arguments or override default values
  
 ```
-python /tf/notebooks/simple_triton/benchmarking/benchmark_interface.py  --gpu-num $gpu_num  --use-trt --precision "FP16" --fileoutput $filename   --iterations 5  --maxbatchsize $maxbatchsize  --model-name "ConvNeXtXLarge"
+python benchmark_interface.py  --gpu-num $gpu_num  --use-trt --precision "FP16" --fileoutput $filename   --iterations 5  --maxbatchsize $maxbatchsize --iterations 3  --model-name "ConvNeXtXLarge"
+```
+
+> **_NOTE:_** Each call to the benchmarking cli runs a model warmup before making timed measurements. The disk cache is cleared between each measurement to ensure that measurements reflect real IO conditions. Results cacheing by Triton is also disabled.
+
+The arguments for the command-line interface are
+```
+--model-name:       Set model name, usage: `--model-name ConvNeXtXLarge`
+--fileoutput:       output file name with path for results
+--batch:            Set inference batch size usage: `--batch 64`, default: 64
+--maxbatchsize:     Set max batch size, usage: `--maxbatchsize 64`, default: 64
+--use-amp:          Use auto matic mixed precision, usage: `--use-amp`, default: False
+--use-trt:          Use tensorRT, usage: `--use-trt`, default: False
+--precision:        Choose between Precision FP16 or FP32, usage: `--precision "FP16"`, default: FP16
+--kind:             choice between gpu or cpu, usage: `--kind gpu`  default: gpu
+--gpu_intance_count:number of instances for a gpu (default: 1), usage: `--gpu-count 1`
+--gpu-num:          Number of GPUs to use, usage: `--gpu-num 2`, default: 1
+--url:              url for connecting with Triton Inference Server, usage: `--url: "localhost:8001"`, default=localhost:8001
+--magnification:    Set magnification size, usage: `--magnification 20`, type=int, default=20
+--tile:             Set tile size, usage `--tile 224`, type=int, default=224
+--limit:            In the consumer we limit the number of pending requests to avoid flooding the inference server. 
+                    type=int, usage `--limit 10`, default=10
+--workers:          worker maintains a max queue of inferences. Worker return result via multiprocessing.queue
+                    type=int, usage `--workers 32`, default=32
+--iterations:       Number of iterations to perform inference on a single file
+--wsi-path          file name and path for WSI image
+--mask-path         File name and path of binary mask image
+--check-readines:   check readiness of models. usage: `--check-readines`, default: false
 ```
 
 ### Output
@@ -189,10 +216,10 @@ python /tf/notebooks/simple_triton/benchmarking/benchmark_interface.py  --gpu-nu
 A single benchmark print the results as dict to parse easily. Results as dict are also store the result in file format "benchmark_output.txt". Set of features stored along with throughput and time elaped are model_name, maxbatchsize, gpu_num, gpu_count, use_amp, use_trt, precision, workers, limit, throughput, elapsed_time. 
 An example output for an experiment run shows,
 ```
-model_name: convnextsmall.tensorflow,  Max Batch Size: 64, gpu-num: 8, instance group count: 1, amp: False, trt: False, precision: FP16, workers: 32, Limit: 10, throughput: 195.95287948015198, elapsed_time: 28.640860160191853 
+model_name: convnextsmall.tensorflow,  maxbatchsize: 64, gpu_num: 8, gpu_intance_count: 1, use_amp: False, use_trt: False, precision: FP16, workers: 32, limit: 10, iterations: 3, throughput(tiles/sec): 195.95287948015198, elapsed_time(sec): 28.640860160191853
 ```
 
-Output  also shows detailed time taken in sec as median, min, max for values such as total, data loading, results return, in-process, completion,  retrieval and other factors. An example output show,
+Per-inference performance statistics are also displayed with each run. Here, _data loading_ refers to the percent time spend loading data for each inference, _results return_ refers to the percent time spent sending results from the worker to the main process, _in-process_ refers the the percent time between issuing and collecting the completed inference request, _completion_ refers to the percent of in-process time to complete the inference calculations, and _retrieval_ refers to the percent of in-process time a completed request waits to be collected.
 
 ```
                              median    min    max
@@ -206,34 +233,7 @@ retrieval (% in-process)      70.85   0.36  89.94
 other (% in-process)           1.68   0.72   7.13
 ```
 
-### Scripting tool
+### Benchmarking by scripting
 
-Users can also run benchmarking sessions using calling the example benchmarking script with command-line arguments to run throughput multiple set of features and find the optimal results. A sample shell script in the example folder named "ConvNeXtXLarge_amp_Batch64_GPU8_iter5_BatchTest.sh", illustrates the use of the benchmarking tool to do a parameter sweep over the number of GPUs, and maximum batch size. Users can modofy the script to add/remove set of features and update their value. 
-Each call to the benchmarking tool runs a warmup before making a series of measurements with the desired parameter settings. Caches are cleared between each measurement to ensure that measured throughput reflects real IO conditions, and that the inference results are not cached by Triton. Output of scripting tool is similar to actual output for each run. 
-
-
-```
-Explanation of each args is as follows,
-<pre>
---model-name:       Set model name, usage: `--model-name ConvNeXtXLarge`
---fileoutput:       output file name with path for results
---batch:            Set inference batch size usage: `--batch 64`, default: 64
---maxbatchsize:     Set max batch size, usage: `--maxbatchsize 64`, default: 64
---use-amp:          Use auto matic mixed precision, usage: `--use-amp`, default: False
---use-trt:          Use tensorRT, usage: `--use-trt`, default: False
---precision:        Choose between Precision FP16 or FP32, usage: `--precision "FP16"`, default: FP16
---kind:             choice between gpu or cpu, usage: `--kind gpu`  default: gpu
---gpu-count:        number of instances for a gpu (default: 1), usage: `--gpu-count 1`
---gpu-num:          Number of GPUs to use, usage: `--gpu-num 2`, default: 1
---url:              url for connecting with Triton Inference Server, usage: `--url: "localhost:8001"`, default=localhost:8001
---magnification:    Set magnification size, usage: `--magnification 20`, type=int, default=20
---tile:             Set tile size, usage `--tile 224`, type=int, default=224
---limit:            In the consumer we limit the number of pending requests to avoid flooding the inference server. 
-                    type=int, usage `--limit 10`, default=10
---workers:          worker maintains a max queue of inferences. Worker return result via multiprocessing.queue
-                    type=int, usage `--workers 32`, default=32
---iterations:       Number of iterations to perform inference on a single file
---wsi-path          file name and path for WSI image
---mask-path         File name and path of binary mask image
---check-readines:   check readiness of models. usage: `--check-readines`, default: false
-</pre>
+Running multiple experiments is best done using a scripting approach to call the benchmark cli with different parameters. We provide an example shell script ConvNeXtXLarge_amp_Batch64_GPU8_iter5_BatchTest.sh that demonstrates a parameter sweep for a ConvNeXtXLarge model. Users can modify the script to add/remove set of 
+features and update the values.
