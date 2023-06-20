@@ -196,7 +196,7 @@ The arguments for the command-line interface are
 --use-trt:          Use tensorRT, usage: `--use-trt`, default: False
 --precision:        Choose between Precision FP16 or FP32, usage: `--precision "FP16"`, default: FP16
 --kind:             choice between gpu or cpu, usage: `--kind gpu`  default: gpu
---gpu-count:        number of instances for a gpu (default: 1), usage: `--gpu-count 1`
+--gpu_intance_count:number of instances for a gpu (default: 1), usage: `--gpu-count 1`
 --gpu-num:          Number of GPUs to use, usage: `--gpu-num 2`, default: 1
 --url:              url for connecting with Triton Inference Server, usage: `--url: "localhost:8001"`, default=localhost:8001
 --magnification:    Set magnification size, usage: `--magnification 20`, type=int, default=20
@@ -216,7 +216,7 @@ The arguments for the command-line interface are
 A single benchmark print the results as dict to parse easily. Results as dict are also store the result in file format "benchmark_output.txt". Set of features stored along with throughput and time elaped are model_name, maxbatchsize, gpu_num, gpu_count, use_amp, use_trt, precision, workers, limit, throughput, elapsed_time. 
 An example output for an experiment run shows,
 ```
-model_name: convnextsmall.tensorflow,  Max Batch Size: 64, gpu-num: 8, instance group count: 1, amp: False, trt: False, precision: FP16, workers: 32, Limit: 10, iterations: 3, throughput(tiles/sec): 195.95287948015198, elapsed_time(sec): 28.640860160191853 
+model_name: convnextsmall.tensorflow,  maxbatchsize: 64, gpu_num: 8, gpu_intance_count: 1, use_amp: False, use_trt: False, precision: FP16, workers: 32, limit: 10, iterations: 3, throughput(tiles/sec): 195.95287948015198, elapsed_time(sec): 28.640860160191853
 ```
 
 Per-inference performance statistics are also displayed with each run. Here, _data loading_ refers to the percent time spend loading data for each inference, _results return_ refers to the percent time spent sending results from the worker to the main process, _in-process_ refers the the percent time between issuing and collecting the completed inference request, _completion_ refers to the percent of in-process time to complete the inference calculations, and _retrieval_ refers to the percent of in-process time a completed request waits to be collected.
