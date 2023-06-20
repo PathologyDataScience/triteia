@@ -181,7 +181,7 @@ In contrast to NVIDIA's [Triton Model Anlyzer](https://github.com/triton-inferen
 With default parameters, the benchmark uses 32 workers to read and batch tiles from a whole-slide image using the [large_image reader](https://github.com/girder/large_image). Each worker maintains a queue of maximum 10 inference requests with 64 tiles per batch and 1 batch per inference request. To explore additional parameters users can provide additional command line arguments or override default values
  
 ```
-python /tf/notebooks/simple_triton/benchmarking/benchmark_interface.py  --gpu-num $gpu_num  --use-trt --precision "FP16" --fileoutput $filename   --iterations 5  --maxbatchsize $maxbatchsize  --model-name "ConvNeXtXLarge"
+python /tf/notebooks/simple_triton/benchmarking/benchmark_interface.py  --gpu-num $gpu_num  --use-trt --precision "FP16" --fileoutput $filename   --iterations 5  --maxbatchsize $maxbatchsize --iterations 3  --model-name "ConvNeXtXLarge"
 ```
 
 ### Output
