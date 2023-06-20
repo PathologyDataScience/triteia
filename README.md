@@ -186,12 +186,31 @@ python /tf/notebooks/simple_triton/benchmarking/benchmark_interface.py  --gpu-nu
 
 ### Output
 
-A single benchmark run returns throughput (tiles/second) and elapsed_time (seconds) for each input WSI. For example, the output for an experiment with 3 WSIs
+A single benchmark print the results as dict to parse easily. Results as dict are also store the result in file format "benchmark_output.txt". Set of features stored along with throughput and time elaped are model_name, maxbatchsize, gpu_num, gpu_count, use_amp, use_trt, precision, workers, limit, throughput, elapsed_time. 
+An example output for an experiment run shows,
 ```
-Throughput (tiles/sec): [509.27591936314724, 459.98523782985006, 462.2393752935705] elapsed_time(sec): [11.019566774368286, 12.2003915309906, 12.14089560508728]
+model_name: convnextsmall.tensorflow,  Max Batch Size: 64, gpu-num: 8, instance group count: 1, amp: False, trt: False, precision: FP16, workers: 32, Limit: 10, throughput: 195.95287948015198, elapsed_time: 28.640860160191853 
 ```
 
-Users can also run benchmarking sessions using calling the example benchmarking script with command-line arguments. A sample shell script illustrates the use of the benchmarking tool to do a parameter sweep over the number of GPUs, inference request queue limit, and maximum batch size. Each call to the benchmarking tool runs a warmup before making a series of measurements with the desired parameter settings. Caches are cleared between each measurement to ensure that measured throughput reflects real IO conditions, and that the inference results are not cached by Triton.
+Output  also shows detailed time taken in sec as median, min, max for values such as total, data loading, results return, in-process, completion,  retrieval and other factors. An example output show,
+
+```
+                             median    min    max
+-------------------------  --------  -----  -----
+total (sec)                    4.01   1.37   7.97
+data loading (% total)        57.63  35.97  83.60
+results return (% total)       0.14   0.05   0.62
+in-process (% total)          42.24  16.05  63.92
+completion (% in-process)     27.59   9.28  96.57
+retrieval (% in-process)      70.85   0.36  89.94
+other (% in-process)           1.68   0.72   7.13
+```
+
+### Scripting tool
+
+Users can also run benchmarking sessions using calling the example benchmarking script with command-line arguments to run throughput multiple set of features and find the optimal results. A sample shell script in the example folder named "ConvNeXtXLarge_amp_Batch64_GPU8_iter5_BatchTest.sh", illustrates the use of the benchmarking tool to do a parameter sweep over the number of GPUs, and maximum batch size. Users can modofy the script to add/remove set of features and update their value. 
+Each call to the benchmarking tool runs a warmup before making a series of measurements with the desired parameter settings. Caches are cleared between each measurement to ensure that measured throughput reflects real IO conditions, and that the inference results are not cached by Triton. Output of scripting tool is similar to actual output for each run. 
+
 
 ```
 Explanation of each args is as follows,
@@ -213,6 +232,7 @@ Explanation of each args is as follows,
                     type=int, usage `--limit 10`, default=10
 --workers:          worker maintains a max queue of inferences. Worker return result via multiprocessing.queue
                     type=int, usage `--workers 32`, default=32
+--iterations:       Number of iterations to perform inference on a single file
 --wsi-path          file name and path for WSI image
 --mask-path         File name and path of binary mask image
 --check-readines:   check readiness of models. usage: `--check-readines`, default: false
