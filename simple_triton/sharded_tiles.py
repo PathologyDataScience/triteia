@@ -90,7 +90,9 @@ class ShardedTiles(object):
         A study dictionary from histomics_stream, defining the reading
         parameters and tile locations for possibly multiple slides.
     batch : int
-        The number of tiles in each batch. Partial batches are not padded.
+        The number of tiles in each batch. Partial batches are not padded. If 0,
+        single sample batches will be generated without the singleton batch
+        dimension.
     worker_index : int
         The worker index, ranging from 0 to `num_workers`.
     num_workers : int
@@ -106,7 +108,8 @@ class ShardedTiles(object):
     Attributes
     ----------
     batch : int
-        The number of tiles in each batch. Partial batches are not padded.
+        The number of tiles in each batch. If 0, single sample batches will be
+        generated without the singleton batch dimension.
     worker_index : int
         The worker index, ranging from 0 to `num_workers`.
     num_workers : int
@@ -114,14 +117,17 @@ class ShardedTiles(object):
 
     Notes
     -----
-    See https://github.com/DigitalSlideArchive/HistomicsStream/blob/master/StudyObject.md
-    for more details on `metadata`.
-
+    For more details on `metadata` see
+    https://github.com/DigitalSlideArchive/HistomicsStream/blob/master/StudyObject.md
     """
 
     def __init__(self, study, batch, worker_index, num_workers):
         self.i = 0
         self.study = study
+        if batch == 0:
+            self._singleton = True
+        else:
+            self._singleton = False
         self.batch = batch
         self.worker_index = worker_index
         self.num_workers = num_workers
@@ -183,7 +189,7 @@ class ShardedTiles(object):
             ):  # lazy creation of large_image objects for serialization
                 slides = set([tile[0] for tile in self.tiles])
                 self.large_images = {slide: large_image.open(slide) for slide in slides}
-            indices = range(self.i, min(self.i + self.batch, len(self.tiles)))
+            indices = range(self.i, min(self.i + max(self.batch, 1), len(self.tiles)))
             pixels = [
                 self.large_images[self.tiles[j][0]].getRegion(**self.tiles[j][1])[0]
                 for j in indices
@@ -192,6 +198,9 @@ class ShardedTiles(object):
                 k: np.array([self.metadata[j][k] for j in indices])
                 for k in self.metadata[indices[0]]
             }
-            pixels = np.stack(pixels, axis=0)
+            if self._singleton:
+                pixels = pixels[0]
+            else:
+                pixels = np.stack(pixels, axis=0)
             self.i += len(indices)
             return pixels, metadata

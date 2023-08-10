@@ -19,9 +19,10 @@ def histomics_stream_inference(
     Parameters
     ----------
     study : dict
-        A histomics_stream study object containing the slides defined in paths, and analysis
-        plan defined by tile size, tile overlap, and magnification/reading parameters. Can
-        contain multiple slides. This study is sharded over multiple workers.
+        A histomics_stream study object containing the slides defined in paths, and
+        analysis plan defined by tile size, tile overlap, and magnification/reading
+        parameters. Can contain multiple slides. This study is sharded over multiple
+        workers.
     model_name : str
         The name of the model to use for inference. This model should be
         loaded on triton prior to inference.
@@ -29,6 +30,8 @@ def histomics_stream_inference(
         The url for the triton server grpc port. Default value is `localhost:8001`.
     batch : int
         The number of tiles to process in a batch. Default value is `64` tiles.
+        If `0`, inference will be performed on single tiles with no batch
+        dimension.
     workers : int
         The number of workers to use for reading tiles from disk and submitting and
         receiving inference results. Each worker will receive a shard of tiles and
