@@ -90,7 +90,9 @@ class ShardedTiles(object):
         A study dictionary from histomics_stream, defining the reading
         parameters and tile locations for possibly multiple slides.
     batch : int
-        The number of tiles in each batch. Partial batches are not padded.
+        The number of tiles in each batch. Partial batches are not padded. If
+        None, a batch of 1 will be used with the singleton batch dimension
+        removed.
     worker_index : int
         The worker index, ranging from 0 to `num_workers`.
     num_workers : int
@@ -106,7 +108,8 @@ class ShardedTiles(object):
     Attributes
     ----------
     batch : int
-        The number of tiles in each batch. Partial batches are not padded.
+        The number of tiles in each batch. If `None`, the singleton batch
+        dimension will be removed from batches of one.
     worker_index : int
         The worker index, ranging from 0 to `num_workers`.
     num_workers : int
@@ -114,15 +117,19 @@ class ShardedTiles(object):
 
     Notes
     -----
-    See https://github.com/DigitalSlideArchive/HistomicsStream/blob/master/StudyObject.md
-    for more details on `metadata`.
-
+    For more details on `metadata` see
+    https://github.com/DigitalSlideArchive/HistomicsStream/blob/master/StudyObject.md
     """
 
     def __init__(self, study, batch, worker_index, num_workers):
         self.i = 0
         self.study = study
-        self.batch = batch
+        if batch is None:
+            self._singleton = True
+            batch = 1
+        else:
+            self._singleton = False
+            self.batch = batch
         self.worker_index = worker_index
         self.num_workers = num_workers
         self.large_images = None
@@ -192,6 +199,9 @@ class ShardedTiles(object):
                 k: np.array([self.metadata[j][k] for j in indices])
                 for k in self.metadata[indices[0]]
             }
-            pixels = np.stack(pixels, axis=0)
+            if self._singleton:
+                pixels = pixels[0]
+            else:
+                pixels = np.stack(pixels, axis=0)
             self.i += len(indices)
             return pixels, metadata
