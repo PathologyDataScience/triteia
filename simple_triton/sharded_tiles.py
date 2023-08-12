@@ -98,9 +98,9 @@ class ShardedTiles(object):
     num_workers : int
         The total number of workers.
     transpose : bool
-        Whether to transpose the dimensions of returned tiles from NHWC/HWC format 
-        (most TensorFlow models) to NCHW/CHW format (ONNX and Torch models). Default value 
-        is False.
+        Whether to transpose the dimensions of returned tiles from NHWC/HWC format
+        (most TensorFlow models) to NCHW/CHW format (ONNX and Torch models). Default
+        value is False.
 
     Returns
     -------
