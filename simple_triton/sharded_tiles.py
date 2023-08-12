@@ -97,6 +97,9 @@ class ShardedTiles(object):
         The worker index, ranging from 0 to `num_workers`.
     num_workers : int
         The total number of workers.
+    nhwc_layout : bool
+        Whether to return tiles in NHWC format (most TensorFlow models) or NCHW
+        format (ONNX and Torch models). Default value is True.
 
     Returns
     -------
@@ -121,7 +124,7 @@ class ShardedTiles(object):
     https://github.com/DigitalSlideArchive/HistomicsStream/blob/master/StudyObject.md
     """
 
-    def __init__(self, study, batch, worker_index, num_workers):
+    def __init__(self, study, batch, worker_index, num_workers, nhwc_layout=True):
         self.i = 0
         self.study = study
         if batch == 0:
@@ -131,6 +134,7 @@ class ShardedTiles(object):
         self.batch = batch
         self.worker_index = worker_index
         self.num_workers = num_workers
+        self.nhwc_layout = nhwc_layout
         self.large_images = None
         self._shard()
 
@@ -202,5 +206,11 @@ class ShardedTiles(object):
                 pixels = pixels[0]
             else:
                 pixels = np.stack(pixels, axis=0)
+            if not self.nhwc_layout:
+                if self._singleton:
+                    axes = [2, 0, 1]
+                else:
+                    axes = [0, 3, 2, 1]
+                pixels = np.transpose(pixels, axes)
             self.i += len(indices)
             return pixels, metadata
