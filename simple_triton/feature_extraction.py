@@ -9,7 +9,13 @@ import tensorflow as tf
 
 
 def histomics_stream_inference(
-    study, model_name, url="localhost:8001", batch=64, workers=32, limit=10
+    study,
+    model_name,
+    url="localhost:8001",
+    batch=64,
+    workers=32,
+    limit=10,
+    transpose=False,
 ):
     """Inference on the tiles defined in a histomics stream study.
 
@@ -38,6 +44,9 @@ def histomics_stream_inference(
         will read them using a ShardedTiles iterator. Default value `32`.
     limit : int
         The maximum number of batches pending inference allowed for each worker.
+    transpose : bool
+        Whether to transpose the data from NHWC format to NCHW format. Default
+        value is False.
 
     Returns
     -------
@@ -63,7 +72,7 @@ def histomics_stream_inference(
     # Start consumers
     shards = []
     for w in range(workers):
-        shard = ShardedTiles(study, batch, w, workers)
+        shard = ShardedTiles(study, batch, w, workers, transpose)
         shards.append(
             InferenceRunner(url, model_name, shard, qout, limit, verbose=False)
         )
