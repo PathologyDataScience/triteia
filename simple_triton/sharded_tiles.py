@@ -209,7 +209,7 @@ class ShardedTiles(object):
             if not self.nhwc_layout:
                 if self._singleton:
                     axes = [2, 0, 1]
-                else
+                else:
                     axes = [0, 3, 2, 1]
                 pixels = np.transpose(pixels, axes)
             self.i += len(indices)
