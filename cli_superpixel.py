@@ -567,7 +567,6 @@ def main():
     print("meta", meta)
     createSuperPixels(spopts, response, tile_info, meta)
  
-    # createSuperPixels(spopts, tile_data, meta_data)
 
     print("FINISHED Inference")
   

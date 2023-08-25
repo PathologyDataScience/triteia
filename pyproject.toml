@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "simple_triton"
+authors = [
+    {name = "Lee Cooper", email = "lee.cooper@northwestern.edu"},
+]
+description = "A simple and efficient python client for the Triton Inference Server."
+readme = "README.md"
+requires-python = ">=3.7"
+keywords = ["one", "two"]
+license = {text = "Apache-2.0"}
+dependencies = [
+    "numpy>=1.21",
+    "tabulate",
+    "tritonclient[all]>=2.30.0",
+    "protobuf"
+]
+dynamic = ["version"]
+
+[tool.setuptools]
+packages = ["simple_triton"]
+
+[tool.setuptools_scm]
