@@ -467,10 +467,6 @@ def main():
     tile_size = 4096
     RUN = False
 
-    ts = large_image.open(image_path)
-    meta = ts.getMetadata()
-    print("meta", meta)
-
     output_image_dir = "/tf/notebook/temp/python_backend/examples/cuda_slic"
     os.makedirs(output_image_dir, exist_ok=True)
 
@@ -532,7 +528,6 @@ def main():
         response, tile_info, times, failed = histomics_stream_inference(
             hs_study, model_name, url="localhost:8001", batch=1, workers=32, limit=10
         )
-        # response = triton_client_grpc.infer(model_name, inputs=inputs0, outputs=outputs)
         print("response:{} tile_info", response)
         elapsed_time = time.time() - start_time
         throughput_tiles_cuda = total_tiles / elapsed_time
