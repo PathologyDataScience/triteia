@@ -1,0 +1,52 @@
+name: "superpixel_overlap"
+backend: "python"
+
+input [
+  {
+    name: "input",
+    data_type: TYPE_FP32,
+    dims: [-1, 4096, 4096, 3]
+
+  }
+]
+
+output [
+  {
+    name: "output",
+    data_type: TYPE_FP32,
+    dims: [1]
+  }
+]
+
+  instance_group [
+    {
+      count: 1
+      kind: KIND_GPU
+      gpus: [ 0,1 ]
+    },
+    {
+      count: 1
+      kind: KIND_GPU
+      gpus: [ 2,3 ]
+    }
+    # ,
+    # {
+    #   count: 1
+    #   kind: KIND_GPU
+    #   gpus: [ 4,5,6,7 ]
+    # }
+  ]
+
+  # dynamic_batching {
+  #   max_queue_delay_microseconds: 100
+  # }
+
+  # response_cache {
+  # enable: true
+  # }
+
+
+
+
+
+
