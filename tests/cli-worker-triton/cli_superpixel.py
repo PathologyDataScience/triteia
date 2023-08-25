@@ -459,7 +459,6 @@ def main():
         "/tf/notebook/TCGA-TM-A7CF-01Z-00-DX1.EB905EDB-5AC5-41C4-AB00-526DD3820524.svs"
     ]
     tempdir = "/tf/notebook/"
-    outImagePath1 = "outputImageFile.tiff"
     outImagePath = os.path.join(tempdir, "superpixel.tiff")
     annotationName = "Superpixel"
     outAnnotationPath = os.path.join(tempdir, "%s.anot" % annotationName)
@@ -476,17 +475,10 @@ def main():
     os.makedirs(output_image_dir, exist_ok=True)
 
     slide = openslide.OpenSlide(image_path)
-
     (width, height) = slide.dimensions
-    factors = slide.level_downsamples
-
     total_tiles_width = width // tiles_size[0]
     total_tiles_height = height // tiles_size[1]
     total_tiles = total_tiles_width * total_tiles_height
-
-    # Get tile shape and batch size
-    tile_shape = (4096, 4096, 3)
-    batch_size = 1
 
     spopts = argparse.Namespace(
         inputImageFile=image_path,
