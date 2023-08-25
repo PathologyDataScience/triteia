@@ -1,0 +1,48 @@
+import numpy as np
+from skimage import io
+from cuda_slic.slic import slic as cuda_slic
+from skimage.segmentation import slic as skimage_slic
+import timeit
+
+def run_skimage_slic(wsi, n_segments):
+    return skimage_slic(wsi, n_segments=n_segments, start_label=1)
+
+def run_cuda_slic(wsi, n_segments):
+    return cuda_slic(wsi, n_segments=n_segments, max_iter=5)
+
+def main():
+    # wsi
+    input_image_path = '/tf/notebook/TCGA-05-4425-01Z-00-DX1.82B093EE-49BC-4FD9-91AC-4CC89944309D.svs'
+    wsi = io.imread(input_image_path)
+
+    n_segments = int(wsi.size / 125)  # superpixel shape = (5, 5, 5)
+
+    # timeit function
+    setup = "from __main__ import run_skimage_slic, run_cuda_slic"
+
+    num_iterations = 3
+    skimage_times = []
+    cuda_times = []
+
+    for _ in range(num_iterations):
+        # Run skimage_slic and measure its runtime
+        skimage_time = timeit.timeit('run_skimage_slic(wsi, n_segments)', setup=setup, globals=locals(), number=1)
+        skimage_times.append(skimage_time)
+
+        # Run cuda_slic and measure its runtime
+        cuda_time = timeit.timeit('run_cuda_slic(wsi, n_segments)', setup=setup, globals=locals(), number=1)
+        cuda_times.append(cuda_time)
+
+    skimage_avg_time = np.mean(skimage_times)
+    cuda_avg_time = np.mean(cuda_times)
+
+    skimage_throughput = n_segments / skimage_avg_time
+    cuda_throughput = n_segments / cuda_avg_time
+
+    print(f"skimage_slic average runtime: {skimage_avg_time:.2f} seconds")
+    print(f"skimage_slic average throughput: {skimage_throughput:.2f} superpixels/second")
+    print(f"cuda_slic average runtime: {cuda_avg_time:.2f} seconds")
+    print(f"cuda_slic average throughput: {cuda_throughput:.2f} superpixels/second")
+
+if __name__ == "__main__":
+    main()
