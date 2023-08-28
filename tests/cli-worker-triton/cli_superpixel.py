@@ -20,25 +20,6 @@ from simple_triton.model import TritonModel
 from simple_triton.config import ConfigBuilder
 
 
-def perform_slic_segmentation(image, n_segments, compactness, sigma):
-    segments = skimage.segmentation.slic(
-        image,
-        n_segments=n_segments,
-        compactness=compactness,
-        sigma=sigma,
-        start_label=0,
-        enforce_connectivity=True,
-    )
-    return segments
-
-
-def perform_seam_overlapping(segments, overlap_amount):
-    overlapped_segments = segments.copy()
-    for i in range(overlap_amount):
-        overlapped_segments[:, i] = segments[:, 0]
-    return overlapped_segments
-
-
 def create_load_model(model_name, url):
     """The function feature_extractor can be used to create feature extraction
     models in the model repository. Note - this cell will take time as the model
