@@ -5,7 +5,7 @@ A simple Python client for efficient inference with the NVIDIA Triton inference 
 See the [user guide](#user-guide) to read about concepts and to get started with examples. Details on testing and implementation are located in the [developer guide](#developer-guide).
 
 ## Supported Triton version
-simple-triton is tested with [Triton version 23.04](https://github.com/triton-inference-server/server/releases/tag/v2.33.0).
+simple-triton is tested with [Triton version 23.03](https://github.com/triton-inference-server/server/releases/tag/v2.32.0).
 
 # User guide <a name="user-guide"></a>
 
@@ -46,10 +46,10 @@ Two Triton server container runtime options are important for use with simple-tr
 for example,
 
 ```
-docker run --gpus=8 --rm -p 8000:8000 -p 8001:8001 -p 8002:8002 -p 8003:8003 -v host_model_repository:/models nvcr.io/nvidia/tritonserver:22.05-py3 tritonserver --model-repository=/models --model-control-mode=explicit --exit-on-error=false --strict-model-config=false
+docker run --gpus=8 --rm -p 8000:8000 -p 8001:8001 -p 8002:8002 -p 8003:8003 --shm-size=1g --ulimit memlock=-1 --ipc=host -v host_model_repository:/models nvcr.io/nvidia/tritonserver:23.03-py3 tritonserver --model-repository=/models --model-control-mode=explicit --exit-on-error=false --strict-model-config=false
 ```
 
-To use shared memory for client/server communication, both the client and server containers must be run with `--ipc=host`. Additionally, the client container should be run with the `--shm-size` option to request an expansion of the default 64MB shared memory. Running the client container with `--network=host` is the easiest configuration to allow the client and server to communicate over the host network.
+The options `--ipc`, `--shm-size`, and `--ulimit memlock` are recommended when using shared memory for client/server communication. If the client is run within container these options should also be passed to the client container run command. Running the client container with `--network=host` is the easiest configuration to allow the client and server to communicate over the host network.
 
 ## Triton concepts <a name="concepts"></a>
 simple-triton is a Python client that simplifies the loading and configuration of models on the NVIDIA Triton Inference Server, as well as inference requests. Communication between client and server uses the Remote Procedure Call (gRPC) protocol. If the client and server share memory then shared memory can further accelerate communication. For inference tasks that are preprocessing intensive or I/O bound, simple-triton can be used with a multiprocessing data loader to shard loading, preprocessing, and inference requests over multiple processes.
