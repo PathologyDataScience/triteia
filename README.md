@@ -49,6 +49,8 @@ for example,
 docker run --gpus=8 --rm -p 8000:8000 -p 8001:8001 -p 8002:8002 -p 8003:8003 --shm-size=1g --ulimit memlock=-1 --ipc=host -v host_model_repository:/models nvcr.io/nvidia/tritonserver:23.03-py3 tritonserver --model-repository=/models --model-control-mode=explicit --exit-on-error=false --strict-model-config=false
 ```
 
+where `host_model_repository` is the location of your model repository folder on the host machine.
+
 > **Note:** The options `--ipc`, `--shm-size`, and `--ulimit memlock` are recommended when using shared memory for client/server communication. This allows Triton to access host system shared memory, increases the default 64MB shared memory limit, and prevents paging of RAM out to disk. If the client is run in a container then the `--ipc` and `--shm-size` options should be passed to the client container run command. Running the client container with `--network=host` is the easiest configuration to allow the client and server to communicate over the host network.
 
 ## Triton concepts <a name="concepts"></a>
