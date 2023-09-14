@@ -526,11 +526,8 @@ class InferenceRunner(Process):
             The request timeout limit (seconds). This is an input argument
             to the triton GRPC client async_infer inferface.
         pre : function
-            A preprocessing function to apply to samples prior to inference.
-            Default value is None.
-        post : function
-            A postprocessing function to apply to inference results. Default
-            value is None.
+            A preprocessing function to apply to samples emitted from `dataset` prior 
+            to inference. Default value is None.
         verbose : bool
             True updates console with inference progress and exceptions.
             Default value is False.
@@ -546,14 +543,7 @@ class InferenceRunner(Process):
         self.limit = limit
         self.timeout = timeout
         self.rest = rest
-        if pre is None:
-            self.pre = lambda x: x
-        else:
-            self.pre = pre
-        if post is None:
-            self.post = lambda x: x
-        else:
-            self.post = post
+        self.pre = pre
 
         # initialize list to hold performance data
         self.time_inference = []
@@ -577,7 +567,8 @@ class InferenceRunner(Process):
                     except StopIteration as e:
                         stop = True
                     if not stop:
-                        sample = self.pre(sample)
+                        if self.pre is not None:
+                            sample = self.pre(sample)
                         request = {
                             "model_name": self.model,
                             "inputs": [sample],
