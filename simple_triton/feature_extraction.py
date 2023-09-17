@@ -15,6 +15,7 @@ def histomics_stream_inference(
     batch=64,
     workers=32,
     limit=10,
+    pre=None,
     transpose=False,
 ):
     """Inference on the tiles defined in a histomics stream study.
@@ -44,6 +45,9 @@ def histomics_stream_inference(
         will read them using a ShardedTiles iterator. Default value `32`.
     limit : int
         The maximum number of batches pending inference allowed for each worker.
+    pre : function
+        A preprocessing function to apply to samples emitted from `dataset` prior
+        to inference. Default value is None.
     transpose : bool
         Whether to transpose the data from NHWC format to NCHW format. Default
         value is False.
@@ -74,7 +78,7 @@ def histomics_stream_inference(
     for w in range(workers):
         shard = ShardedTiles(study, batch, w, workers, transpose)
         shards.append(
-            InferenceRunner(url, model_name, shard, qout, limit, verbose=False)
+            InferenceRunner(url, model_name, shard, qout, limit, pre=pre, verbose=False)
         )
     for s in shards:
         s.start()
