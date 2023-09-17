@@ -46,7 +46,7 @@ def histomics_stream_inference(
     limit : int
         The maximum number of batches pending inference allowed for each worker.
     pre : function
-        A preprocessing function to apply to samples emitted from `dataset` prior 
+        A preprocessing function to apply to samples emitted from `dataset` prior
         to inference. Default value is None.
     transpose : bool
         Whether to transpose the data from NHWC format to NCHW format. Default

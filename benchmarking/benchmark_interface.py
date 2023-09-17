@@ -194,7 +194,7 @@ class Benchmark:
             print("\n")
             num += 1
         # Calculate average
-        self.args_dict["throughput"]= throughput / (self.args_dict["iterations"])
+        self.args_dict["throughput"] = throughput / (self.args_dict["iterations"])
         self.args_dict["elapsed_time"] = elapsed_time / (self.args_dict["iterations"])
         analyze(self.times)
 
@@ -336,12 +336,12 @@ if __name__ == "__main__":
         "--check-readiness", action="store_true"
     )  # check readiness of models
     parser.add_argument(
-    "-i",
-    "--iterations",
-    default=1,
-    type=int,
-    help="Number of iterations of inference to check variation",
-)
+        "-i",
+        "--iterations",
+        default=1,
+        type=int,
+        help="Number of iterations of inference to check variation",
+    )
     args = parser.parse_args()
     args_dict = vars(parser.parse_args())
 
@@ -366,7 +366,12 @@ if __name__ == "__main__":
     benchmark.create_load_model()
     benchmark.inference_measure_throughput()
     # display elapsed time
-    print(f"Throughput (tiles/sec):", args_dict["throughput"], "elapsed_time(sec):", args_dict["elapsed_time"])
+    print(
+        f"Throughput (tiles/sec):",
+        args_dict["throughput"],
+        "elapsed_time(sec):",
+        args_dict["elapsed_time"],
+    )
     f = open(args_dict["fileoutput"], "a")
     f.write(
         "model_name: {},  maxbatchsize: {}, gpu_num: {}, gpu_intance_count: {}, use_amp: {}, use_trt: {}, precision: {}, workers: {}, limit: {}, iterations: {}, throughput(tiles/sec): {}, elapsed_time(sec): {} \n".format(
@@ -381,11 +386,10 @@ if __name__ == "__main__":
             args_dict["limit"],
             args_dict["iterations"],
             args_dict["throughput"],
-            args_dict["elapsed_time"]
-                )
+            args_dict["elapsed_time"],
+        )
     )
     f.close()
     with open(args_dict["fileoutput"], "r") as f:
-     print(f.readlines()[-1])
-     f.close()
-
+        print(f.readlines()[-1])
+        f.close()
