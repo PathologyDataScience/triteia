@@ -583,9 +583,6 @@ class InferenceRunner(Process):
 
             # put completed post-processed requests into queue
             for inference in completed:
-                # apply postprocessing function
-                # if len(inference["result"]):
-                # TBD
 
                 # remove inputs
                 del inference["inputs"]
