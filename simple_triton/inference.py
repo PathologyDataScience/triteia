@@ -496,7 +496,6 @@ class InferenceRunner(Process):
         rest=1e-2,
         timeout=None,
         pre=None,
-        post=None,
         verbose=False,
     ):
         """InferenceRunner constructor.
