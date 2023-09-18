@@ -63,35 +63,13 @@ class Requests(object):
 
         Notes
         -----
-        https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#datatypes
+        All types listed in model configurations are prepended with "TYPE_".
         """
 
-        if api_type == "TYPE_FP32":
-            return np.float32
-        elif api_type == "TYPE_FP16":
-            return np.float16
-        elif api_type == "TYPE_FLOAT64":
-            return np.float64
-        elif api_type == "TYPE_UINT8":
-            return np.uint8
-        elif api_type == "TYPE_UINT16":
-            return np.uint16
-        elif api_type == "TYPE_UINT32":
-            return np.uint32
-        elif api_type == "TYPE_UINT64":
-            return np.uint64
-        elif api_type == "TYPE_INT8":
-            return np.int8
-        elif api_type == "TYPE_INT16":
-            return np.int16
-        elif api_type == "TYPE_INT32":
-            return np.int32
-        elif api_type == "TYPE_INT64":
-            return np.int64
-        elif api_type == "TYPE_BOOL":
-            return np.bool
-        else:
+        output = triton_to_np_dtype(api_type.split("TYPE_")[1])
+        if output is None:
             raise ValueError(f"Unrecognized type '{str(api_type)}'")
+        return output
 
     def _np_to_api_types(self, dtype):
         """Converts numpy dtype to triton API type string.
@@ -105,34 +83,16 @@ class Requests(object):
         -------
         api_type : str
             The corresponding type string for the triton client API.
+            
+        Notes
+        -----
+        All types listed in model configurations are prepended with "TYPE_".
         """
 
-        if dtype == np.float32:
-            return "TYPE_FP32"
-        elif dtype == np.float16:
-            return "TYPE_FP16"
-        elif dtype == np.float64:
-            return "TYPE_FLOAT64"
-        elif dtype == np.uint8:
-            return "TYPE_UINT8"
-        elif dtype == np.uint16:
-            return "TYPE_UINT16"
-        elif dtype == np.uint32:
-            return "TYPE_UINT32"
-        elif dtype == np.uint64:
-            return "TYPE_UINT64"
-        elif dtype == np.int8:
-            return "TYPE_INT8"
-        elif dtype == np.int16:
-            return "TYPE_INT16"
-        elif dtype == np.int32:
-            return "TYPE_INT32"
-        elif dtype == np.int64:
-            return "TYPE_INT64"
-        elif dtype == np.bool:
-            return "TYPE_BOOL"
-        else:
+        output = np_to_triton_dtype(dtype)
+        if output is None:
             raise ValueError(f"Unrecognized type '{str(dtype)}'")
+        return output
 
     def print_pending(self):
         """Prints current state of self.pending for debugging."""
@@ -168,12 +128,11 @@ class Requests(object):
         
         Notes
         -----
-        For multi-input models, secondary inputs are required to have a batch
-        dimension. However, this dimension can be singleton in the case where
-        these inputs represent a parameter applied to the entire batch. For this
-        reason, we do not require multi-input models to have a uniform shape
-        along the batch dimension, and the batch size is inferred from the batch
-        dimension of the first element if `inputs`.
+        For multi-input models, secondary inputs require a batch dimension. In
+        cases where an input is a parameter to be applied to an entire batch, this
+        dimension can be singleton. For this reason, we do not require inputs to 
+        multi-input models to have a uniform batch dimension shape, and the batch 
+        size is inferred from the first element of `inputs`.
         """
 
         def _compare_types(model_dict, provided, expected):
