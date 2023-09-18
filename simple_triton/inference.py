@@ -7,7 +7,9 @@ import os
 from simple_triton.model import TritonModel
 from simple_triton.utils import create_client
 import time
-from tritonclient.utils import InferenceServerException
+from tritonclient.utils import (InferenceServerException,
+                                triton_to_np_dtype,
+                                np_to_triton_dtype)
 
 
 class Requests(object):
@@ -145,8 +147,11 @@ class Requests(object):
 
         Parameters
         ----------
-        inputs : list of numpy.ndarray
-            A list of numpy arrays to input for model inference.
+        inputs : numpy.ndarray or dict of numpy.ndarray
+            For single-input models provide a single numpy array. Multi-input
+            models require a dict that keys input names to numpy arrays. This
+            dict is required because the ordering of model inputs appearing in
+            `model_dict` is not reliable.
         model_dict : dict
             A dictionary describing the name, shape, and type of inputs and
             outputs, and the maximum batch size if defined.
@@ -158,27 +163,28 @@ class Requests(object):
         See also
         --------
         model_metadata
+        
+        Notes
+        -----
+        For multi-input models, secondary inputs are required to have a batch
+        dimension. However, this dimension can be singleton in the case where
+        these inputs represent a parameter applied to the entire batch. For this
+        reason, we do not require multi-input models to have a uniform shape
+        along the batch dimension, and the batch size is inferred from the batch
+        dimension of the first element if `inputs`.
         """
-
-        # validate number of inputs
-        if len(inputs) != len(model_dict["input"]):
-            raise Exception(
-                (
-                    f"Model {model_dict['name']} expects {len(model_dict['input'])} "
-                    f"inputs, received {len(inputs)}."
+        
+        def _compare_types(model_dict, provided, expected):
+            if self._np_to_api_types(provided.dtype) != expected["dataType"]:
+                raise Exception(
+                    (
+                        f"Model {model_dict['name']} input "
+                        f"{expected['name']} "
+                        f"expects type {expected['dataType']}, received input with "
+                        f"type {provided.dtype}."
+                    )
                 )
-            )
-
-        # if model is batching -> batch dimension implied
-        if "maxBatchSize" in model_dict:
-            if model_dict["maxBatchSize"] > 0:
-                batching = True
-                batch_size = inputs[0].shape[0]
-            else:
-                batching = False
-        else:
-            batching = False
-
+                
         def _compare_dims(provided, expected):
             return all(
                 [True if e == -1 else p == e for (p, e) in zip(provided, expected)]
@@ -186,23 +192,9 @@ class Requests(object):
 
         def _int(shape):
             return [int(s) for s in shape]
-
-        # validate input types
-        if strict_types:
-            for i, (provided, expected) in enumerate(zip(inputs, model_dict["input"])):
-                if self._np_to_api_types(provided.dtype) != expected["dataType"]:
-                    raise Exception(
-                        (
-                            f"Model {model_dict['name']} input "
-                            f"{model_dict['input'][i]['name']} "
-                            f"expects type {expected['dataType']}, received input with "
-                            f"type {provided.dtype}."
-                        )
-                    )
-
-        # validate input shapes
-        for i, (provided, expected) in enumerate(zip(inputs, model_dict["input"])):
-            if batching:  # check uniform batch sizing and max_batch_size limit
+        
+        def _compare_shape(model_dict, provided, expected, batching):
+            if batching:
                 offset = 1
             else:
                 offset = 0
@@ -224,23 +216,85 @@ class Requests(object):
                     )
                 )
 
+        # validate type and number of inputs
+        if isinstance(inputs, np.ndarray):
+            if len(model_dict["input"]) != 1:
+                raise Exception(
+                    (
+                        f"Model {model_dict['name']} with {len(model_dict['input'])}"
+                        " inputs requires dictionary of numpy arrays, keyed to"
+                        " input names."
+                    )
+                )
+        elif isinstance(inputs, dict):
+            if len(inputs) != len(model_dict["input"]):
+                raise Exception(
+                    (
+                        f"Model {model_dict['name']} expects {len(model_dict['input'])}"
+                        f" inputs, received {len(inputs)}."
+                    )
+                )
+        else:
+            raise Exception(
+                (
+                    "inputs must be an np.ndarray or a dictionary of np.ndarrays"
+                    " keyed to the model inputs."
+                )
+            )
+            
+        # verify that all inputs are found for dict input
+        if isinstance(inputs, dict):
+            for i in model_dict["input"]:
+                if i["name"] not in inputs.keys():
+                    raise Exception(f"Model input {i['name']} not found in inputs.")
+
+        # if model is batching -> batch dimension implied
+        if "maxBatchSize" in model_dict:
+            if model_dict["maxBatchSize"] > 0:
+                batching = True
+                if isinstance(inputs, np.ndarray):
+                    batch_size = inputs.shape[0]
+                else:
+                    batch_size = inputs.items()[0].shape[0]
+            else:
+                batching = False
+        else:
+            batching = False
+            
+        # validate input types
+        if strict_types:
+            if isinstance(inputs, np.ndarray):
+                _compare_types(model_dict, inputs, model_dict["input"][0])
+            else:
+                for i in model_dict["input"]:
+                    _compare_types(model_dict, inputs, i)
+                    
+        # validate input shapes
+        if isinstance(inputs, np.ndarray):
+            _compare_shape(model_dict, inputs, model_dict["input"][0], batching)
+        else:
+            for i in model_dict["input"]:
+                _compare_shape(model_dict, inputs[i["name"]], i, batching)
+                
         # validate batching
         if batching:
-            for i, (provided, expected) in enumerate(zip(inputs, model_dict["input"])):
-                if provided.shape[0] != batch_size:
-                    raise Exception(
-                        (
-                            f"Non-uniform batch size of inputss. Expected {batch_size}, "
-                            f"found {provided.shape[0]}."
-                        )
-                    )
-                if provided.shape[0] > model_dict["maxBatchSize"]:
+            if isinstance(inputs, np.ndarray):
+                if inputs.shape[0] > model_dict["maxBatchSize"]:
                     raise Exception(
                         (
                             f"Model {model_dict['name']} max batch size "
                             f"{model_dict['maxBatchSize']} exceeded."
                         )
                     )
+            else:
+                for i in inputs.items():
+                    if i.shape[0] > model_dict["maxBatchSize"]:
+                        raise Exception(
+                            (
+                                f"Model {model_dict['name']} max batch size "
+                                f"{model_dict['maxBatchSize']} exceeded."
+                            )
+                        )
 
     def _client_inputs(self, inputs, model_dict):
         """Generates tritonclient.grpc.InferInput objects for client.
