@@ -115,58 +115,161 @@ def histomics_stream_inference(
     return features, tile_info, times, failed
 
 
-def feature_extractor(repository, model, name, t=(224, 224), pool="avg"):
-    """Creates a savedmodel format feature extractor model.
+def _nested_replace(inbound, replacement):
+    if isinstance(inbound, list):
+        inbound = [_nested_replace(l, replacement) for l in inbound]
+    elif isinstance(inbound, str):
+        if inbound in replacement.keys():
+            inbound = replacement[inbound]
+    return inbound
+
+
+def _tf_rename_inputs(model, input_index=1):
+    """Renames tensorflow model input names for consistency with triton.
+
+    The first input will be renamed as "input_{input_index}". Subsequent inputs will be
+    named incrementally.
+
+    Parameters
+    ----------
+    model : tf.keras.Model
+        A model object to rename.
+    input_index : int
+        The starting index for input layers. Default value is 1.
+
+    Returns
+    -------
+    renamed : tf.keras.Model
+        A model object with inputs renamed in order starting with "input_{input_index}".
+
+    Notes
+    -----
+    Renaming is applied independently to inputs and outputs for flexibility in combining
+    model objects. Renaming cannot be applied to nested models, where a layer is really
+    a model containing additional layers.
+    """
+
+    # build list of input layer names to replace and replacement names
+    config = model.get_config()
+    inputs = [
+        layer["name"]
+        for layer in config["layers"]
+        if layer["class_name"] == "InputLayer"
+    ]
+    replace = {
+        i: r
+        for i, r in zip(
+            inputs,
+            [f"input_{i}" for i in range(input_index, len(inputs) + input_index)],
+        )
+    }
+
+    # modify names instances in layers
+    for layer in config["layers"]:
+        if layer["class_name"] == "InputLayer":
+            layer["name"] = replace[layer["name"]]
+            layer["config"]["name"] = replace[layer["config"]["name"]]
+
+    # modify all downstream layers directly connected to these layers
+    for layer in config["layers"]:
+        if "inbound_nodes" in layer.keys():
+            layer["inbound_nodes"] = _nested_replace(layer["inbound_nodes"], replace)
+
+    # replace name instances in config
+    config["input_layers"] = _nested_replace(config["input_layers"], replace)
+
+    # transfer to new model
+    renamed = tf.keras.Model().from_config(config)
+    for n, o in zip(renamed.layers, model.layers):
+        n.set_weights(o.get_weights())
+    return renamed
+
+
+def _tf_rename_outputs(model, output_index=1):
+    """Renames tensorflow model output names for consistency with triton.
+
+    The first output will be renamed as "output_{output_index}". Subsequent outputs
+    will be named incrementally.
+
+    Parameters
+    ----------
+    model : tf.keras.Model
+        A model object to rename.
+    output_index : int
+        The starting index for output layers. Default value is 1.
+
+    Returns
+    -------
+    renamed : tf.keras.Model
+        A model object with inputs renamed in order starting with "output_{output_index}".
+
+    Notes
+    -----
+    Renaming is applied independently to inputs and outputs for flexibility in combining
+    model objects. Renaming cannot be applied to nested models, where a layer is really
+    a model containing additional layers.
+    """
+
+    # build list of output layer names
+    config = model.get_config()
+    outputs = [o[0] for o in config["output_layers"]]
+    replace = {
+        o: r
+        for o, r in zip(
+            outputs,
+            [f"output_{i}" for i in range(output_index, len(outputs) + output_index)],
+        )
+    }
+
+    # modify names instances in layers
+    for layer in config["layers"]:
+        if layer["name"] in replace.keys():
+            layer["name"] = replace[layer["name"]]
+            layer["config"]["name"] = replace[layer["config"]["name"]]
+
+    # replace name instances in config
+    config["output_layers"] = _nested_replace(config["output_layers"], replace)
+
+    # transfer to new model
+    renamed = tf.keras.Model().from_config(config)
+    for n, o in zip(renamed.layers, model.layers):
+        n.set_weights(o.get_weights())
+    return renamed
+
+
+def tf_extractor(
+    repository, model, name, input_shape=(224, 224, 3), pooling="avg", normalize=False
+):
+    """Creates a tensorflow feature extractor model in savedmodel format.
+
+    The model is saved in a folder structure that is compliant with the Triton model
+    repository. The base model folder is named with a ".tensorflow" suffix, and an
+    additional model version folder is created to store the model files.
 
     Parameters
     ----------
     repository : str
-        Path to the model repository folder on the triton host.
-    model : str {}
-        Name of model
+        Path to the model repository folder where the model will be saved.
+    model : str
+        Name of model from tf.keras.applications. Currently the modules supported
+        include convnext, efficientnet_v2, and resnetv2.
     name : str
-        Designated model name to use for saving in repository.
-    t : tuple(int, int)
-        The height and width (pixels) of the tiles used for analysis at target magnification.
-        Default value is (224, 224).
+        Designated model name for saving in model repository.
+    input_shape : tuple(int, int, int)
+        The height, width, and channels of tiles used for feature extraction at the
+        target magnification. Default value is (224, 224, 3).
+    pooling : str {"avg", "max"}
+        The pooling mode for the terminal layer of the feature extractor network.
+    normalize : bool
+        Include a deconvolution-based color normalization layer at the input. Requires
+        providing stain matrices for both the input and ideal color profile. Default
+        value is False.
 
     Returns
     -------
     D : int
         Dimensionality of model output.
     """
-
-    def rename(model, input_name="input_1", output_name="output_1"):
-        # renames feature extraction model input, ouput names to input_1, output_1
-
-        def nested_replace(inbound, name, replacement):
-            if isinstance(inbound, list):
-                inbound = [nested_replace(l, name, replacement) for l in inbound]
-            else:
-                if inbound == name:
-                    inbound = replacement
-            return inbound
-
-        config = model.get_config()
-        replace = config["layers"][0]["name"]
-        config["layers"][0]["name"] = input_name
-        config["layers"][0]["config"]["name"] = input_name
-        config["layers"][1]["inbound_nodes"] = nested_replace(
-            config["layers"][1]["inbound_nodes"], replace, input_name
-        )
-        config["input_layers"] = nested_replace(
-            config["input_layers"], replace, input_name
-        )
-        replace = config["layers"][-1]["name"]
-        config["layers"][-1]["name"] = output_name
-        config["layers"][-1]["config"]["name"] = output_name
-        config["output_layers"] = nested_replace(
-            config["output_layers"], replace, output_name
-        )
-        new = tf.keras.Model().from_config(config)
-        for n, o in zip(new.layers, model.layers):
-            n.set_weights(o.get_weights())
-        return new
 
     # fail if name exists in model repository
     if os.path.exists(os.path.join(repository, name)):
@@ -177,78 +280,78 @@ def feature_extractor(repository, model, name, t=(224, 224), pool="avg"):
         model = tf.keras.applications.efficientnet_v2.EfficientNetV2S(
             include_top=False,
             weights="imagenet",
-            input_shape=(t[0], t[1], 3),
-            pooling=pool,
+            input_shape=input_shape,
+            pooling=pooling,
         )
     elif model.lower() == "efficientnetv2m":
         model = tf.keras.applications.efficientnet_v2.EfficientNetV2M(
             include_top=False,
             weights="imagenet",
-            input_shape=(t[0], t[1], 3),
-            pooling=pool,
+            input_shape=input_shape,
+            pooling=pooling,
         )
     elif model.lower() == "efficientnetv2l":
         model = tf.keras.applications.efficientnet_v2.EfficientNetV2L(
             include_top=False,
             weights="imagenet",
-            input_shape=(t[0], t[1], 3),
-            pooling=pool,
+            input_shape=input_shape,
+            pooling=pooling,
         )
     elif model.lower() == "convnextbase":
         model = tf.keras.applications.convnext.ConvNeXtBase(
             include_top=False,
             weights="imagenet",
-            input_shape=(t[0], t[1], 3),
-            pooling=pool,
+            input_shape=input_shape,
+            pooling=pooling,
         )
     elif model.lower() == "convnextlarge":
         model = tf.keras.applications.convnext.ConvNeXtLarge(
             include_top=False,
             weights="imagenet",
-            input_shape=(t[0], t[1], 3),
-            pooling=pool,
+            input_shape=input_shape,
+            pooling=pooling,
         )
     elif model.lower() == "convnextsmall":
         model = tf.keras.applications.convnext.ConvNeXtSmall(
             include_top=False,
             weights="imagenet",
-            input_shape=(t[0], t[1], 3),
-            pooling=pool,
+            input_shape=input_shape,
+            pooling=pooling,
         )
     elif model.lower() == "convnexttiny":
         model = tf.keras.applications.convnext.ConvNeXtTiny(
             include_top=False,
             weights="imagenet",
-            input_shape=(t[0], t[1], 3),
-            pooling=pool,
+            input_shape=input_shape,
+            pooling=pooling,
         )
     elif model.lower() == "convnextxlarge":
         model = tf.keras.applications.convnext.ConvNeXtXLarge(
             include_top=False,
             weights="imagenet",
-            input_shape=(t[0], t[1], 3),
-            pooling=pool,
+            input_shape=input_shape,
+            pooling=pooling,
         )
     elif model.lower() == "resnet101v2":
         model = tf.keras.applications.resnet_v2.ResNet101V2(
             include_top=False,
             weights="imagenet",
-            input_shape=(t[0], t[1], 3),
-            pooling=pool,
+            input_shape=input_shape,
+            pooling=pooling,
         )
     elif model.lower() == "resnet152v2":
         model = tf.keras.applications.resnet_v2.ResNet152V2(
             include_top=False,
             weights="imagenet",
-            input_shape=(t[0], t[1], 3),
-            pooling=pool,
+            input_shape=input_shape,
+            pooling=pooling,
         )
     elif model.lower() == "resnet50v2":
         model = tf.keras.applications.resnet_v2.ResNet50V2(
             include_top=False,
             weights="imagenet",
-            input_shape=(t[0], t[1], 3),
-            pooling=pool,
+            input_shape=input_shape,
+            pooling=pooling,
         )
     else:
         raise ValueError("model not recognized.")
@@ -257,15 +360,12 @@ def feature_extractor(repository, model, name, t=(224, 224), pool="avg"):
     D = model.output_shape[-1]
 
     # create the output folder
-    path = os.path.join(repository, name)
-    os.mkdir(path)
-    path = os.path.join(path, "1")
-    os.mkdir(path)
-    path = os.path.join(path, "model.savedmodel")
-    os.mkdir(path)
+    os.mkdir(os.path.join(repository, name))
+    os.mkdir(os.path.join(path, "1"))
+    os.mkdir(os.path.join(path, "model.savedmodel"))
 
     # rename model inputs and outputs
-    model = rename(model)
+    model = _tf_rename_outputs(_tf_rename_inputs(model))
 
     # save model
     model.save(path)
