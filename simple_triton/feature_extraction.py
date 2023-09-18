@@ -155,7 +155,7 @@ def _deconv_model(extractor):
         k: extractor_config["layers"][0]["config"][k]
         for k in ["dtype", "sparse", "ragged"]
     }
-    shape = list(model.inputs[0].shape)
+    shape = list(extractor.inputs[0].shape)
     if shape[0] is None:
         shape = shape[1:]
 
