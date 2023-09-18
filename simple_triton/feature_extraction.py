@@ -115,6 +115,61 @@ def histomics_stream_inference(
     return features, tile_info, times, failed
 
 
+def _deconv_model(extractor):
+    """Create a tensorflow deconvolution model for prepend to a tensorflow
+    feautre extraction model.
+
+    This model contains a non-trainable layer that performs color deconvolution
+    using a stain matrix matched to the input, and reconvolves the stain
+    concentrations with an ideal stain matrix. It contains three inputs: 1.
+    The batched images 2. The
+
+    Parameters
+    ----------
+    extractor : tf.keras.Model
+        A tensorflow feature extractor model.
+
+    Returns
+    -------
+    deconv : tf.keras.Model
+        A model containing a non-trainable normalization layer, and
+        inputs for batched images, and source and target stain matrices.
+
+    See also
+    --------
+    deconvolution_based_normalization from histomicstk.preprocessing.normalization.
+    """
+
+    # raise error if feature extractor has more than one input
+    if len(extractor.inputs) > 1:
+        raise ValueError(
+            (
+                "Feature extractor must have one input, "
+                f"has {len(extractor.inputs)} instead."
+            )
+        )
+
+    # create a model with 3 input layers and a DeconvNorm layer
+    extractor_config = extractor.get_config()
+    input_kwargs = {
+        k: extractor_config["layers"][0]["config"][k]
+        for k in ["dtype", "sparse", "ragged"]
+    }
+
+    # create input layers
+    input_1 = tf.keras.layers.Input(
+        shape=[None, None, 3], **input_kwargs, name="input_1"
+    )
+    input_2 = tf.keras.layers.Input(shape=[3, 3], name="input_2")
+    input_3 = tf.keras.layers.Input(shape=[3, 3], name="input_3")
+
+    # create deconv layer and model
+    deconv_layer = DeconvNorm()([input_0, input_1, input_2])
+    deconv = tf.keras.Model([input_1, input_2, input_3], deconv_layer)
+
+    return deconv
+
+
 def _nested_replace(inbound, replacement):
     if isinstance(inbound, list):
         inbound = [_nested_replace(l, replacement) for l in inbound]
@@ -356,16 +411,21 @@ def tf_extractor(
     else:
         raise ValueError("model not recognized.")
 
+    # prepend normalization layer
+    if normalize:
+        deconv = _deconv_model(model)
+        deconv = _tf_rename_inputs(deconv)
+        model = _tf_rename_outputs(_tf_rename_inputs(model, 4))
+        model = tf.keras.Model(deconv.inputs, model(deconv.outputs))
+    else:
+        model = _tf_rename_outputs(_tf_rename_inputs(model))
+
     # get dimensionality of extracted features
     D = model.output_shape[-1]
 
     # create the output folder
-    os.mkdir(os.path.join(repository, name))
-    os.mkdir(os.path.join(path, "1"))
-    os.mkdir(os.path.join(path, "model.savedmodel"))
-
-    # rename model inputs and outputs
-    model = _tf_rename_outputs(_tf_rename_inputs(model))
+    path = os.path.join(repository, name, "1", "model.savedmodel")
+    os.makedirs(path)
 
     # save model
     model.save(path)
