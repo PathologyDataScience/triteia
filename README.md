@@ -17,7 +17,7 @@ simple-triton is tested with [Triton version 23.03](https://github.com/triton-in
 - [Triton concepts](#concepts)
     - [Model control](#control)
     - [Model configuration](#config)
-- [Multi-input models](#multi-input)
+- [Inference](#inference)
 - [Developer guide](#developer-guide)
     - [Testing](#testing)
     - [Benchmarking](#benchmarking)
@@ -158,9 +158,13 @@ model.load(config=builder.config)
 
 The dimensions of model inputs and outputs can also be altered using `ConfigBuilder` methods. This is helpful when dealing with models that have variable-sized inputs/outputs that can be misinterpreted by Triton during loading.
 
-# Multi-input models <a name="multi-input"></a>
+# Inference <a name="inference"></a>
 
-Multi-input models require input to be provided as a dictionary of key-value pairs, linking model input names to corresponding numpy arrays. This is required because we cannot rely on strict ordering of inputs provided by `Model.get_config()`. All inputs are required to have a batch dimension, even if they are simple parameters applied to the entire batch (this can be a singleton dimension). Batch size is inferred from the batch dimension of the first input value, which is typically the data that inference is performed on.
+Inference with a hosted model is done using the `InferenceRunner` class. One instance of this class is intended to submit requests for a single model hosted on a single server. It consumes data from a simple iterator that emits data/metadata pairs. For single input models, data should be provided as a numpy array. For multi-input models, data should be provided as a dict of key value pairs linking numpy arrays to model input names. These names can be retrieved using `Model.get_config()`.
+
+The InferenceRunner can apply preprocessing functions to the data after loading and prior to inference by passing a callable to the `pre` argument. For performance a typical session will create class instances inside multiple processes to parallelize reading and preprocessing. See the example notebook for details.
+
+> **Note:** For multi-input models all inputs are required to have a batch dimension. For parameter inputs this batch dimension can be singleton. Batch size is inferred from the batch dimension of the first input value, which is typically the data that inference is performed on.
 
 # Developer guide <a name="developer-guide"></a>
 
