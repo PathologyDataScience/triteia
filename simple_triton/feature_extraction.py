@@ -431,3 +431,166 @@ def tf_extractor(
     model.save(path)
 
     return D
+
+def normalize(w):
+    """Normalize the columns of a stain matrix to unit-norm.
+
+    Parameters
+    ----------
+    w : array_like
+        A 3x3 array with stain vectors in columns.
+
+    Returns
+    -------
+    normed : array_like
+        A 3x3 array where the columns are unit-norm.
+    """
+
+    return tf.divide(w, tf.norm(w, axis=0))
+
+
+def rgb_to_sda(rgb, i0=256.0, allow_negatives=False):
+    """Transform batched rgb image data to stain darkness colorspace.
+
+    Parameters
+    ----------
+    rgb : array_like
+        An NWHC array of batched rgb colorspace image data.
+    i0 : float
+        Background intensity for all channels. Default value is 256.
+    allow_negatives : bool
+        Whether to allow negative intensities in SDA space. Default
+        value is False.
+
+    Returns
+    -------
+    sda : array_like
+        An NWHC array of batched sda colorspace image data.
+    """
+
+    shifted = tf.math.maximum(rgb + 1.0, 1e-10)
+    sda = -tf.math.log(shifted / i0) * 255.0 / tf.math.log(i0)
+    if not allow_negatives:
+        sda = tf.math.maximum(sda, 0.0)
+    return sda
+
+
+def sda_to_rgb(sda, i0=256.0):
+    """Transform batched sda image data to rgb colorspace.
+
+    Parameters
+    ----------
+    sda : array_like
+        An NWHC array of batched sda colorspace image data.
+    i0 : float
+        Background intensity for all channels. Default value is 256.
+
+    Returns
+    -------
+    rgb : array_like
+        An NWHC array of batched rgb colorspace image data.
+    """
+
+    return i0 ** (1.0 - sda / 255.0) - 1.0
+
+
+def matmul_channel(w, batched):
+    """Multiply a stain matrix or matrix inverse against batched image data.
+
+    This applies a 3x3 matrix to the channel dimension of an NHWC array
+    representing batched image data.
+
+    Parameters
+    ----------
+    w : array_like
+        A 3x3 array representing stains (in columns) or the inverse
+        of such a stain matrix.
+    batched : array_like
+        An NWHC array of batched image data.
+
+    Returns
+    -------
+    product : array_like
+        An NWHC array representing the doc product w * batched along the
+        channel dimension.
+    """
+
+    return tf.transpose(tf.tensordot(w, batched, axes=[[1], [3]]), perm=[1, 2, 3, 0])
+
+
+@tf.keras.saving.register_keras_serializable()
+class DeconvNorm(tf.keras.layers.Layer):
+    """A deconvolution-based color normalization layer.
+
+    This non-trainable layer takes as input an image, a source stain matrix,
+    and a target stain matrix, and uses color deconvolution to map the input
+    image color profile to the target profile. The image is first deconvolved
+    using it's source stain matrix to create a stain concentration image, and
+    is then transformed back to rgb space using the target stain matrix. Stain
+    matrices can be estimated using the Macenko method in histomicstk. This
+    operation works on batched images.
+
+    Parameters
+    ----------
+    i0 : float
+        Background intensity for glass regions. One value for all channels.
+        Default value is 256.
+    allow_negatives : bool
+        Whether to allow negative values in the stain darkness color space.
+        Default value is False.
+
+    Attributes
+    ----------
+    i0 : float
+        Background intensity for glass regions. One value for all channels.
+        Default value is 256.
+    allow_negatives : bool
+        Whether to allow negative values in the stain darkness color space.
+        Default value is False.
+
+    Methods
+    -------
+    call(inputs)
+        A list containing the input image (float), a 3x3 source stain matrix
+        where each column represents a stain (float), and a 3x3 target stain
+        matrix representing the ideal color profile (float).
+    """
+
+    def __init__(self, i0=256.0, allow_negatives=False, **kwargs):
+        super(DeconvNorm, self).__init__(**kwargs)
+        self.i0 = i0
+        self.allow_negatives = allow_negatives
+
+    def call(self, inputs):
+        # unpack and normalize stain matrix inputs
+        w_source = normalize(inputs[1][0])
+        w_target = normalize(inputs[2][0])
+
+        # invert w_source
+        winv_source = tf.linalg.pinv(w_source)
+
+        # conversion from rgb to stain darkness (SDA) space
+        sda = rgb_to_sda(inputs[0], self.i0, self.allow_negatives)
+
+        # apply source deconvolution to separate into stains
+        deconvolved = matmul_channel(winv_source, sda)
+
+        # clip to limits in sda space that correspond to [0, 255] rgb space
+        lower = -tf.math.log(0.0 + 1.0 / self.i0) * 255.0 / tf.math.log(self.i0)
+        upper = -tf.math.log(255.0 + 1.0 / self.i0) * 255.0 / tf.math.log(self.i0)
+        deconvolved = tf.clip_by_value(
+            deconvolved, tf.minimum(lower, upper), tf.maximum(lower, upper)
+        )
+
+        # apply target convolution to remix
+        convolved = matmul_channel(w_target, deconvolved)
+
+        # conversion from stain darkness to rgb
+        rgb = sda_to_rgb(convolved, self.i0)
+
+        return rgb
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({"i0": self.i0, "allow_negatives": self.allow_negatives})
+        return config
