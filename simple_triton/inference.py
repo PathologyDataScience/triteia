@@ -216,7 +216,7 @@ class Requests(object):
                 if isinstance(inputs, np.ndarray):
                     batch_size = inputs.shape[0]
                 else:
-                    batch_size = inputs.items()[0].shape[0]
+                    batch_size = inputs[list(inputs.keys())[0]].shape[0]
             else:
                 batching = False
         else:
@@ -248,7 +248,7 @@ class Requests(object):
                         )
                     )
             else:
-                for i in inputs.items():
+                for i in inputs.values():
                     if i.shape[0] > model_dict["maxBatchSize"]:
                         raise Exception(
                             (
@@ -282,27 +282,26 @@ class Requests(object):
         """
 
         # validate inputs against model expectations
-        self._validate_inputs(inputs, model_dict)
+        _validate_inputs(inputs, model_dict)
 
         # create InferInput objects for each model input
-        infer_inputs = []
         import tritonclient.grpc as grpcclient
 
-        def add_input(infer_inputs, provided, expected):
+        def add_input(provided, expected):
             iio = grpcclient.InferInput(
                 expected["name"], provided.shape, expected["dataType"].split("TYPE_")[1]
             )
             if self._np_to_api_types(provided.dtype) != expected["dataType"]:
                 provided = provided.astype(self._api_to_np_types(expected["dataType"]))
             iio.set_data_from_numpy(provided)
-            return infer_inputs.append(iio)
+            return iio
 
         if isinstance(inputs, np.ndarray):
-            infer_inputs = add_input(infer_inputs, inputs, model_dict["input"][0])
+            infer_inputs = [add_input(inputs, model_dict["input"][0])]
         else:
-            for i in model_dict["input"]:
-                infer_inputs = add_input(infer_inputs, inputs[i["name"]], i)
-
+            infer_inputs = [
+                add_input(inputs[i["name"]], i) for i in model_dict["input"]
+            ]
         return infer_inputs
 
     def _client_outputs(self, model_dict):
