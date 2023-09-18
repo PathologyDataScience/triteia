@@ -160,9 +160,7 @@ def _deconv_model(extractor):
         shape = shape[1:]
 
     # create input layers
-    input_1 = tf.keras.layers.Input(
-        shape=[None, None, 3], **input_kwargs, name="input_1"
-    )
+    input_1 = tf.keras.layers.Input(shape=shape, **input_kwargs, name="input_1")
     input_2 = tf.keras.layers.Input(shape=[3, 3], name="input_2")
     input_3 = tf.keras.layers.Input(shape=[3, 3], name="input_3")
 
