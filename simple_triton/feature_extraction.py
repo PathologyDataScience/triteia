@@ -149,12 +149,15 @@ def _deconv_model(extractor):
             )
         )
 
-    # create a model with 3 input layers and a DeconvNorm layer
+    # get extractor input layer parameters and shape
     extractor_config = extractor.get_config()
     input_kwargs = {
         k: extractor_config["layers"][0]["config"][k]
         for k in ["dtype", "sparse", "ragged"]
     }
+    shape = list(model.inputs[0].shape)
+    if shape[0] is None:
+        shape = shape[1:]
 
     # create input layers
     input_1 = tf.keras.layers.Input(
@@ -164,7 +167,7 @@ def _deconv_model(extractor):
     input_3 = tf.keras.layers.Input(shape=[3, 3], name="input_3")
 
     # create deconv layer and model
-    deconv_layer = DeconvNorm()([input_0, input_1, input_2])
+    deconv_layer = DeconvNorm()([input_1, input_2, input_3])
     deconv = tf.keras.Model([input_1, input_2, input_3], deconv_layer)
 
     return deconv
@@ -431,6 +434,7 @@ def tf_extractor(
     model.save(path)
 
     return D
+
 
 def normalize(w):
     """Normalize the columns of a stain matrix to unit-norm.
