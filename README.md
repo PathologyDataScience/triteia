@@ -17,6 +17,7 @@ simple-triton is tested with [Triton version 23.03](https://github.com/triton-in
 - [Triton concepts](#concepts)
     - [Model control](#control)
     - [Model configuration](#config)
+- [Multi-input models](#multi-input)
 - [Developer guide](#developer-guide)
     - [Testing](#testing)
     - [Benchmarking](#benchmarking)
@@ -156,6 +157,10 @@ model.load(config=builder.config)
 ```
 
 The dimensions of model inputs and outputs can also be altered using `ConfigBuilder` methods. This is helpful when dealing with models that have variable-sized inputs/outputs that can be misinterpreted by Triton during loading.
+
+# Multi-input models <a name="multi-input"></a>
+
+Multi-input models require input to be provided as a dictionary of key-value pairs, linking model input names to corresponding numpy arrays. This is required because we cannot rely on strict ordering of inputs provided by `Model.get_config()`. All inputs are required to have a batch dimension, even if they are simple parameters applied to the entire batch (this can be a singleton dimension). Batch size is inferred from the batch dimension of the first input value, which is typically the data that inference is performed on.
 
 # Developer guide <a name="developer-guide"></a>
 
