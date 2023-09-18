@@ -630,7 +630,7 @@ class InferenceRunner(Process):
                             sample = self.pre(sample)
                         request = {
                             "model_name": self.model,
-                            "inputs": [sample],
+                            "inputs": sample,
                             "metadata": metadata,
                             "times": {"qin_put": t_put, "qin_get": t_get},
                         }
