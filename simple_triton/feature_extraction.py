@@ -122,7 +122,8 @@ def _deconv_model(extractor):
     This model contains a non-trainable layer that performs color deconvolution
     using a stain matrix matched to the input, and reconvolves the stain
     concentrations with an ideal stain matrix. It contains three inputs: 1.
-    The batched images 2. The
+    The batched images 2. The stain matrix for the input data and 3. The ideal
+    stain matrix.
 
     Parameters
     ----------
@@ -160,13 +161,13 @@ def _deconv_model(extractor):
         shape = shape[1:]
 
     # create input layers
-    input_1 = tf.keras.layers.Input(shape=shape, **input_kwargs, name="input_1")
+    input_0 = tf.keras.layers.Input(shape=shape, **input_kwargs, name="input_0")
+    input_1 = tf.keras.layers.Input(shape=[3, 3], name="input_1")
     input_2 = tf.keras.layers.Input(shape=[3, 3], name="input_2")
-    input_3 = tf.keras.layers.Input(shape=[3, 3], name="input_3")
 
     # create deconv layer and model
-    deconv_layer = DeconvNorm()([input_1, input_2, input_3])
-    deconv = tf.keras.Model([input_1, input_2, input_3], deconv_layer)
+    deconv_layer = DeconvNorm()([input_0, input_1, input_2])
+    deconv = tf.keras.Model([input_0, input_1, input_2], deconv_layer)
 
     return deconv
 
@@ -180,7 +181,7 @@ def _nested_replace(inbound, replacement):
     return inbound
 
 
-def _tf_rename_inputs(model, input_index=1):
+def _tf_rename_inputs(model, input_index=0):
     """Renames tensorflow model input names for consistency with triton.
 
     The first input will be renamed as "input_{input_index}". Subsequent inputs will be
@@ -191,7 +192,7 @@ def _tf_rename_inputs(model, input_index=1):
     model : tf.keras.Model
         A model object to rename.
     input_index : int
-        The starting index for input layers. Default value is 1.
+        The starting index for input layers. Default value is 0.
 
     Returns
     -------
@@ -241,7 +242,7 @@ def _tf_rename_inputs(model, input_index=1):
     return renamed
 
 
-def _tf_rename_outputs(model, output_index=1):
+def _tf_rename_outputs(model, output_index=0):
     """Renames tensorflow model output names for consistency with triton.
 
     The first output will be renamed as "output_{output_index}". Subsequent outputs
@@ -252,7 +253,7 @@ def _tf_rename_outputs(model, output_index=1):
     model : tf.keras.Model
         A model object to rename.
     output_index : int
-        The starting index for output layers. Default value is 1.
+        The starting index for output layers. Default value is 0.
 
     Returns
     -------
