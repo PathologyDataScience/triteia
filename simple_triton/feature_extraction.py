@@ -417,8 +417,9 @@ def tf_extractor(
     if normalize:
         deconv = _deconv_model(model)
         deconv = _tf_rename_inputs(deconv)
-        model = _tf_rename_outputs(_tf_rename_inputs(model, 4))
+        model = _tf_rename_inputs(model, 3)
         model = tf.keras.Model(deconv.inputs, model(deconv.outputs))
+        model = _tf_rename_outputs(model)
     else:
         model = _tf_rename_outputs(_tf_rename_inputs(model))
 
