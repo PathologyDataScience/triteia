@@ -11,12 +11,14 @@ import tensorflow as tf
 def histomics_stream_inference(
     study,
     model_name,
+    w_source=None,
+    w_target=None,
     url="localhost:8001",
     batch=64,
     workers=32,
     limit=10,
     pre=None,
-    transpose=False,
+    nchw=False,
 ):
     """Inference on the tiles defined in a histomics stream study.
 
@@ -26,13 +28,18 @@ def histomics_stream_inference(
     Parameters
     ----------
     study : dict
-        A histomics_stream study object containing the slides defined in paths, and
-        analysis plan defined by tile size, tile overlap, and magnification/reading
-        parameters. Can contain multiple slides. This study is sharded over multiple
-        workers.
+        A histomics_stream study object defining the tile size, overlap, and 
+        magnification/reading reading parameters for one or more slides. This study 
+        is sharded over multiple workers.
     model_name : str
         The name of the model to use for inference. This model should be
         loaded on triton prior to inference.
+    w_source : array_like
+        Stain matrix (3x3) for the input slides. Requires a model with a normalization 
+        layer. Default value is None.
+    w_target : array_like
+        Ideal stain matrix (3x3) for normalization. Requires a model with a 
+        normalization layer. Default value is None. 
     url : str
         The url for the triton server grpc port. Default value is `localhost:8001`.
     batch : int
@@ -48,7 +55,7 @@ def histomics_stream_inference(
     pre : function
         A preprocessing function to apply to samples emitted from `dataset` prior
         to inference. Default value is None.
-    transpose : bool
+    nchw : bool
         Whether to transpose the data from NHWC format to NCHW format. Default
         value is False.
 
@@ -76,7 +83,7 @@ def histomics_stream_inference(
     # Start consumers
     shards = []
     for w in range(workers):
-        shard = ShardedTiles(study, batch, w, workers, transpose)
+        shard = ShardedTiles(study, w_source, w_target, batch, w, workers, nchw)
         shards.append(
             InferenceRunner(url, model_name, shard, qout, limit, pre=pre, verbose=False)
         )
@@ -332,6 +339,13 @@ def tf_extractor(
     if os.path.exists(os.path.join(repository, name)):
         raise ValueError(f"Model with name {name} already exists in repository.")
 
+    # initialize custom objects necessary for reconstruction
+    from tensorflow import keras
+    from keras.applications import convnext
+
+    convnext.LayerScale
+    custom_objects = {"LayerScale": convnext.LayerScale}
+
     # switch on `model`
     if model.lower() == "efficientnetv2s":
         model = tf.keras.applications.efficientnet_v2.EfficientNetV2S(
@@ -414,14 +428,15 @@ def tf_extractor(
         raise ValueError("model not recognized.")
 
     # prepend normalization layer
-    if normalize:
-        deconv = _deconv_model(model)
-        deconv = _tf_rename_inputs(deconv)
-        model = _tf_rename_inputs(model, 3)
-        model = tf.keras.Model(deconv.inputs, model(deconv.outputs))
-        model = _tf_rename_outputs(model)
-    else:
-        model = _tf_rename_outputs(_tf_rename_inputs(model))
+    with keras.utils.custom_object_scope(custom_objects):
+        if normalize:
+            deconv = _deconv_model(model)
+            deconv = _tf_rename_inputs(deconv)
+            model = _tf_rename_inputs(model, 3)
+            model = tf.keras.Model(deconv.inputs, model(deconv.outputs))
+            model = _tf_rename_outputs(model)
+        else:
+            model = _tf_rename_outputs(_tf_rename_inputs(model))
 
     # get dimensionality of extracted features
     D = model.output_shape[-1]
