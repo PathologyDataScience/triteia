@@ -128,11 +128,9 @@ class Requests(object):
         
         Notes
         -----
-        For multi-input models, secondary inputs require a batch dimension. In
-        cases where an input is a parameter to be applied to an entire batch, this
-        dimension can be singleton. For this reason, we do not require inputs to 
-        multi-input models to have a uniform batch dimension shape, and the batch 
-        size is inferred from the first element of `inputs`.
+        For multi-input models, secondary inputs such as parameters require a 
+        batch dimension. This must be equal to the data batch size and so these
+        parameters must be repeated.
         """
 
         def _compare_types(model_dict, provided, expected):
@@ -256,6 +254,13 @@ class Requests(object):
                                 f"{model_dict['maxBatchSize']} exceeded."
                             )
                         )
+                    if i.shape[0] != batch_size:
+                        raise Exception(
+                            (
+                                "Non-uniform batch size of inputs. Expected"
+                                f" {batch_size}, found {i.shape[0]}."
+                            )
+                        )
 
     def _client_inputs(self, inputs, model_dict):
         """Generates tritonclient.grpc.InferInput objects for client.
@@ -282,7 +287,7 @@ class Requests(object):
         """
 
         # validate inputs against model expectations
-        _validate_inputs(inputs, model_dict)
+        self._validate_inputs(inputs, model_dict)
 
         # create InferInput objects for each model input
         import tritonclient.grpc as grpcclient
