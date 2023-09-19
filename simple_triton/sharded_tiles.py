@@ -135,6 +135,8 @@ class ShardedTiles(object):
     ):
         self.i = 0
         self.study = study
+        self.w_source = w_source
+        self.w_target = w_target
         if batch == 0:
             self._singleton = True
         else:
@@ -145,14 +147,6 @@ class ShardedTiles(object):
         self._nchw = nchw
         self.large_images = None
         self._shard()
-
-        # ensure that if provided, w_source, w_target are batch x 3 x 3
-        if w_source is not None:
-            w_source = np.stack(batch * [w_source], axis=0)
-        if w_target is not None:
-            w_target = np.stack(batch * [w_target], axis=0)
-        self.w_source = w_source
-        self.w_target = w_target
 
     def _shard(self):
         # generates the large_image read parameters and metadata for shard
@@ -232,7 +226,9 @@ class ShardedTiles(object):
             if (self.w_source is None) and (self.w_target is None):
                 return pixels, metadata
             else:
-                data = dict(
-                    input_0=pixels, input_1=self.w_source, input_2=self.w_target
-                )
+                data = {
+                    "input_0": pixels,
+                    "input_1": np.stack(pixels.shape[0] * [self.w_source], axis=0),
+                    "input_2": np.stack(pixels.shape[0] * [self.w_target], axis=0),
+                }
                 return data, metadata
