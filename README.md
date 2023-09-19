@@ -160,11 +160,13 @@ The dimensions of model inputs and outputs can also be altered using `ConfigBuil
 
 # Inference <a name="inference"></a>
 
-Inference with a hosted model is done using the `InferenceRunner` class. One instance of this class is intended to submit requests for a single model hosted on a single server. It consumes data from a simple iterator that emits data/metadata pairs. For single input models, data should be provided as a numpy array. For multi-input models, data should be provided as a dict of key value pairs linking numpy arrays to model input names. These names can be retrieved using `Model.get_config()`.
+Inference with a hosted model is done using the `InferenceRunner` class. A single instance of this class is intended to submit requests for one model hosted on one server. It consumes data from a simple iterator that emits data/metadata pairs. For performance a typical session will create instances using multiprocessing to parallelize reading and preprocessing. See the example notebook for details.
 
-The InferenceRunner can apply preprocessing functions to the data after loading and prior to inference by passing a callable to the `pre` argument. For performance a typical session will create class instances inside multiple processes to parallelize reading and preprocessing. See the example notebook for details.
+For single input models, data is provided as a numpy array. For multi-input models, data is provided as a dict of key value pairs linking numpy arrays to model input names (visible from `Model.get_config()`).
 
-> **Note:** For multi-input models all inputs are required to have a batch dimension. For parameter inputs this batch dimension can be singleton. Batch size is inferred from the batch dimension of the first input value, which is typically the data that inference is performed on.
+The InferenceRunner can apply preprocessing functions to data after loading and prior to inference by passing a callable to the `pre` argument. 
+
+> **Note:** For multi-input models all inputs are required to uniform batch dimensions.
 
 # Developer guide <a name="developer-guide"></a>
 
