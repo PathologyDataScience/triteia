@@ -89,6 +89,12 @@ class ShardedTiles(object):
     study : dict
         A study dictionary from histomics_stream, defining the reading
         parameters and tile locations for possibly multiple slides.
+    w_source : array_like
+        Stain matrix (3x3) for the input slides. Requires a model with a normalization
+        layer. Default value is None.
+    w_target : array_like
+        Ideal stain matrix (3x3) for normalization. Requires a model with a
+        normalization layer. Default value is None.
     batch : int
         The number of tiles in each batch. Partial batches are not padded. If 0,
         single sample batches will be generated without the singleton batch
@@ -97,17 +103,16 @@ class ShardedTiles(object):
         The worker index, ranging from 0 to `num_workers`.
     num_workers : int
         The total number of workers.
-    transpose : bool
-        Whether to transpose the dimensions of returned tiles from NHWC/HWC format
-        (most TensorFlow models) to NCHW/CHW format (ONNX and Torch models). Default
-        value is False.
+    nchw : bool
+        Transpose the dimensions of tiles to NCHW/CHW format for ONNX and Torch
+        models. Default value is False.
 
     Returns
     -------
     tiles : array-like
         A four-dimensional BHWC numpy array of batched tiles.
     metadata : dict
-        TBD
+        A dictionary of tile position and magnification information.
 
     Attributes
     ----------
@@ -125,9 +130,13 @@ class ShardedTiles(object):
     https://github.com/DigitalSlideArchive/HistomicsStream/blob/master/StudyObject.md
     """
 
-    def __init__(self, study, batch, worker_index, num_workers, transpose=False):
+    def __init__(
+        self, study, w_source, w_target, batch, worker_index, num_workers, nchw=False
+    ):
         self.i = 0
         self.study = study
+        self.w_source = w_source
+        self.w_target = w_target
         if batch == 0:
             self._singleton = True
         else:
@@ -135,7 +144,7 @@ class ShardedTiles(object):
         self.batch = batch
         self.worker_index = worker_index
         self.num_workers = num_workers
-        self._transpose = transpose
+        self._nchw = nchw
         self.large_images = None
         self._shard()
 
@@ -207,11 +216,19 @@ class ShardedTiles(object):
                 pixels = pixels[0]
             else:
                 pixels = np.stack(pixels, axis=0)
-            if self._transpose:
+            if self._nchw:
                 if self._singleton:
                     axes = [2, 0, 1]
                 else:
                     axes = [0, 3, 2, 1]
                 pixels = np.transpose(pixels, axes)
             self.i += len(indices)
-            return pixels, metadata
+            if (self.w_source is None) and (self.w_target is None):
+                return pixels, metadata
+            else:
+                data = {
+                    "input_0": pixels,
+                    "input_1": np.stack(pixels.shape[0] * [self.w_source], axis=0),
+                    "input_2": np.stack(pixels.shape[0] * [self.w_target], axis=0),
+                }
+                return data, metadata

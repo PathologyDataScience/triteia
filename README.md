@@ -17,6 +17,7 @@ simple-triton is tested with [Triton version 23.03](https://github.com/triton-in
 - [Triton concepts](#concepts)
     - [Model control](#control)
     - [Model configuration](#config)
+- [Inference](#inference)
 - [Developer guide](#developer-guide)
     - [Testing](#testing)
     - [Benchmarking](#benchmarking)
@@ -156,6 +157,16 @@ model.load(config=builder.config)
 ```
 
 The dimensions of model inputs and outputs can also be altered using `ConfigBuilder` methods. This is helpful when dealing with models that have variable-sized inputs/outputs that can be misinterpreted by Triton during loading.
+
+# Inference <a name="inference"></a>
+
+Inference with a hosted model is done using the `InferenceRunner` class. A single instance of this class is intended to submit requests for one model hosted on one server. It consumes data from a simple iterator that emits data/metadata pairs. For performance a typical session will create instances using multiprocessing to parallelize reading and preprocessing. See the example notebook for details.
+
+For single input models, data is provided as a numpy array. For multi-input models, data is provided as a dict of key value pairs linking numpy arrays to model input names (visible from `Model.get_config()`).
+
+The InferenceRunner can apply preprocessing functions to data after loading and prior to inference by passing a callable to the `pre` argument. 
+
+> **Note:** For multi-input models all inputs are required to uniform batch dimensions.
 
 # Developer guide <a name="developer-guide"></a>
 
