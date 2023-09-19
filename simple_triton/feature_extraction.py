@@ -28,18 +28,18 @@ def histomics_stream_inference(
     Parameters
     ----------
     study : dict
-        A histomics_stream study object defining the tile size, overlap, and 
-        magnification/reading reading parameters for one or more slides. This study 
+        A histomics_stream study object defining the tile size, overlap, and
+        magnification/reading reading parameters for one or more slides. This study
         is sharded over multiple workers.
     model_name : str
         The name of the model to use for inference. This model should be
         loaded on triton prior to inference.
     w_source : array_like
-        Stain matrix (3x3) for the input slides. Requires a model with a normalization 
+        Stain matrix (3x3) for the input slides. Requires a model with a normalization
         layer. Default value is None.
     w_target : array_like
-        Ideal stain matrix (3x3) for normalization. Requires a model with a 
-        normalization layer. Default value is None. 
+        Ideal stain matrix (3x3) for normalization. Requires a model with a
+        normalization layer. Default value is None.
     url : str
         The url for the triton server grpc port. Default value is `localhost:8001`.
     batch : int

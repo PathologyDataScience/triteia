@@ -117,7 +117,12 @@ def analyze(times, floatfmt=".2f"):
             min(retrieval),
             max(retrieval),
         ],
-        ["other (% in-process)", np.median(np.array(other)), min(other), max(other),],
+        [
+            "other (% in-process)",
+            np.median(np.array(other)),
+            min(other),
+            max(other),
+        ],
     ]
 
     # display results

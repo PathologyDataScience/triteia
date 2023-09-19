@@ -90,10 +90,10 @@ class ShardedTiles(object):
         A study dictionary from histomics_stream, defining the reading
         parameters and tile locations for possibly multiple slides.
     w_source : array_like
-        Stain matrix (3x3) for the input slides. Requires a model with a normalization 
+        Stain matrix (3x3) for the input slides. Requires a model with a normalization
         layer. Default value is None.
     w_target : array_like
-        Ideal stain matrix (3x3) for normalization. Requires a model with a 
+        Ideal stain matrix (3x3) for normalization. Requires a model with a
         normalization layer. Default value is None.
     batch : int
         The number of tiles in each batch. Partial batches are not padded. If 0,
@@ -104,7 +104,7 @@ class ShardedTiles(object):
     num_workers : int
         The total number of workers.
     nchw : bool
-        Transpose the dimensions of tiles to NCHW/CHW format for ONNX and Torch 
+        Transpose the dimensions of tiles to NCHW/CHW format for ONNX and Torch
         models. Default value is False.
 
     Returns

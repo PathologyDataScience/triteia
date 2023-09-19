@@ -83,7 +83,7 @@ class Requests(object):
         -------
         api_type : str
             The corresponding type string for the triton client API.
-            
+
         Notes
         -----
         All types listed in model configurations are prepended with "TYPE_".
@@ -125,10 +125,10 @@ class Requests(object):
         See also
         --------
         model_metadata
-        
+
         Notes
         -----
-        For multi-input models, secondary inputs such as parameters require a 
+        For multi-input models, secondary inputs such as parameters require a
         batch dimension. This must be equal to the data batch size and so these
         parameters must be repeated.
         """
