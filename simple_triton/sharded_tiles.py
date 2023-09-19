@@ -148,9 +148,9 @@ class ShardedTiles(object):
 
         # ensure that if provided, w_source, w_target are batch x 3 x 3
         if w_source is not None:
-            w_source = np.repeat(w_source, [batch, 1, 1], axis=0)
+            w_source = np.stack(batch * [w_source], axis=0)
         if w_target is not None:
-            w_target = np.repeat(w_target, [batch, 1, 1], axis=0)
+            w_target = np.stack(batch * [w_target], axis=0)
         self.w_source = w_source
         self.w_target = w_target
 
