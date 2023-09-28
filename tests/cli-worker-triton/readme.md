@@ -9,9 +9,13 @@ docker run -it  --gpus '"device=0,1,2,3,4,5,6,7"'   --rm  --shm-size=4g --ulimit
 In the docker shell Install these dependencies
 
 docker exec -it mar9654_triton_server /bin/bash
+
 pip install scikit-image
+
 pip install imagecodecs
+
 pip install cuda-slic
+
 pip install histomicstk --find-links https://girder.github.io/large_image_wheels
 
 
