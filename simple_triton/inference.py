@@ -393,10 +393,11 @@ class Requests(object):
                     request["times"]["completed"] = completion_time
                     request["times"]["retrieved"] = time.time()
 
+                    # clear result
+                    request["result"] = []
+
                     # inference generated an exception
                     if type(results) == InferenceServerException:
-                        # clear result
-                        request["result"] = []
 
                         # capture error in request
                         if request["attempts"] == 1:
@@ -412,8 +413,6 @@ class Requests(object):
 
                     # inference generated a result
                     else:
-                        # clear result
-                        request["result"] = []
 
                         # convert responses to numpy arrays
                         for j, output in enumerate(
