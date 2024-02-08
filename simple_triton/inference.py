@@ -412,11 +412,14 @@ class Requests(object):
 
                     # inference generated a result
                     else:
+                        # clear result
+                        request["result"] = []
+
                         # convert responses to numpy arrays
                         for j, output in enumerate(
                             self.model_dicts[request["model_name"]]["output"]
                         ):
-                            request["result"][j] = results.as_numpy(output["name"])
+                            request["result"].append(results.as_numpy(output["name"]))
 
                         # add request to output list
                         request["success"] = True
