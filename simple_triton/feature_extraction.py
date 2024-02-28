@@ -8,14 +8,75 @@ from simple_triton.utils import TimedQueue
 import tensorflow as tf
 
 
-def histomics_stream_inference(
-    study,
-    model_name,
-    w_source=None,
-    w_target=None,
+def infer(
+    dataset,
+    model, 
+    url, 
+    limit=10, 
+    rest=1e-2,
+    timeout=None,
+    pre=None,
+    verbose=False
+    ):
+
+    # list of outputs
+    outputs = []
+
+    # set flag indicating qin stop signal received
+    stop = False
+
+    # create requests object
+    req = Requests(url, limit)
+
+    # loop until iterator is exhausted
+    while True:
+        if not stop:
+            # draw samples, preprocess, and submit for inference up to limit
+            for i in range(limit - len(req.pending)):
+                try:
+                    t_put = time.time()
+                    sample, metadata = next(dataset)
+                    t_get = time.time()
+                except StopIteration as e:
+                    stop = True
+                if not stop:
+                    if pre is not None:
+                        sample = pre(sample)
+                    request = {
+                        "model_name": model,
+                        "inputs": sample,
+                        "metadata": metadata,
+                        "times": {"qin_put": t_put, "qin_get": t_get},
+                    }
+                    req.insert(request, timeout)
+                else:
+                    break
+
+        # check pending requests
+        completed = req.check(block=False)
+
+        # put completed post-processed requests into queue
+        for inference in completed:
+            # remove inputs
+            del inference["inputs"]
+
+            # place in queue
+            outputs.append(inference)
+
+        # if done send stop signal
+        if len(req.pending) == 0 and stop:
+            break
+
+        # sleep
+        time.sleep(rest)
+
+    return outputs
+
+
+def slide_inference(
+    dataset,
+    model,
     url="localhost:8001",
-    batch=64,
-    workers=32,
     limit=10,
     pre=None,
     nchw=False,
@@ -27,31 +88,16 @@ def histomics_stream_inference(
 
     Parameters
     ----------
-    study : dict
-        A histomics_stream study object defining the tile size, overlap, and
-        magnification/reading reading parameters for one or more slides. This study
-        is sharded over multiple workers.
+    dataset : iterator
+        An iterator producing (batch, metadata) where batch is a numpy.ndarray
+        and metadata is a dictionary describing the batch.
     model_name : str
         The name of the model to use for inference. This model should be
         loaded on triton prior to inference.
-    w_source : array_like
-        Stain matrix (3x3) for the input slides. Requires a model with a normalization
-        layer. Default value is None.
-    w_target : array_like
-        Ideal stain matrix (3x3) for normalization. Requires a model with a
-        normalization layer. Default value is None.
     url : str
         The url for the triton server grpc port. Default value is `localhost:8001`.
-    batch : int
-        The number of tiles to process in a batch. Default value is `64` tiles.
-        If `0`, inference will be performed on single tiles with no batch
-        dimension.
-    workers : int
-        The number of workers to use for reading tiles from disk and submitting and
-        receiving inference results. Each worker will receive a shard of tiles and
-        will read them using a ShardedTiles iterator. Default value `32`.
     limit : int
-        The maximum number of batches pending inference allowed for each worker.
+        The maximum number of batches pending inference allowed for this worker.
     pre : function
         A preprocessing function to apply to samples emitted from `dataset` prior
         to inference. Default value is None.
@@ -63,51 +109,26 @@ def histomics_stream_inference(
     -------
     features : list of np.ndarray
         Per-tile inference results
-    tile_info : dict
-        A dictionary of file, magnification, and position data for each tile produced
-        by histomics_stream.
+    metadata : dict
+        A dictionary inference metadata where values are numpy arrays.
+        If using histomics stream this will contain file, magnification, and position
+        data for each batch produced by `dataset`.
     performance : dict
         A dictionary of time performance data on reading, inference, and inter-process
         communication.
     failed : list
         A list of failed inference requests.
-
-    See Also
-    --------
-    ShardedTiles
     """
 
-    # create input, output queues
-    qout = TimedQueue()
-
-    # Start consumers
-    shards = []
-    for w in range(workers):
-        shard = ShardedTiles(study, w_source, w_target, batch, w, workers, nchw)
-        shards.append(
-            InferenceRunner(url, model_name, shard, qout, limit, pre=pre, verbose=False)
-        )
-    for s in shards:
-        s.start()
-
-    # collecct results
-    batches = []
-    N = workers
-    while N:
-        output, t_put, t_get = qout.get()
-        if output is None:
-            N -= 1
-        else:
-            output["times"]["qout_put"] = t_put
-            output["times"]["qout_get"] = t_get
-            batches.append(output)
+    # perform inference
+    batches = infer(dataset, model, url, limit)
 
     # successful results results
     features = [
         [b["result"][i] for b in batches if b["success"]]
         for i in range(len(batches[0]["result"]))
     ]
-    tile_info = {
+    metadata = {
         k: np.concatenate([b["metadata"][k] for b in batches if b["success"]])
         for k in batches[0]["metadata"].keys()
     }
@@ -119,7 +140,7 @@ def histomics_stream_inference(
     # failures
     failed = [b for b in batches if not b["success"]]
 
-    return features, tile_info, times, failed
+    return features, metadata, times, failed
 
 
 def _deconv_model(extractor):
