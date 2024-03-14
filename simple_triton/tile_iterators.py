@@ -185,9 +185,9 @@ def _largeimage_kwargs(slide, study):
 
 
 class LargeimagePrefetch(object):
-    """A prefetching tile iterator for large_image tiff sources.
+    """A prefetching tile iterator for large_image sources.
 
-    This iterator generates tile batches via multiprocessing. If chunking
+    This iterator generates tile batches via multiprocessing. If chunk size
     is specified in input study, each process will read one chunk. Otherwise
     each process reads one tile.
 
@@ -198,7 +198,7 @@ class LargeimagePrefetch(object):
     icc : bool
         Whether to apply ICC correction. Default value is True.
     batch : int
-        Size of generated batches. Partial batches are not padded. Default 
+        Size of generated batches. Partial batches are not padded. Default
         value is 64.
     prefetch : int
         The number of prefetched batches to maintain.
@@ -206,7 +206,7 @@ class LargeimagePrefetch(object):
         The number of multiprocessing workers.
     """
 
-    def __init__(self, study, icc=True, batch=64, prefetch=4, workers=32):
+    def __init__(self, study, icc=False, batch=64, prefetch=4, workers=32):
         if len(study["slides"]) > 1:
             raise ValueError("Multi-slide studies not supported.")
         slide = list(study["slides"].values())[0]
@@ -354,7 +354,7 @@ class LargeimagePrefetch(object):
             SharedNumpyArray(
                 (kwargs["region"]["height"], kwargs["region"]["width"], 3), np.uint8
             ),
-            **kwargs
+            **kwargs,
         )
 
     def _fill_single(self):
