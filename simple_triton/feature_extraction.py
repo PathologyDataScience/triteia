@@ -9,15 +9,8 @@ import tensorflow as tf
 
 
 def infer(
-    dataset,
-    model, 
-    url, 
-    limit=10, 
-    rest=1e-2,
-    timeout=None,
-    pre=None,
-    verbose=False
-    ):
+    dataset, model, url, limit=10, rest=1e-2, timeout=None, pre=None, verbose=False
+):
 
     # list of outputs
     outputs = []
