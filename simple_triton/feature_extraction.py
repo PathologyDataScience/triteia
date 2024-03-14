@@ -2,6 +2,7 @@ import histomics_stream as hs
 import numpy as np
 import os
 from simple_triton.inference import Requests
+import time
 
 
 def study(
@@ -184,7 +185,7 @@ def inference(
             for i in range(limit - len(req.pending)):
                 try:
                     t_put = time.time()
-                    sample, metadata = next(dataset)
+                    sample, metadata = next(iterator)
                     t_get = time.time()
                 except StopIteration as e:
                     stop = True
@@ -210,7 +211,7 @@ def inference(
             del inference["inputs"]
 
             # place in queue
-            outputs.append(inference)
+            batches.append(inference)
 
         # if done send stop signal
         if len(req.pending) == 0 and stop:
@@ -219,21 +220,23 @@ def inference(
         # sleep
         time.sleep(rest)
 
+    # failures
+    failed = [b for b in batches if not b["success"]]
+    batches = [b for b in batches if b["success"]]
+        
     # successful results
     features = [
-        [b["result"][i] for b in batches if b["success"]]
+        [b["result"][i] for b in batches]
         for i in range(len(batches[0]["result"]))
     ]
     metadata = {
-        k: np.concatenate([b["metadata"][k] for b in batches if b["success"]])
-        for k in batches[0]["metadata"].keys()
+        k: np.stack([b[k] for batch in batches for b in batch["metadata"]])
+        for k in batches[0]["metadata"][0].keys()
     }
     times = {
-        k: [b["times"][k] for b in batches if b["success"]]
+        k: [b["times"][k] for b in batches]
         for k in batches[0]["times"].keys()
     }
 
-    # failures
-    failed = [b for b in batches if not b["success"]]
-
     return features, metadata, times, failed
+
