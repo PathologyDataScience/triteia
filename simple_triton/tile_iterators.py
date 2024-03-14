@@ -7,7 +7,6 @@ from concurrent.futures import (
 )
 from copy import deepcopy
 import functools
-import histomics_stream as hs
 import large_image_source_tiff
 import multiprocessing.shared_memory
 import numpy as np
