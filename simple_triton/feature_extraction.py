@@ -2,7 +2,7 @@ import histomics_stream as hs
 import numpy as np
 import os
 from simple_triton.inference import Requests
-import time
+from time import time
 
 
 def study(
@@ -184,9 +184,9 @@ def inference(
             # draw samples, preprocess, and submit for inference up to limit
             for i in range(limit - len(req.pending)):
                 try:
-                    t_put = time.time()
+                    t_start = time()
                     sample, metadata = next(iterator)
-                    t_get = time.time()
+                    t_stop = time()
                 except StopIteration as e:
                     stop = True
                 if not stop:
@@ -196,7 +196,7 @@ def inference(
                         "model_name": model_name,
                         "inputs": sample,
                         "metadata": metadata,
-                        "times": {"qin_put": t_put, "qin_get": t_get},
+                        "times": {"read_start": t_start, "read_stop": t_stop},
                     }
                     req.insert(request, timeout)
                 else:
