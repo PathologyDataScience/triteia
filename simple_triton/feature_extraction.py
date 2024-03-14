@@ -223,20 +223,15 @@ def inference(
     # failures
     failed = [b for b in batches if not b["success"]]
     batches = [b for b in batches if b["success"]]
-        
+
     # successful results
     features = [
-        [b["result"][i] for b in batches]
-        for i in range(len(batches[0]["result"]))
+        [b["result"][i] for b in batches] for i in range(len(batches[0]["result"]))
     ]
     metadata = {
         k: np.stack([b[k] for batch in batches for b in batch["metadata"]])
         for k in batches[0]["metadata"][0].keys()
     }
-    times = {
-        k: [b["times"][k] for b in batches]
-        for k in batches[0]["times"].keys()
-    }
+    times = {k: [b["times"][k] for b in batches] for k in batches[0]["times"].keys()}
 
     return features, metadata, times, failed
-
