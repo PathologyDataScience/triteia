@@ -1,5 +1,3 @@
-import multiprocessing
-import multiprocessing.queues
 import numpy as np
 from tabulate import tabulate
 import tensorflow as tf
@@ -127,29 +125,6 @@ def analyze(times, floatfmt=".2f"):
 
     # display results
     print(tabulate(table, headers=["", "median", "min", "max"], floatfmt=floatfmt))
-
-
-class TimedQueue(multiprocessing.queues.Queue):
-    """A queue that records element insertion and removal times."""
-
-    def __init__(self, *args, **kwargs):
-        super(TimedQueue, self).__init__(
-            *args, **kwargs, ctx=multiprocessing.get_context()
-        )
-
-    def put(self, obj, block=True, timeout=None):
-        super(TimedQueue, self).put((obj, time.time()), block, timeout)
-
-    def put_nowait(self, obj):
-        super(TimedQueue, self).put_nowait((obj, time.time()))
-
-    def get(self, block=True, timeout=None):
-        output, insertion = super(TimedQueue, self).get(block, timeout)
-        return output, insertion, time.time()
-
-    def get_nowait(self):
-        output, insertion = super(TimedQueue, self).get_nowait()
-        return output, insertion, time.time()
 
 
 def reshape_savedmodel(
