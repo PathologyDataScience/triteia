@@ -273,7 +273,7 @@ class LargeimagePrefetch(object):
             tiles = tiles + reads[0 : min(len(reads), self.batch - len(tiles))]
             self.pending = self.pending - len(reads)
         self._fill_group()
-        return tiles, meta
+        return np.stack(tiles), meta
 
     @staticmethod
     def read_group(source, sharr, read_kwargs):
@@ -338,7 +338,7 @@ class LargeimagePrefetch(object):
             self.pool.shutdown(wait=False, cancel_futures=True)
             raise
         self._fill_single()
-        return tiles, meta
+        return np.stack(tiles), meta
 
     @staticmethod
     def read_single(source, sharr, **kwargs):
