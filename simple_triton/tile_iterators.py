@@ -69,9 +69,11 @@ class SharedNumpyArray:
 
 def _txr_keys(dictionary, keys):
     return {
-        k: dictionary[k].encode("utf-8")
-        if isinstance(dictionary[k], str)
-        else dictionary[k]
+        k: (
+            dictionary[k].encode("utf-8")
+            if isinstance(dictionary[k], str)
+            else dictionary[k]
+        )
         for k in keys
         if k in dictionary.keys()
     }
@@ -183,9 +185,9 @@ def _largeimage_kwargs(slide, study):
 
 
 class LargeimagePrefetch(object):
-    """A prefetching tile iterator for large_image sources.
+    """A prefetching tile iterator for large_image tiff sources.
 
-    This iterator generates tile batches via multiprocessing. If chunk size
+    This iterator generates tile batches via multiprocessing. If chunking
     is specified in input study, each process will read one chunk. Otherwise
     each process reads one tile.
 
@@ -194,16 +196,17 @@ class LargeimagePrefetch(object):
     study : dict
         A histomics stream study.
     icc : bool
-        Whether to attempt ICC correction.
+        Whether to apply ICC correction. Default value is True.
     batch : int
-        The batch size. A partial batch at the end will not be padded.
+        Size of generated batches. Partial batches are not padded. Default 
+        value is 64.
     prefetch : int
-        The target number of prefetched batches.
+        The number of prefetched batches to maintain.
     workers : int
         The number of multiprocessing workers.
     """
 
-    def __init__(self, study, icc=False, batch=64, prefetch=4, workers=32):
+    def __init__(self, study, icc=True, batch=64, prefetch=4, workers=32):
         if len(study["slides"]) > 1:
             raise ValueError("Multi-slide studies not supported.")
         slide = list(study["slides"].values())[0]
