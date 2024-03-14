@@ -13,10 +13,7 @@ def inference(
     timeout=None,
     verbose=False,
 ):
-    """Inference on the tiles defined in a histomics stream study.
-
-    This shards a study over multiple workers with each worker loading tiles
-    and managing the submission and retrieval of different batches of tiles.
+    """Inference on the data defined in an iterator.
 
     Parameters
     ----------
