@@ -37,6 +37,9 @@ class SharedNumpyArray:
     
     def tobytes(self):
         return self.buf.tobytes()
+    
+    def view(self):
+        return np.ndarray(self.shape, self.dtype, buffer=self.shm.buf)
 
     # If we want easier interoperability, we could, instead, forward a
     # whitelist of attributes to our underlying np.ndarray object; these could
@@ -68,8 +71,6 @@ class SharedNumpyArray:
             if getattr(self, 'created', None) is True:
                 self.shm.unlink()
 
-
-# -
 
 def _txr_keys(dictionary, keys):
     return {
