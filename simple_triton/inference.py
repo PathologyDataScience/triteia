@@ -302,12 +302,15 @@ class Requests(object):
             iio.set_data_from_numpy(provided)
             return iio
 
-        if isinstance(inputs, ARRAY_TYPES):
+        if isinstance(inputs, np.ndarray):
             infer_inputs = [add_input(inputs, model_dict["input"][0])]
+        elif isinstance(inputs, SharedNumpyArray):
+            infer_inputs = [add_input(inputs.view(), model_dict["input"][0])]
         else:
-            infer_inputs = [
-                add_input(inputs[i["name"]], i) for i in model_dict["input"]
-            ]
+            infer_inputs = [add_input(
+                inputs[i["name"]] if isinstance(inputs[i["name"]], np.ndarray) else inputs[i["name"]].view(), 
+                i
+            ) for i in model_dict["input"]]
         return infer_inputs
 
     def _client_outputs(self, model_dict):
