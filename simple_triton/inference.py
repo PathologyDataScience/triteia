@@ -2,8 +2,8 @@ from functools import partial
 import numpy as np
 import os
 from simple_triton.model import TritonModel
-from simple_triton.utils import create_client
 from simple_triton.tile_iterators import SharedNumpyArray
+from simple_triton.utils import create_client
 import time
 from tritonclient.utils import (
     InferenceServerException,
@@ -12,7 +12,9 @@ from tritonclient.utils import (
 )
 
 
-ARRAY_TYPES = (np.ndarray, SharedNumpyArray)
+ARRAY_TYPES = (
+    np.ndarray, SharedNumpyArray
+)
 
 
 class Requests(object):
@@ -297,8 +299,6 @@ class Requests(object):
             iio = grpcclient.InferInput(
                 expected["name"], provided.shape, expected["dataType"].split("TYPE_")[1]
             )
-            if self._np_to_api_types(provided.dtype) != expected["dataType"]:
-                provided = provided.astype(self._api_to_np_types(expected["dataType"]))
             iio.set_data_from_numpy(provided)
             return iio
 
