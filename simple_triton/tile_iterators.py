@@ -69,6 +69,8 @@ class SharedNumpyArray:
                 self.shm.unlink()
 
 
+# -
+
 def _txr_keys(dictionary, keys):
     return {
         k: (
@@ -168,6 +170,8 @@ class TiffPrefetch(object):
     ----------
     study : dict
         A histomics stream study.
+    dtype : type
+        Desired numpy datatype for outputs. Default value is `np.uint8`.
     icc : bool
         Whether to attempt ICC correction.
     batch : int
@@ -178,9 +182,10 @@ class TiffPrefetch(object):
         The number of multiprocessing workers.
     """
 
-    def __init__(self, study, icc=False, batch=64, prefetch=16, workers=16):
+    def __init__(self, study, dtype=np.uint8, icc=False, batch=64, prefetch=16, workers=16):
         if len(study["slides"]) > 1:
             raise ValueError("Multi-slide studies not supported.")
+        self.dtype = dtype
         self.pool = ProcessPoolExecutor(max_workers=workers)
         slide = list(study["slides"].values())[0]
         self.source = large_image_source_tiff.open(
@@ -221,7 +226,7 @@ class TiffPrefetch(object):
         return tiles, read_kwargs
 
     @staticmethod
-    def read(source, read_kwargs, sharrs, offset, batch):
+    def read(source, dtype, read_kwargs, sharrs, offset, batch):
         # read followed by crops
         xt = [k["tile_left"] for k in read_kwargs]
         yt = [k["tile_top"] for k in read_kwargs]
@@ -239,7 +244,7 @@ class TiffPrefetch(object):
         )
         chunk, _ = source.getRegion(**read_dict)
         tiles = [
-            chunk[y-yr:y-yr+h, x-xr:x-xr+w, :]
+            chunk[y-yr:y-yr+h, x-xr:x-xr+w, :].astype(dtype)
             for (x,y,w,h) in zip(xt,yt,wt,ht)
         ]
         for i, tile in enumerate(tiles):
@@ -250,6 +255,7 @@ class TiffPrefetch(object):
         return self.pool.submit(
             self.read,
             self.source,
+            self.dtype,
             read_kwargs,
             sharrs,
             offset,
@@ -272,7 +278,7 @@ class TiffPrefetch(object):
                          self.read_kwargs[self.pos][0]["tile_height"], 
                          self.read_kwargs[self.pos][0]["tile_width"],
                          3],
-                         np.uint8)
+                         self.dtype)
                     futures = []
                     batch_kwargs = []
 
@@ -295,7 +301,7 @@ class TiffPrefetch(object):
                                  reads[0]["tile_height"],
                                  reads[0]["tile_width"],
                                  3],
-                                np.uint8)
+                                self.dtype)
                                 for _ in range(batches-1)]
                             ]
 
