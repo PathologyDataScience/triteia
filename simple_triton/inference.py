@@ -3,12 +3,16 @@ import numpy as np
 import os
 from simple_triton.model import TritonModel
 from simple_triton.utils import create_client
+from simple_triton.tile_iterators import SharedNumpyArray
 import time
 from tritonclient.utils import (
     InferenceServerException,
     triton_to_np_dtype,
     np_to_triton_dtype,
 )
+
+
+ARRAY_TYPES = (np.ndarray, SharedNumpyArray)
 
 
 class Requests(object):
@@ -173,7 +177,7 @@ class Requests(object):
                 )
 
         # validate type and number of inputs
-        if isinstance(inputs, np.ndarray):
+        if isinstance(inputs, ARRAY_TYPES):
             if len(model_dict["input"]) != 1:
                 raise Exception(
                     (
@@ -208,7 +212,7 @@ class Requests(object):
         if "maxBatchSize" in model_dict:
             if model_dict["maxBatchSize"] > 0:
                 batching = True
-                if isinstance(inputs, np.ndarray):
+                if isinstance(inputs, ARRAY_TYPES):
                     batch_size = inputs.shape[0]
                 else:
                     batch_size = inputs[list(inputs.keys())[0]].shape[0]
@@ -219,14 +223,14 @@ class Requests(object):
 
         # validate input types
         if strict_types:
-            if isinstance(inputs, np.ndarray):
+            if isinstance(inputs, ARRAY_TYPES):
                 _compare_types(model_dict, inputs, model_dict["input"][0])
             else:
                 for i in model_dict["input"]:
                     _compare_types(model_dict, inputs[i["name"]], i)
 
         # validate input shapes
-        if isinstance(inputs, np.ndarray):
+        if isinstance(inputs, ARRAY_TYPES):
             _compare_shape(model_dict, inputs, model_dict["input"][0], batching)
         else:
             for i in model_dict["input"]:
@@ -234,7 +238,7 @@ class Requests(object):
 
         # validate batching
         if batching:
-            if isinstance(inputs, np.ndarray):
+            if isinstance(inputs, ARRAY_TYPES):
                 if inputs.shape[0] > model_dict["maxBatchSize"]:
                     raise Exception(
                         (
@@ -298,7 +302,7 @@ class Requests(object):
             iio.set_data_from_numpy(provided)
             return iio
 
-        if isinstance(inputs, np.ndarray):
+        if isinstance(inputs, ARRAY_TYPES):
             infer_inputs = [add_input(inputs, model_dict["input"][0])]
         else:
             infer_inputs = [
