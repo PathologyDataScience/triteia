@@ -66,7 +66,7 @@ Some key performance optimizations of Triton that available through simple-trito
 4. Shared memory communication - send data to and receive data from Triton using shared memory when the client and server are on the same machine.
 
 ## Model control <a name="control"></a>
-The `TritonModel` class can be used to load/unload models, to retrieve model configurations or metadata, or to check model if a mode is idle or loaded. A model is defined by a model name and server url
+The `TritonModel` class can be used to load/unload models, to retrieve model configurations or metadata, or to check model if a model is idle or loaded. A model is defined by a model name and server url
 
 ```python
 from simple_triton.model import TritonModel
@@ -160,13 +160,11 @@ The dimensions of model inputs and outputs can also be altered using `ConfigBuil
 
 # Inference <a name="inference"></a>
 
-Inference with a hosted model is done using the `InferenceRunner` class. A single instance of this class is intended to submit requests for one model hosted on one server. It consumes data from a simple iterator that emits data/metadata pairs. For performance a typical session will create instances using multiprocessing to parallelize reading and preprocessing. See the example notebook for details.
+Inference is performed using `inference.inference`. This function consumes data from a simple iterator that emits data/metadata pairs. For single input models, data is provided as a numpy array. For multi-input models, data is provided as a dict of key value pairs linking numpy arrays to model input names (visible from `Model.get_config()`).
 
-For single input models, data is provided as a numpy array. For multi-input models, data is provided as a dict of key value pairs linking numpy arrays to model input names (visible from `Model.get_config()`).
+`inference` can apply preprocessing functions to data after loading and prior to inference by passing a callable to the `pre` argument. 
 
-The InferenceRunner can apply preprocessing functions to data after loading and prior to inference by passing a callable to the `pre` argument. 
-
-> **Note:** For multi-input models all inputs are required to uniform batch dimensions.
+> **Note:** For multi-input models all inputs are required to uniform batch dimensions. Duplicate singleton values where necessary to satisfy this requirement.
 
 # Developer guide <a name="developer-guide"></a>
 
