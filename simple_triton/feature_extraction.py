@@ -2,7 +2,7 @@ import histomics_stream as hs
 import numpy as np
 import os
 from simple_triton.inference import Requests
-from time import time
+from time import sleep, time
 
 
 def study(
@@ -218,7 +218,7 @@ def inference(
             break
 
         # sleep
-        time.sleep(rest)
+        sleep(rest)
 
     # failures
     failed = [b for b in batches if not b["success"]]
