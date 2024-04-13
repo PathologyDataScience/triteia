@@ -1,10 +1,8 @@
 from functools import partial
-import multiprocessing
-import multiprocessing.queues
-from multiprocessing import Process
 import numpy as np
 import os
 from simple_triton.model import TritonModel
+from simple_triton.tile_iterators import SharedNumpyArray
 from simple_triton.utils import create_client
 import time
 from tritonclient.utils import (
@@ -12,6 +10,9 @@ from tritonclient.utils import (
     triton_to_np_dtype,
     np_to_triton_dtype,
 )
+
+
+ARRAY_TYPES = (np.ndarray, SharedNumpyArray)
 
 
 class Requests(object):
@@ -176,7 +177,7 @@ class Requests(object):
                 )
 
         # validate type and number of inputs
-        if isinstance(inputs, np.ndarray):
+        if isinstance(inputs, ARRAY_TYPES):
             if len(model_dict["input"]) != 1:
                 raise Exception(
                     (
@@ -211,7 +212,7 @@ class Requests(object):
         if "maxBatchSize" in model_dict:
             if model_dict["maxBatchSize"] > 0:
                 batching = True
-                if isinstance(inputs, np.ndarray):
+                if isinstance(inputs, ARRAY_TYPES):
                     batch_size = inputs.shape[0]
                 else:
                     batch_size = inputs[list(inputs.keys())[0]].shape[0]
@@ -222,14 +223,14 @@ class Requests(object):
 
         # validate input types
         if strict_types:
-            if isinstance(inputs, np.ndarray):
+            if isinstance(inputs, ARRAY_TYPES):
                 _compare_types(model_dict, inputs, model_dict["input"][0])
             else:
                 for i in model_dict["input"]:
                     _compare_types(model_dict, inputs[i["name"]], i)
 
         # validate input shapes
-        if isinstance(inputs, np.ndarray):
+        if isinstance(inputs, ARRAY_TYPES):
             _compare_shape(model_dict, inputs, model_dict["input"][0], batching)
         else:
             for i in model_dict["input"]:
@@ -237,7 +238,7 @@ class Requests(object):
 
         # validate batching
         if batching:
-            if isinstance(inputs, np.ndarray):
+            if isinstance(inputs, ARRAY_TYPES):
                 if inputs.shape[0] > model_dict["maxBatchSize"]:
                     raise Exception(
                         (
@@ -296,16 +297,24 @@ class Requests(object):
             iio = grpcclient.InferInput(
                 expected["name"], provided.shape, expected["dataType"].split("TYPE_")[1]
             )
-            if self._np_to_api_types(provided.dtype) != expected["dataType"]:
-                provided = provided.astype(self._api_to_np_types(expected["dataType"]))
             iio.set_data_from_numpy(provided)
             return iio
 
         if isinstance(inputs, np.ndarray):
             infer_inputs = [add_input(inputs, model_dict["input"][0])]
+        elif isinstance(inputs, SharedNumpyArray):
+            infer_inputs = [add_input(inputs.view(), model_dict["input"][0])]
         else:
             infer_inputs = [
-                add_input(inputs[i["name"]], i) for i in model_dict["input"]
+                add_input(
+                    (
+                        inputs[i["name"]]
+                        if isinstance(inputs[i["name"]], np.ndarray)
+                        else inputs[i["name"]].view()
+                    ),
+                    i,
+                )
+                for i in model_dict["input"]
             ]
         return infer_inputs
 
@@ -506,120 +515,3 @@ class Requests(object):
 
         # append request to list
         self.pending.append(sample)
-
-
-class InferenceRunner(Process):
-    """InferenceRunner"""
-
-    def __init__(
-        self,
-        url,
-        model,
-        dataset,
-        qout,
-        limit=10,
-        rest=1e-2,
-        timeout=None,
-        pre=None,
-        verbose=False,
-    ):
-        """InferenceRunner constructor.
-
-        Parameters
-        ----------
-        url : string
-            The inference server url.
-        model : string
-            The model name.
-        dataset : object
-            An iterator producing batched samples and metadata. Each batch
-            is a 2-tuple containing a list of numpy arrays for the model
-            inputs (list of np.ndarray), and an optional dictionary of
-            sample metadata that will stay linked to the inference request
-            and result.
-        qout : multiprocessing.Queue
-            Output queue receiving completed inference requests and process
-            summary information on process completion.
-        limit : int
-            The maximum allowable pending requests. Default value is 10.
-        rest : float
-            The resting period for the InferenceRunner process. The process
-            will rest for this period (seconds) after submitting and checking
-            inference requests. Default value is 10 milliseconds.
-        timeout : float
-            The request timeout limit (seconds). This is an input argument
-            to the triton GRPC client async_infer inferface.
-        pre : function
-            A preprocessing function to apply to samples emitted from `dataset` prior
-            to inference. Default value is None.
-        verbose : bool
-            True updates console with inference progress and exceptions.
-            Default value is False.
-        """
-
-        multiprocessing.Process.__init__(self)
-
-        # capture input arguments
-        self.url = url
-        self.model = model
-        self.dataset = dataset
-        self.qout = qout
-        self.limit = limit
-        self.timeout = timeout
-        self.rest = rest
-        self.pre = pre
-
-        # initialize list to hold performance data
-        self.time_inference = []
-
-    def run(self):
-        # set flag indicating qin stop signal received
-        stop = False
-
-        # create requests object
-        req = Requests(self.url, self.limit)
-
-        # loop until iterator is exhausted
-        while True:
-            if not stop:
-                # draw samples, preprocess, and submit for inference up to limit
-                for i in range(self.limit - len(req.pending)):
-                    try:
-                        t_put = time.time()
-                        sample, metadata = next(self.dataset)
-                        t_get = time.time()
-                    except StopIteration as e:
-                        stop = True
-                    if not stop:
-                        if self.pre is not None:
-                            sample = self.pre(sample)
-                        request = {
-                            "model_name": self.model,
-                            "inputs": sample,
-                            "metadata": metadata,
-                            "times": {"qin_put": t_put, "qin_get": t_get},
-                        }
-                        req.insert(request, self.timeout)
-                    else:
-                        break
-
-            # check pending requests
-            completed = req.check(block=False)
-
-            # put completed post-processed requests into queue
-            for inference in completed:
-                # remove inputs
-                del inference["inputs"]
-
-                # place in queue
-                self.qout.put(inference)
-
-            # if done send stop signal
-            if len(req.pending) == 0 and stop:
-                self.qout.put(None)
-                break
-
-            # sleep
-            time.sleep(self.rest)
-
-        return
