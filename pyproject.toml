@@ -10,17 +10,23 @@ authors = [
 description = "A simple and efficient python client for the Triton Inference Server."
 readme = "README.md"
 requires-python = ">=3.7"
-keywords = ["one", "two"]
+keywords = ["mlops", "digital pathology"]
 license = {text = "Apache-2.0"}
 dependencies = [
     "numpy>=1.21",
     "tabulate",
     "tritonclient[all]>=2.30.0",
-    "protobuf"
+    "protobuf",
 ]
 dynamic = ["version"]
+
+[project.scripts]
+inference = "simple_triton.inference:main"
 
 [tool.setuptools]
 packages = ["simple_triton"]
 
 [tool.setuptools_scm]
+
+[project.urls]
+"Github" = "https://github.com/PathologyDataScience/simple_triton"
