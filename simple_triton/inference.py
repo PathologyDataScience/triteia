@@ -1,3 +1,4 @@
+import argparse
 from functools import partial
 import numpy as np
 import os
@@ -515,3 +516,143 @@ class Requests(object):
 
         # append request to list
         self.pending.append(sample)
+
+import argparse
+import os
+
+
+def main():
+    parser = argparse.ArgumentParser(description=("Testing nargs."))
+    parser.add_argument(
+        "input",
+        type=str,
+        nargs="*",
+        help="Path to file or file pattern.",
+    )
+    parser.add_argument("output", type=str, help="Output directory.")
+    parser.add_argument(
+        "-f",
+        "--files",
+        required=False,
+        type=str,
+        help="Path to root folder containing images, or text file listing image paths.",
+    )
+    parser.add_argument(
+        "-n",
+        "--noskip",
+        dest="skip",
+        action="store_false",
+        help=("Overwrite existing images (non-default)."),
+    )
+    parser.add_argument(
+        "-s",
+        "--server",
+        required=False,
+        default="localhost:8001",
+        type=str,
+        help="Triton server address. Default value is `localhost:8001`.",
+    )
+    parser.add_argument(
+        "-m",
+        "--model",
+        required=True,
+        type=str,
+        help="Model name.",
+    )
+    parser.add_argument(
+        "-t",
+        "--tile",
+        required=False,
+        default=None,
+        type=int,
+        help="Tile size. Defaults to internal file tile size at scan magnification.",
+    )
+    parser.add_argument(
+        "-o",
+        "--overlap",
+        required=False,
+        default=0,
+        type=int,
+        help="Tile overlap. Defaults to 0 pixels.",
+    )
+    parser.add_argument(
+        "-M",
+        "--magnification",
+        required=False,
+        default=None,
+        type=float,
+        help="Magnification. Defaults to scan magnification.",
+    )
+    parser.add_argument(
+        "-i",
+        "--icc",
+        action="store_true",
+        help="Apply ICC correction. Defaults to False.",
+    )
+    parser.add_argument(
+        "-b",
+        "--batch",
+        required=False,
+        default=128,
+        type=int,
+        help=("Batch size. Defaults 128 tiles."),
+    )
+    parser.add_argument(
+        "-p",
+        "--prefetch",
+        required=False,
+        default=4,
+        type=int,
+        help=("The number of prefetch batches."),
+    )
+    parser.add_argument(
+        "-w",
+        "--workers",
+        required=False,
+        default=32,
+        type=int,
+        help=("The number of loader processes (default 32)."),
+    )
+    args = parser.parse_args()
+
+    # parse inputs - pattern expansion or file containing list of files
+    if isinstance(args.input, list):
+        files = [os.path.join(os.getcwd(), f) for f in args.input]
+    elif os.path.isfile(args.files):
+        with open(args.files) as f:
+            files = [line.split()[0] for line in f]
+    else:
+        raise ValueError(
+            "Provide one of a text file containing inputs via -f/--files or a file pattern."
+        )
+
+    # check of model is loaded
+
+    # iterate through files
+    for file in files:
+        # determine magnification, tile size if not provided
+        source = large_image_source_tiff.open(args.input)
+        metadata = source.getMetadata()
+        magnification = (
+            metadata["magnification"]
+            if args.magnification is None
+            else args.magnification
+        )
+        t = (
+            (metadata["tileHeight"], metadata["tileWidth"])
+            if args.tile is None
+            else (args.tile, args.tile)
+        )
+        if (args.tile is None) and (magnification != metadata["magnification"]):
+            raise ValueError(
+                (
+                    "Using default tile size requires native magnification "
+                    f"`None` or {metadata['magnification']}."
+                )
+            )
+
+        # create tile source
+
+
+if __name__ == "__main__":
+    main()
