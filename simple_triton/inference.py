@@ -6,6 +6,10 @@ from simple_triton.model import TritonModel
 from simple_triton.tile_iterators import SharedNumpyArray
 from simple_triton.utils import create_client
 from simple_triton.config import ConfigBuilder
+from simple_triton.feature_extraction import inference, study
+from simple_triton.tile_iterators import TiffPrefetch
+from mil.io.writer import write_record
+import tensorflow as tf
 
 import time
 import large_image_source_tiff
@@ -617,6 +621,14 @@ def main():
         type=int,
         help=("The number of loader processes (default 32)."),
     )
+    parser.add_argument(
+        "-ma",
+        "--mask_dir",
+        required=True,
+        default=None,
+        type=str,
+        help=("The directory where the masks are stored"),
+    )
     args = parser.parse_args()
 
     # parse inputs - pattern expansion or file containing list of files
@@ -629,6 +641,10 @@ def main():
         raise ValueError(
             "Provide one of a text file containing inputs via -f/--files or a file pattern."
         )
+
+    # throw an error when mask directory has not been inputted
+    if args.mask_dir is None:
+        raise ValueError("Provide the directory where the masks have been stored.")
 
     # check of model is loaded
     model = TritonModel(args.model, args.server)
@@ -679,6 +695,42 @@ def main():
             )
 
         # create tile source
+        mask_path = os.path.join(
+            args.mask_dir, file.split("/")[-1].replace(".svs", ".svs_1.25_mask.png")
+        )
+        hs_study = study(
+            (file, mask_path),
+            t=(t, t),
+            chunk=(t, t),
+            objective=magnification,
+            mask_threshold=0.5,
+        )
+
+        # tile iterator
+        iterator = TiffPrefetch(
+            hs_study, np.uint8, args.icc, args.batch, args.prefetch, args.workers
+        )
+
+        # inference
+        features, metadata, times, failures = inference(
+            iterator, args.model, url=args.server, limit=1, rest=0.0
+        )
+
+        # concatenate features
+        features = np.concatenate(features[0], axis=0)
+
+        # write to tfrecord
+        tfr_file = "{}/{}.{}_{}_{}X.tfr".format(
+            args.output, file.split("/")[-1], args.model, t, args.overlap, magnification
+        )
+        write_record(
+            tfr_file,
+            features,
+            metadata,
+            labels={},
+            structured=False,
+            precision=tf.float16,
+        )
 
 
 if __name__ == "__main__":
