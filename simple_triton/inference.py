@@ -5,6 +5,8 @@ import os
 from simple_triton.model import TritonModel
 from simple_triton.tile_iterators import SharedNumpyArray
 from simple_triton.utils import create_client
+from simple_triton.config import ConfigBuilder
+
 import time
 import large_image_source_tiff
 from tritonclient.utils import (
@@ -629,6 +631,29 @@ def main():
         )
 
     # check of model is loaded
+    model = TritonModel(args.model, args.server)
+    if model.is_loaded:
+        print("The model has already been loaded")
+    else:
+        try:
+            # load tensorflow model - set maximum batch size
+            model = TritonModel(args.model, args.server)
+
+            # initialize builder with a basic configuration
+            builder = ConfigBuilder(args.model, config={"maxBatchSize": args.batch})
+
+            # increase the number of model instances per GPU to 2
+            builder.add_instance_group(count=2)
+
+            # add automatic mixed precision
+            builder.add_mixed_precision()
+
+            # re-load model with new config
+            model.load(config=builder.config)
+
+            assert model.is_loaded()
+        except Exception as e:
+            print("loading model failed: " + str(e), flush=True)
 
     # iterate through files
     for file in files:
