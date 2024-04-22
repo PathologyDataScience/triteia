@@ -6,6 +6,7 @@ from simple_triton.model import TritonModel
 from simple_triton.tile_iterators import SharedNumpyArray
 from simple_triton.utils import create_client
 import time
+import large_image_source_tiff
 from tritonclient.utils import (
     InferenceServerException,
     triton_to_np_dtype,
@@ -517,6 +518,7 @@ class Requests(object):
         # append request to list
         self.pending.append(sample)
 
+
 import argparse
 import os
 
@@ -631,7 +633,7 @@ def main():
     # iterate through files
     for file in files:
         # determine magnification, tile size if not provided
-        source = large_image_source_tiff.open(args.input)
+        source = large_image_source_tiff.open(file)
         metadata = source.getMetadata()
         magnification = (
             metadata["magnification"]
