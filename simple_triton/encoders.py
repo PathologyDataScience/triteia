@@ -61,63 +61,6 @@ def reshape_savedmodel(
     )
 
 
-def _deconv_model(extractor):
-    """Create a tensorflow deconvolution model for prepend to a tensorflow
-    feautre extraction model.
-
-    This model contains a non-trainable layer that performs color deconvolution
-    using a stain matrix matched to the input, and reconvolves the stain
-    concentrations with an ideal stain matrix. It contains three inputs: 1.
-    The batched images 2. The stain matrix for the input data and 3. The ideal
-    stain matrix.
-
-    Parameters
-    ----------
-    extractor : tf.keras.Model
-        A tensorflow feature extractor model.
-
-    Returns
-    -------
-    deconv : tf.keras.Model
-        A model containing a non-trainable normalization layer, and
-        inputs for batched images, and source and target stain matrices.
-
-    See also
-    --------
-    deconvolution_based_normalization from histomicstk.preprocessing.normalization.
-    """
-
-    # raise error if feature extractor has more than one input
-    if len(extractor.inputs) > 1:
-        raise ValueError(
-            (
-                "Feature extractor must have one input, "
-                f"has {len(extractor.inputs)} instead."
-            )
-        )
-
-    # get extractor input layer parameters and shape
-    extractor_config = extractor.get_config()
-    input_kwargs = {
-        k: extractor_config["layers"][0]["config"][k]
-        for k in ["dtype", "sparse", "ragged"]
-    }
-    shape = list(extractor.inputs[0].shape)
-    if shape[0] is None:
-        shape = shape[1:]
-
-    # create input layers
-    input_0 = tf.keras.layers.Input(shape=shape, **input_kwargs, name="input_0")
-    input_1 = tf.keras.layers.Input(shape=[3, 3], name="input_1")
-    input_2 = tf.keras.layers.Input(shape=[3, 3], name="input_2")
-
-    # create deconv layer and model
-    deconv_layer = DeconvNorm()([input_0, input_1, input_2])
-    deconv = tf.keras.Model([input_0, input_1, input_2], deconv_layer)
-
-    return deconv
-
-
 def _nested_replace(inbound, replacement):
     if isinstance(inbound, list):
         inbound = [_nested_replace(l, replacement) for l in inbound]
