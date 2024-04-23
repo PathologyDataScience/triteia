@@ -3,6 +3,7 @@ import numpy as np
 import os
 from simple_triton.inference import Requests
 from time import sleep, time
+import tensorflow as tf
 
 
 def study(
@@ -116,6 +117,8 @@ def study(
 def inference(
     iterator,
     model_name,
+    w_source=None,
+    w_target=None,
     url="localhost:8001",
     pre=None,
     nchw=False,
@@ -135,6 +138,12 @@ def inference(
     model_name : str
         The name of the model to use for inference. Models must be loaded prior to
         inference.
+    w_source : array_like
+        Stain matrix (3x3) for the input slides. Requires a model with a normalization
+        layer. Default value is None.
+    w_target : array_like
+        Ideal stain matrix (3x3) for normalization. Requires a model with a
+        normalization layer. Default value is None.
     url : str
         The url for the triton server grpc port. Default value is `localhost:8001`.
     pre : function
@@ -186,6 +195,18 @@ def inference(
                 try:
                     t_start = time()
                     sample, metadata = next(iterator)
+                    if not ((w_source is None) and (w_target is None)):
+                        sample = {
+                            "input_0": sample,
+                            "input_1": np.stack(
+                                sample.shape[0] * [tf.cast(w_source, tf.float32)],
+                                axis=0,
+                            ),
+                            "input_2": np.stack(
+                                sample.shape[0] * [tf.cast(w_target, tf.float32)],
+                                axis=0,
+                            ),
+                        }
                     t_stop = time()
                 except StopIteration as e:
                     stop = True

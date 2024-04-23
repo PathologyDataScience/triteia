@@ -61,63 +61,6 @@ def reshape_savedmodel(
     )
 
 
-def _deconv_model(extractor):
-    """Create a tensorflow deconvolution model for prepend to a tensorflow
-    feautre extraction model.
-
-    This model contains a non-trainable layer that performs color deconvolution
-    using a stain matrix matched to the input, and reconvolves the stain
-    concentrations with an ideal stain matrix. It contains three inputs: 1.
-    The batched images 2. The stain matrix for the input data and 3. The ideal
-    stain matrix.
-
-    Parameters
-    ----------
-    extractor : tf.keras.Model
-        A tensorflow feature extractor model.
-
-    Returns
-    -------
-    deconv : tf.keras.Model
-        A model containing a non-trainable normalization layer, and
-        inputs for batched images, and source and target stain matrices.
-
-    See also
-    --------
-    deconvolution_based_normalization from histomicstk.preprocessing.normalization.
-    """
-
-    # raise error if feature extractor has more than one input
-    if len(extractor.inputs) > 1:
-        raise ValueError(
-            (
-                "Feature extractor must have one input, "
-                f"has {len(extractor.inputs)} instead."
-            )
-        )
-
-    # get extractor input layer parameters and shape
-    extractor_config = extractor.get_config()
-    input_kwargs = {
-        k: extractor_config["layers"][0]["config"][k]
-        for k in ["dtype", "sparse", "ragged"]
-    }
-    shape = list(extractor.inputs[0].shape)
-    if shape[0] is None:
-        shape = shape[1:]
-
-    # create input layers
-    input_0 = tf.keras.layers.Input(shape=shape, **input_kwargs, name="input_0")
-    input_1 = tf.keras.layers.Input(shape=[3, 3], name="input_1")
-    input_2 = tf.keras.layers.Input(shape=[3, 3], name="input_2")
-
-    # create deconv layer and model
-    deconv_layer = DeconvNorm()([input_0, input_1, input_2])
-    deconv = tf.keras.Model([input_0, input_1, input_2], deconv_layer)
-
-    return deconv
-
-
 def _nested_replace(inbound, replacement):
     if isinstance(inbound, list):
         inbound = [_nested_replace(l, replacement) for l in inbound]
@@ -127,7 +70,7 @@ def _nested_replace(inbound, replacement):
     return inbound
 
 
-def _tf_rename_inputs(model, input_index=0):
+def tf_rename_inputs(model, input_index=0):
     """Renames tensorflow model input names for consistency with triton.
 
     The first input will be renamed as "input_{input_index}". Subsequent inputs will be
@@ -188,7 +131,7 @@ def _tf_rename_inputs(model, input_index=0):
     return renamed
 
 
-def _tf_rename_outputs(model, output_index=0):
+def tf_rename_outputs(model, output_index=0):
     """Renames tensorflow model output names for consistency with triton.
 
     The first output will be renamed as "output_{output_index}". Subsequent outputs
@@ -240,8 +183,27 @@ def _tf_rename_outputs(model, output_index=0):
     return renamed
 
 
+class TfCast(tf.keras.layers.Layer):
+    def __init__(self, dtype=tf.float32, **kwargs):
+        super(TfCast, self).__init__(**kwargs)
+        self.cast = dtype
+
+    def call(self, inputs):
+        return tf.cast(inputs, self.cast)
+
+    def get_config(self):
+        return super(TfCast, self).get_config()
+
+
 def tf_encoder(
-    repository, model, name, input_shape=(224, 224, 3), pooling="avg", normalize=False
+    repository,
+    model,
+    name,
+    input_shape=(224, 224, 3),
+    dtype=tf.uint8,
+    pooling="avg",
+    normalize=False,
+    version=1,
 ):
     """Creates a tensorflow encoder model in savedmodel format.
 
@@ -277,13 +239,6 @@ def tf_encoder(
     # fail if name exists in model repository
     if os.path.exists(os.path.join(repository, name)):
         raise ValueError(f"Model with name {name} already exists in repository.")
-
-    # initialize custom objects necessary for reconstruction
-    from tensorflow import keras
-    from keras.applications import convnext
-
-    convnext.LayerScale
-    custom_objects = {"LayerScale": convnext.LayerScale}
 
     # switch on `model`
     if model.lower() == "efficientnetv2s":
@@ -366,16 +321,32 @@ def tf_encoder(
     else:
         raise ValueError("model not recognized.")
 
-    # prepend normalization layer
-    with keras.utils.custom_object_scope(custom_objects):
-        if normalize:
-            deconv = _deconv_model(model)
-            deconv = _tf_rename_inputs(deconv)
-            model = _tf_rename_inputs(model, 3)
-            model = tf.keras.Model(deconv.inputs, model(deconv.outputs))
-            model = _tf_rename_outputs(model)
-        else:
-            model = _tf_rename_outputs(_tf_rename_inputs(model))
+    # remove encoder input/output layers and extract configs
+    # add input layer and optional devonvolution layer
+    input_layer = model.layers.pop(0)
+    input_kwargs = input_layer.get_config()
+    output_layer = model.layers.pop(len(model.layers) - 1)
+    output_kwargs = output_layer.get_config()
+    output_kwargs["name"] = "output_0"
+    if "config" in output_kwargs:
+        if "name" in output_kwargs["config"]:
+            output_kwargs["config"]["name"] = "output_0"
+    input_0 = tf.keras.layers.Input(
+        shape=input_shape,
+        dtype=dtype,
+        name="input_0",
+        sparse=input_kwargs["sparse"],
+        ragged=input_kwargs["ragged"],
+    )
+    output_0 = type(output_layer).from_config(output_kwargs)
+    float_input = TfCast(tf.float32)(input_0) if dtype != tf.float32 else input_0
+    if normalize:
+        input_1 = tf.keras.layers.Input(shape=[3, 3], name="input_1")
+        input_2 = tf.keras.layers.Input(shape=[3, 3], name="input_2")
+        deconv = DeconvNorm()([float_input, input_1, input_2])
+        model = tf.keras.Model([input_0, input_1, input_2], model(deconv))
+    else:
+        model = tf.keras.Model(input_0, output_0(model(float_input)))
 
     # get dimensionality of extracted features
     D = model.output_shape[-1]
