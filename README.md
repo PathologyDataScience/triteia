@@ -18,6 +18,7 @@ simple-triton is tested with [Triton version 23.03](https://github.com/triton-in
     - [Model control](#control)
     - [Model configuration](#config)
 - [Inference](#inference)
+- [Python Backend Models](#backend-models)
 - [Developer guide](#developer-guide)
     - [Testing](#testing)
     - [Benchmarking](#benchmarking)
@@ -165,6 +166,26 @@ Inference is performed using `inference.inference`. This function consumes data 
 `inference` can apply preprocessing functions to data after loading and prior to inference by passing a callable to the `pre` argument. 
 
 > **Note:** For multi-input models all inputs are required to uniform batch dimensions. Duplicate singleton values where necessary to satisfy this requirement.
+
+# Python Backend Models <a name="backend-models"></a>
+Supported Python Backend models are wrapped in TritonModel class provided in model.py.
+
+To run a model using the Python backend in the Triton server container, follow these steps:
+
+- **Install Dependencies:** In the Triton server container, install all required packages from `requirements.txt`. You may need to move to your `host_model_repository` directory to perform the installation.
+```python
+$ pip install -r requirements.txt
+```
+- **Prepare Model Directory:** Each model is located in `backend-models` folder.  The model's folder should be moved to `host_model_repository`. The model's folder contains `model.py` that should be inside folder `1` and `config.pbtxt` should be on the same level of folder `1`. 
+
+```plaintext
+    .
+    ├── ...
+    ├── phikon                  # Phikon Model
+    │   ├── config.pbtxt        # Default configuration file
+    │   ├── 1                   # Version 1 of the model
+    │       ├── model.py        # TritonPythonModel Class adapted for Phikon
+```
 
 # Developer guide <a name="developer-guide"></a>
 
