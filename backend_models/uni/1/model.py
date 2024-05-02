@@ -68,7 +68,6 @@ class TritonPythonModel:
                 with torch.inference_mode():
                     feature_emb = self.model(input_norm)
                     features = feature_emb.detach().cpu().numpy()
-                    print(features)
 
                 out_tensor_features = pb_utils.Tensor(
                     "output_0", features.astype(np.float32)
