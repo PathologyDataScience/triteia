@@ -667,15 +667,20 @@ def main():
         raise ValueError("Provide the directory where the masks have been stored.")
     else:
         if os.path.isdir(args.mask_dir):
-            mask_files = [os.path.join(args.mask_dir, mask) for mask in os.listdir(args.mask_dir)]
+            mask_files = [
+                os.path.join(args.mask_dir, mask) for mask in os.listdir(args.mask_dir)
+            ]
         else:
-            mask_files = [args.mask_dir]    
+            mask_files = [args.mask_dir]
 
     # target color profile
     if args.target_profile is not None:
-        if os.path.isdir(args.target_profile) or not args.target_profile.endswith('.npy'):
+        if os.path.isdir(args.target_profile) or not args.target_profile.endswith(
+            ".npy"
+        ):
             raise ValueError(
-                "target profile should be a .npy file containing a stain matrix (3x3).")
+                "target profile should be a .npy file containing a stain matrix (3x3)."
+            )
         target_p = np.load(args.target_profile)
     else:
         target_p = None
@@ -683,7 +688,10 @@ def main():
     # source color profiles for slides
     if args.source_profile is not None:
         if os.path.isdir(args.source_profile):
-            source_p = [os.path.join(args.source_profile, file) for file in os.listdir(args.source_profile)]
+            source_p = [
+                os.path.join(args.source_profile, file)
+                for file in os.listdir(args.source_profile)
+            ]
         elif os.path.isfile(args.source_profile):
             source_p = [args.source_profile]
     else:
@@ -696,15 +704,15 @@ def main():
         matched_source = False
 
         for mask in mask_files:
-            if fnmatch.fnmatch(mask.split('/')[-1], f'*{file.split('/')[-1]}*'):
+            if fnmatch.fnmatch(mask.split("/")[-1], f'*{file.split("/")[-1]}*'):
                 matched_mask = True
                 break
         if not matched_mask:
             raise FileNotFoundError(f"No mask file found for {file}")
-        
+
         if source_p is not None:
             for prof in source_p:
-                if fnmatch.fnmatch(prof.split('/')[-1], f'*{file.split('/')[-1]}*'):
+                if fnmatch.fnmatch(prof.split("/")[-1], f'*{file.split("/")[-1]}*'):
                     matched_source = True
                     break
             if not matched_source:
@@ -739,7 +747,7 @@ def main():
             print("loading model failed: " + str(e), flush=True)
 
     # iterate through files and masks
-    for (file, mask, source_p) in matched_files:
+    for file, mask, source_p in matched_files:
         # determine magnification, tile size if not provided
         source = large_image_source_tiff.open(file)
         metadata = source.getMetadata()
@@ -777,7 +785,13 @@ def main():
 
         # inference
         features, metadata, times, failures = inference(
-            iterator, args.model, w_source=source_p, w_target=target_p, url=args.server, limit=1, rest=0.0
+            iterator,
+            args.model,
+            w_source=source_p,
+            w_target=target_p,
+            url=args.server,
+            limit=1,
+            rest=0.0,
         )
 
         # concatenate features
