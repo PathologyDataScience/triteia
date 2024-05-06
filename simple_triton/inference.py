@@ -630,6 +630,23 @@ def main():
         type=str,
         help=("The directory where the masks are stored"),
     )
+    parser.add_argument(
+        "-tp",
+        "--target_profile",
+        required=True,
+        default=None,
+        type=str,
+        help=("Target color profile (.npy file)"),
+    )
+    parser.add_argument(
+        "-sp",
+        "--source_profile",
+        required=True,
+        default=None,
+        type=str,
+        help=("Path to source color profiles"),
+    )
+
     args = parser.parse_args()
 
     # parse inputs - pattern expansion or file containing list of files
@@ -648,22 +665,53 @@ def main():
     # throw an error when mask directory has not been inputted
     if args.mask_dir is None:
         raise ValueError("Provide the directory where the masks have been stored.")
-    
-    # Get a list of files in the mask folder
-    mask_files = [os.path.join(args.mask_dir, mask) for mask in os.listdir(args.mask_dir)]
+    else:
+        if os.path.isdir(args.mask_dir):
+            mask_files = [os.path.join(args.mask_dir, mask) for mask in os.listdir(args.mask_dir)]
+        else:
+            mask_files = [args.mask_dir]    
 
-    # match files to masks and throw an error if a slide is not matched to a maks
+    # target color profile
+    if args.target_profile is not None:
+        if os.path.isdir(args.target_profile) or not args.target_profile.endswith('.npy'):
+            raise ValueError(
+                "target profile should be a .npy file containing a stain matrix (3x3).")
+        target_p = np.load(args.target_profile)
+    else:
+        target_p = None
+
+    # source color profiles for slides
+    if args.source_profile is not None:
+        if os.path.isdir(args.source_profile):
+            source_p = [os.path.join(args.source_profile, file) for file in os.listdir(args.source_profile)]
+        elif os.path.isfile(args.source_profile):
+            source_p = [args.source_profile]
+    else:
+        source_p = None
+
+    # match files to masks and source profiles and throw an error if a slide is not matched to a maks/profile
     matched_files = []
     for file in files:
-        matched = False
+        matched_mask = False
+        matched_source = False
+
         for mask in mask_files:
             if fnmatch.fnmatch(mask.split('/')[-1], f'*{file.split('/')[-1]}*'):
-                matched_files.append((file, mask))
-                matched = True
+                matched_mask = True
                 break
-        if not matched:
+        if not matched_mask:
             raise FileNotFoundError(f"No mask file found for {file}")
-    
+        
+        if source_p is not None:
+            for prof in source_p:
+                if fnmatch.fnmatch(prof.split('/')[-1], f'*{file.split('/')[-1]}*'):
+                    matched_source = True
+                    break
+            if not matched_source:
+                raise FileNotFoundError(f"No source profile found for {file}")
+            matched_files.append((file, mask, np.load(prof)))
+        else:
+            matched_files.append((file, mask, None))
 
     # check of model is loaded
     model = TritonModel(args.model, args.server)
@@ -691,7 +739,7 @@ def main():
             print("loading model failed: " + str(e), flush=True)
 
     # iterate through files and masks
-    for (file, mask) in matched_files:
+    for (file, mask, source_p) in matched_files:
         # determine magnification, tile size if not provided
         source = large_image_source_tiff.open(file)
         metadata = source.getMetadata()
@@ -729,7 +777,7 @@ def main():
 
         # inference
         features, metadata, times, failures = inference(
-            iterator, args.model, url=args.server, limit=1, rest=0.0
+            iterator, args.model, w_source=source_p, w_target=target_p, url=args.server, limit=1, rest=0.0
         )
 
         # concatenate features
