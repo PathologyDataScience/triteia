@@ -2,6 +2,7 @@ import argparse
 from functools import partial
 import numpy as np
 import os
+import fnmatch
 from simple_triton.model import TritonModel
 from simple_triton.tile_iterators import SharedNumpyArray
 from simple_triton.utils import create_client
@@ -634,6 +635,8 @@ def main():
     # parse inputs - pattern expansion or file containing list of files
     if isinstance(args.input, list):
         files = [os.path.join(os.getcwd(), f) for f in args.input]
+    elif os.path.isdir(args.input):
+        files = [os.path.join(args.input, file) for file in os.listdir(args.input)]
     elif os.path.isfile(args.files):
         with open(args.files) as f:
             files = [line.split()[0] for line in f]
@@ -645,6 +648,22 @@ def main():
     # throw an error when mask directory has not been inputted
     if args.mask_dir is None:
         raise ValueError("Provide the directory where the masks have been stored.")
+    
+    # Get a list of files in the mask folder
+    mask_files = [os.path.join(args.mask_dir, mask) for mask in os.listdir(args.mask_dir)]
+
+    # match files to masks and throw an error if a slide is not matched to a maks
+    matched_files = []
+    for file in files:
+        matched = False
+        for mask in mask_files:
+            if fnmatch.fnmatch(mask.split('/')[-1], f'*{file.split('/')[-1]}*'):
+                matched_files.append((file, mask))
+                matched = True
+                break
+        if not matched:
+            raise FileNotFoundError(f"No mask file found for {file}")
+    
 
     # check of model is loaded
     model = TritonModel(args.model, args.server)
@@ -671,8 +690,8 @@ def main():
         except Exception as e:
             print("loading model failed: " + str(e), flush=True)
 
-    # iterate through files
-    for file in files:
+    # iterate through files and masks
+    for (file, mask) in matched_files:
         # determine magnification, tile size if not provided
         source = large_image_source_tiff.open(file)
         metadata = source.getMetadata()
@@ -695,11 +714,8 @@ def main():
             )
 
         # create tile source
-        mask_path = os.path.join(
-            args.mask_dir, file.split("/")[-1].replace(".svs", ".svs_1.25_mask.png")
-        )
         hs_study = study(
-            (file, mask_path),
+            (file, mask),
             t=(t, t),
             chunk=(t, t),
             objective=magnification,
