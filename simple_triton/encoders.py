@@ -321,16 +321,9 @@ def tf_encoder(
     else:
         raise ValueError("model not recognized.")
 
-    # remove encoder input/output layers and extract configs
-    # add input layer and optional devonvolution layer
-    input_layer = model.layers.pop(0)
-    input_kwargs = input_layer.get_config()
-    output_layer = model.layers.pop(len(model.layers) - 1)
-    output_kwargs = output_layer.get_config()
-    output_kwargs["name"] = "output_0"
-    if "config" in output_kwargs:
-        if "name" in output_kwargs["config"]:
-            output_kwargs["config"]["name"] = "output_0"
+    # extract configurations for input and output layers
+    # build optional devonvolution layer
+    input_kwargs = model.layers[0].get_config()
     input_0 = tf.keras.layers.Input(
         shape=input_shape,
         dtype=dtype,
@@ -338,25 +331,33 @@ def tf_encoder(
         sparse=input_kwargs["sparse"],
         ragged=input_kwargs["ragged"],
     )
-    output_0 = type(output_layer).from_config(output_kwargs)
-    float_input = TfCast(tf.float32)(input_0) if dtype != tf.float32 else input_0
+    input_float = TfCast(tf.float32)(input_0) if dtype != tf.float32 else input_0
+    output_kwargs = model.layers[-1].get_config()
+    output_kwargs["name"] = "output_0"
+    if "config" in output_kwargs:
+        if "name" in output_kwargs["config"]:
+            output_kwargs["config"]["name"] = "output_0"
+    output_0 = type(model.layers[-1]).from_config(output_kwargs)
+    intermediate = tf.keras.Model(model.layers[1].input, model.layers[-2].output)
     if normalize:
         input_1 = tf.keras.layers.Input(shape=[3, 3], name="input_1")
         input_2 = tf.keras.layers.Input(shape=[3, 3], name="input_2")
-        deconv = DeconvNorm()([float_input, input_1, input_2])
-        model = tf.keras.Model([input_0, input_1, input_2], model(deconv))
+        deconv = DeconvNorm()([input_float, input_1, input_2])
+        encoder = tf.keras.Model(
+            [input_0, input_1, input_2], output_0(intermediate(deconv))
+        )
     else:
-        model = tf.keras.Model(input_0, output_0(model(float_input)))
+        encoder = tf.keras.Model(input_0, output_0(intermediate(input_float)))
 
     # get dimensionality of extracted features
-    D = model.output_shape[-1]
+    D = encoder.output_shape[-1]
 
     # create the output folder
     path = os.path.join(repository, name, "1", "model.savedmodel")
     os.makedirs(path)
 
     # save model
-    model.save(path)
+    encoder.save(path)
 
     return D
 
