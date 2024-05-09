@@ -64,7 +64,7 @@ class TritonPythonModel:
                 print("An error occured in Inference")
                 print(e)
 
-            return responses
+        return responses
 
     def finalize(self):
         print("Cleaning up ..")

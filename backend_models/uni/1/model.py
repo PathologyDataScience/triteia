@@ -3,6 +3,8 @@ import json
 import numpy as np
 import tritonclient.utils as triton_utils
 import timm
+from timm.data import resolve_data_config
+from timm.data.transforms_factory import create_transform
 import torch
 from huggingface_hub import login
 from PIL import Image
@@ -42,8 +44,9 @@ class TritonPythonModel:
         self.model = self.model.to(torch.device(f"cuda:{self.gpu_id}"))
 
         # These values are obtained from UNI hugging face example
-        self.mean = np.array([0.485, 0.456, 0.406])
-        self.std = np.array([0.229, 0.224, 0.225])
+        self.transform = create_transform(
+            **resolve_data_config(self.model.pretrained_cfg, model=self.model)
+        )
         self.model.eval()
 
     def execute(self, requests):
@@ -58,12 +61,15 @@ class TritonPythonModel:
             try:
                 in_0 = pb_utils.get_input_tensor_by_name(request, "input_0")
                 input_np = in_0.as_numpy()
-                input_np = np.transpose(input_np, (0, 3, 1, 2))
-                input_tensor = torch.tensor(input_np)
-                input_norm = (
-                    input_tensor / 255.0 - self.mean.reshape((1, 3, 1, 1))
-                ) / (self.std.reshape((1, 3, 1, 1)))
-                input_norm = input_norm.float().to(torch.device(f"cuda:{self.gpu_id}"))
+
+                batch_size = input_np.shape[0]
+                PIL_images = [Image.fromarray(input_np[i]) for i in range(batch_size)]
+                transformed_images = torch.stack(
+                    [self.transform(img) for img in PIL_images]
+                )
+                input_norm = transformed_images.float().to(
+                    torch.device(f"cuda:{self.gpu_id}")
+                )
 
                 with torch.inference_mode():
                     feature_emb = self.model(input_norm)
@@ -80,7 +86,7 @@ class TritonPythonModel:
                 print("An error occured in Inference")
                 print(e)
 
-            return responses
+        return responses
 
     def finalize(self):
         print("Cleaning up ..")
