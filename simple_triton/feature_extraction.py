@@ -496,10 +496,9 @@ def main():
         # create tile source
         hs_study = study(
             (file, mask),
-            t=(t, t),
-            chunk=(t, t),
+            t=t,
+            chunk=t,
             objective=magnification,
-            mask_threshold=0.5,
         )
 
         # tile iterator
@@ -523,7 +522,12 @@ def main():
 
         # write to tfrecord
         tfr_file = "{}/{}.{}_{}_{}X.tfr".format(
-            args.output, file.split("/")[-1], args.model, t, args.overlap, magnification
+            args.output,
+            file.split("/")[-1],
+            args.model,
+            t[0],
+            args.overlap,
+            magnification,
         )
         write_record(
             tfr_file,
