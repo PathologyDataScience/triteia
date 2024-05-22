@@ -527,7 +527,7 @@ def main():
             args.model,
             t[0],
             args.overlap,
-            magnification,
+            str(int(magnification)),
         )
         write_record(
             tfr_file,
