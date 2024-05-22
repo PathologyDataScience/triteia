@@ -251,7 +251,6 @@ def main():
     parser.add_argument(
         "input",
         type=str,
-        nargs="*",
         help="Path to file or file pattern.",
     )
     parser.add_argument("output", type=str, help="Output directory.")
@@ -370,8 +369,8 @@ def main():
         files = [os.path.join(os.getcwd(), f) for f in args.input]
     elif os.path.isdir(args.input):
         files = [os.path.join(args.input, file) for file in os.listdir(args.input)]
-    elif os.path.isfile(args.files):
-        with open(args.files) as f:
+    elif os.path.isfile(args.input):
+        with open(args.input) as f:
             files = [line.split()[0] for line in f]
     else:
         raise ValueError(
