@@ -11,6 +11,7 @@ import large_image_source_tiff
 from mil.io.writer import write_record
 import tensorflow as tf
 from time import sleep, time
+from tqdm import tqdm
 
 
 def study(
@@ -348,7 +349,7 @@ def main():
     parser.add_argument(
         "-tp",
         "--target_profile",
-        required=True,
+        required=False,
         default=None,
         type=str,
         help=("Target color profile (.npy file)"),
@@ -356,7 +357,7 @@ def main():
     parser.add_argument(
         "-sp",
         "--source_profile",
-        required=True,
+        required=False,
         default=None,
         type=str,
         help=("Path to source color profiles"),
