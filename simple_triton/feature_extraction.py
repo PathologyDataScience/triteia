@@ -12,6 +12,7 @@ from mil.io.writer import write_record
 import tensorflow as tf
 from time import sleep, time
 from tqdm import tqdm
+from pprint import pprint
 
 
 def study(
@@ -413,6 +414,7 @@ def main():
         source_p = None
 
     # match files to masks and source profiles and throw an error if a slide is not matched to a maks/profile
+    print("---------------- matching files to masks and source profiles -------------")
     matched_files = []
     for file in files:
         matched_mask = False
@@ -437,9 +439,13 @@ def main():
             matched_files.append((file, mask, None))
 
     # check of model is loaded
+    print("---------------- loading model -------------")
     model = TritonModel(args.model, args.server)
+    model.unload()
+    model.load()
     if model.is_loaded:
         print("The model has already been loaded")
+        pprint(model.get_config())
     else:
         try:
             # load tensorflow model - set maximum batch size
@@ -463,6 +469,9 @@ def main():
 
     # iterate through files and masks
     for file, mask, source_p in matched_files:
+        # start timer
+        start = time()
+
         # determine magnification, tile size if not provided
         source = large_image_source_tiff.open(file)
         metadata = source.getMetadata()
@@ -523,6 +532,14 @@ def main():
             labels={},
             structured=False,
             precision=tf.float16,
+        )
+
+        # display elapsed time
+        print(
+            (
+                f"{os.path.split(tfr_file)[1]} - "
+                f"{features.shape[0]} tiles, elapsed time: {time()-start}"
+            )
         )
 
 
