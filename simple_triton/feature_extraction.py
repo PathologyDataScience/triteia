@@ -421,6 +421,19 @@ def main():
     print("---------------- matching files to masks and source profiles -------------")
     matched_files = []
     for file in files:
+
+        # Skip existing tfr files
+        tfr_file = "{}/{}.{}_{}_{}_{}X.tfr".format(
+            args.output,
+            file.split("/")[-1],
+            args.model,
+            args.tile,
+            args.overlap,
+            str(int(args.magnification)),
+        )
+        if args.skip and os.path.exists(tfr_file):
+            continue
+
         matched_mask = False
         matched_source = False
 
