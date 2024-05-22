@@ -365,6 +365,10 @@ def main():
 
     args = parser.parse_args()
 
+    # check if output directory exists
+    if not os.path.exists(args.output):
+        os.makedirs(args.output)
+
     # parse inputs - pattern expansion or file containing list of files
     if isinstance(args.input, list):
         files = [os.path.join(os.getcwd(), f) for f in args.input]
