@@ -304,7 +304,7 @@ def main():
         "-M",
         "--magnification",
         required=False,
-        default=None,
+        default=20.0,
         type=float,
         help="Magnification. Defaults to scan magnification.",
     )
