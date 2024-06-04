@@ -248,26 +248,38 @@ def inference(
 
 
 def main():
-    parser = argparse.ArgumentParser(description=("Testing nargs."))
+    parser = argparse.ArgumentParser(
+        description=(
+            "Generate embeddings for tiled representations of whole-slide images. "
+            "The optimized dataloader supports TIFF based image formats like .svs."
+        )
+    )
     parser.add_argument(
         "input",
         type=str,
-        help="Path to file or file pattern.",
+        help="Path to single file or file pattern.",
     )
-    parser.add_argument("output", type=str, help="Output directory.")
+    parser.add_argument(
+        "output", 
+        type=str, 
+        help="Output directory for embedding files."
+    )
     parser.add_argument(
         "-f",
         "--files",
         required=False,
         type=str,
-        help="Path to root folder containing images, or text file listing image paths.",
+        help=(
+            "Path to folder containing whole-slide images or text file containing "
+            "image paths. This is an alternative to single file or file pattern input."
+        ),
     )
     parser.add_argument(
         "-n",
         "--noskip",
         dest="skip",
         action="store_false",
-        help=("Overwrite existing images (non-default)."),
+        help="Overwrite existing embeddings files (non-default).",
     )
     parser.add_argument(
         "-s",
@@ -275,7 +287,7 @@ def main():
         required=False,
         default="localhost:8001",
         type=str,
-        help="Triton server address. Default value is `localhost:8001`.",
+        help="Triton server address. Default is `localhost:8001`.",
     )
     parser.add_argument(
         "-m",
@@ -328,7 +340,7 @@ def main():
         required=False,
         default=4,
         type=int,
-        help=("The number of prefetch batches."),
+        help=("The number of batches to prefetch from disk (default 4)."),
     )
     parser.add_argument(
         "-w",
@@ -336,7 +348,7 @@ def main():
         required=False,
         default=32,
         type=int,
-        help=("The number of loader processes (default 32)."),
+        help=("The number of data loader processes (default 32)."),
     )
     parser.add_argument(
         "-ma",
@@ -352,7 +364,7 @@ def main():
         required=False,
         default=None,
         type=str,
-        help=("Target color profile (.npy file)"),
+        help=("Target color profile (.npy file)."),
     )
     parser.add_argument(
         "-sp",
@@ -360,9 +372,8 @@ def main():
         required=False,
         default=None,
         type=str,
-        help=("Path to source color profiles"),
+        help=("Path to source color profiles."),
     )
-
     args = parser.parse_args()
 
     # check if output directory exists
