@@ -28,7 +28,7 @@ class SharedNumpyArray:
         self.buf[i] = arr
 
     def copy(self, arr):
-        self.shape = arry.shape
+        self.shape = arr.shape
         self.buf = np.ndarray(self.shape, dtype=self.dtype, buffer=self.shm.buf)
         self.buf[:] = arr[:]
 
@@ -181,7 +181,14 @@ class TiffPrefetch(object):
     """
 
     def __init__(
-        self, study, dtype=np.uint8, icc=False, batch=64, prefetch=16, workers=16
+        self,
+        study,
+        dtype=np.uint8,
+        icc=False,
+        nchw=False,
+        batch=64,
+        prefetch=16,
+        workers=16,
     ):
         if len(study["slides"]) > 1:
             raise ValueError("Multi-slide studies not supported.")
@@ -192,6 +199,7 @@ class TiffPrefetch(object):
             slide["filename"], style={"icc": False} if not icc else None
         )
         self.read_kwargs = _hs_flatten(slide, study)
+        self._nchw = nchw
         self._initialize(batch, prefetch)
 
     def _initialize(self, batch, prefetch):
@@ -272,15 +280,26 @@ class TiffPrefetch(object):
                 else:
                     """last read aligned with batch boundary, create new shared array,
                     and read_kwargs, futures containers"""
-                    tiles = SharedNumpyArray(
-                        [
-                            self.batch,
-                            self.read_kwargs[self.pos][0]["tile_height"],
-                            self.read_kwargs[self.pos][0]["tile_width"],
-                            3,
-                        ],
-                        self.dtype,
-                    )
+                    if self._nchw:
+                        tiles = SharedNumpyArray(
+                            [
+                                self.batch,
+                                3,
+                                self.read_kwargs[self.pos][0]["tile_height"],
+                                self.read_kwargs[self.pos][0]["tile_width"],
+                            ],
+                            self.dtype,
+                        )
+                    else:
+                        tiles = SharedNumpyArray(
+                            [
+                                self.batch,
+                                self.read_kwargs[self.pos][0]["tile_height"],
+                                self.read_kwargs[self.pos][0]["tile_width"],
+                                3,
+                            ],
+                            self.dtype,
+                        )
                     futures = []
                     batch_kwargs = []
 
@@ -298,21 +317,38 @@ class TiffPrefetch(object):
                     batches = math.ceil((len(reads) + offset) / self.batch)
 
                     # create additional arrays if this read spans multiple batches
-                    tiles = [
-                        *tiles,
-                        *[
-                            SharedNumpyArray(
-                                [
-                                    self.batch,
-                                    reads[0]["tile_height"],
-                                    reads[0]["tile_width"],
-                                    3,
-                                ],
-                                self.dtype,
-                            )
-                            for _ in range(batches - 1)
-                        ],
-                    ]
+                    if self._nchw:
+                        tiles = [
+                            *tiles,
+                            *[
+                                SharedNumpyArray(
+                                    [
+                                        self.batch,
+                                        3,
+                                        reads[0]["tile_height"],
+                                        reads[0]["tile_width"],
+                                    ],
+                                    self.dtype,
+                                )
+                                for _ in range(batches - 1)
+                            ],
+                        ]
+                    else:
+                        tiles = [
+                            *tiles,
+                            *[
+                                SharedNumpyArray(
+                                    [
+                                        self.batch,
+                                        reads[0]["tile_height"],
+                                        reads[0]["tile_width"],
+                                        3,
+                                    ],
+                                    self.dtype,
+                                )
+                                for _ in range(batches - 1)
+                            ],
+                        ]
 
                     """submit job - read into first array in `tiles` at slice `offset`.
                     overflow to subsequent arrays if this read spans multiple batches.

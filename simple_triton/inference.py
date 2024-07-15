@@ -170,7 +170,7 @@ class Requests(object):
                 raise Exception(
                     (
                         f"Model {model_dict['name']} input "
-                        f"{model_dict['input'][i]['name']} "
+                        f"{model_dict['input'][0]['name']} "
                         f"expects shape {output}, received input with "
                         f"shape {list(provided.shape)}."
                     )
