@@ -126,8 +126,8 @@ def study(
 def inference(
     iterator,
     model_name,
-    w_source=None,
-    w_target=None,
+    source=None,
+    target=None,
     url="localhost:8001",
     pre=None,
     nchw=False,
@@ -458,24 +458,20 @@ def main():
     else:
         target = None
 
-    # process each task
-    for file, mask, stains in files:
-        start = time()
-
-        # determine
-
     # iterate through files and masks
-    for file, mask, source in matched_files:
+    for file, mask, stain in matched_files:
         # start timer
         start = time()
 
         # load source stains
-        if source is not None:
-            source = np.load(source)
+        if stain is not None:
+            source = np.load(stain)
             if source.shape != (3, 3):
                 raise ValueError(
                     "Image stain profile expected shape (3, 3), found {target.shape}."
                 )
+        else:
+            source = None
 
         # create tile source
         hs_study = study(
