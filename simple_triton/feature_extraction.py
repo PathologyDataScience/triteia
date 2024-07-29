@@ -2,7 +2,6 @@ import histomics_stream as hs
 import numpy as np
 import argparse
 import os
-import regex
 from simple_triton.inference import Requests
 from simple_triton.config import ConfigBuilder
 from simple_triton.tile_iterators import TiffPrefetch
@@ -315,8 +314,8 @@ def main():
         "-s",
         "--skip",
         dest="skip",
-        action="store_false",
-        help="Skip files with existing embeddings in output (default True).",
+        action="store_true",
+        help="Skip files with existing embeddings in output.",
     )
     parser.add_argument(
         "-a",
@@ -360,9 +359,9 @@ def main():
         "-b",
         "--batch",
         required=False,
-        default=128,
+        default=64,
         type=int,
-        help=("Batch size (default 128 tiles)."),
+        help=("Batch size (default 64 tiles)."),
     )
     parser.add_argument(
         "-c",
@@ -406,12 +405,12 @@ def main():
                 )
             files = [args.input, args.mask, args.normalization]
     else:
-        with open(args.input) as f:
+        with open(args.input, 'r') as f:
             files = [line.strip().split("\t") for line in f]
         for i, f in enumerate(files):
             if not os.path.isfile(f[0]):
                 raise FileNotFoundError(f"Image file {f[0]} not found.")
-            files[i] = [f[0], *(3 - len(f)) * [None]]
+            f = [*f, *(3 - len(f)) * [None]]
             if f[1] is not None:
                 if not os.path.isfile(f[1]):
                     raise FileNotFoundError(
@@ -422,6 +421,7 @@ def main():
                     raise FileNotFoundError(
                         f"Stain profile file {f[1]} for image {f[0]} not found."
                     )
+            files[i] = f
 
     # optionally skip files with existing embeddings
     def tfr_name(output, file, model, tile, overlap, magnification):
@@ -431,25 +431,26 @@ def main():
         )
 
     if args.skip:
-        files = [
-            f
-            for f in files
-            if not os.path.isfile(
-                tfr_name(
-                    args.output,
-                    f[0],
-                    args.model,
-                    args.tile,
-                    args.overlap,
-                    str(args.magnification),
-                )
+        tfrs = [
+            tfr_name(
+                args.output,
+                f[0],
+                args.model,
+                args.tile,
+                args.overlap,
+                str(args.magnification),
             )
+            for f in files
         ]
+        skip = [(f,t) for (f,t) in zip(files, tfrs) if os.path.isfile(t)]
+        for f, t in skip:
+            print(f"Skipping image {f[0]}, output {t} exists.")
+        files = [f for f in files if f not in [s[0] for s in skip]]
 
     # ensure presence of target stain profile
-    if args.target is None:
-        if not all([f[1] is None for f in files]):
-            raise ValueError("Path to target stain profile is not provided.")
+    if args.target is None and any([f[2] is not None for f in files]):
+        raise ValueError("Path to target stain profile not provided.")
+    if args.target is not None:
         target = np.load(args.target)
         if target.shape != (3, 3):
             raise ValueError(
@@ -459,8 +460,7 @@ def main():
         target = None
 
     # iterate through files and masks
-    for file, mask, stain in matched_files:
-        # start timer
+    for file, mask, stain in files:
         start = time()
 
         # load source stains
@@ -474,10 +474,12 @@ def main():
             source = None
 
         # create tile source
+        chunk = args.chunk * args.tile - (args.chunk - 1) * args.overlap
         hs_study = study(
-            (file, mask),
-            t=args.t,
-            chunk=args.c * args.t - (args.c - 1) * o,
+            file if mask is None else (file, mask),
+            t=(args.tile, args.tile),
+            chunk=(chunk, chunk),
+            overlap=(args.overlap, args.overlap),
             objective=args.magnification,
         )
 
@@ -492,7 +494,7 @@ def main():
             args.model,
             source=source,
             target=target,
-            url=args.server,
+            url=args.address,
             limit=1,
             rest=0.0,
         )
@@ -502,7 +504,7 @@ def main():
 
         # write to tfrecord
         write_record(
-            tfr_name(args.output, file, model, args.t, args.o, args.magnification),
+            tfr_name(args.output, file, args.model, args.tile, args.overlap, args.magnification),
             features,
             metadata,
             labels={},
