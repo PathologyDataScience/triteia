@@ -2,7 +2,7 @@ import histomics_stream as hs
 import numpy as np
 import argparse
 import os
-import fnmatch
+import regex
 from simple_triton.inference import Requests
 from simple_triton.config import ConfigBuilder
 from simple_triton.tile_iterators import TiffPrefetch
@@ -126,6 +126,8 @@ def study(
 def inference(
     iterator,
     model_name,
+    w_source=None,
+    w_target=None,
     url="localhost:8001",
     pre=None,
     nchw=False,
@@ -145,6 +147,12 @@ def inference(
     model_name : str
         The name of the model to use for inference. Models must be loaded prior to
         inference.
+    source : array_like
+        Stain matrix (3x3) for the input slides. Requires a model with a normalization
+        layer. Default value is None.
+    target : array_like
+        Ideal stain matrix (3x3) for normalization. Requires a model with a
+        normalization layer. Default value is None.
     url : str
         The url for the triton server grpc port. Default value is `localhost:8001`.
     pre : function
@@ -196,6 +204,18 @@ def inference(
                 try:
                     t_start = time()
                     sample, metadata = next(iterator)
+                    if not ((source is None) and (target is None)):
+                        sample = {
+                            "input_0": sample,
+                            "input_1": np.stack(
+                                sample.shape[0] * [tf.cast(source, tf.float32)],
+                                axis=0,
+                            ),
+                            "input_2": np.stack(
+                                sample.shape[0] * [tf.cast(target, tf.float32)],
+                                axis=0,
+                            ),
+                        }
                     t_stop = time()
                 except StopIteration as e:
                     stop = True
@@ -250,59 +270,69 @@ def inference(
 def main():
     parser = argparse.ArgumentParser(
         description=(
-            "Generate embeddings for tiled representations of whole-slide images. "
-            "The optimized dataloader supports TIFF based image formats like .svs."
+            "Generate embeddings for tiled representations of TIFF based "
+            "whole-slide images."
         )
     )
     parser.add_argument(
         "input",
         type=str,
-        help="Path to single file or file pattern.",
-    )
-    parser.add_argument(
-        "output", 
-        type=str, 
-        help="Output directory for embedding files."
-    )
-    parser.add_argument(
-        "-f",
-        "--files",
-        required=False,
-        type=str,
         help=(
-            "Path to folder containing whole-slide images or text file containing "
-            "image paths. This is an alternative to single file or file pattern input."
+            "Path to single image or a tab-delimited file of image paths and "
+            "optional masks and stain profiles."
         ),
     )
+    parser.add_argument("output", type=str, help="Output directory.")
     parser.add_argument(
-        "-n",
-        "--noskip",
-        dest="skip",
-        action="store_false",
-        help="Overwrite existing embeddings files (non-default).",
-    )
-    parser.add_argument(
-        "-s",
-        "--server",
-        required=False,
-        default="localhost:8001",
+        "model",
         type=str,
-        help="Triton server address. Default is `localhost:8001`.",
+        help="Model name.",
     )
     parser.add_argument(
         "-m",
-        "--model",
-        required=True,
+        "--mask",
+        default=None,
         type=str,
-        help="Model name.",
+        help="Optional path to a tissue mask image for single image input.",
+    )
+    parser.add_argument(
+        "-n",
+        "--normalization",
+        required=False,
+        default=None,
+        type=str,
+        help="Optional path to an image stain profile for single image input.",
+    )
+    parser.add_argument(
+        "-r",
+        "--target",
+        required=False,
+        default=None,
+        type=str,
+        help=("Optional target stain profile for Macenko normalization."),
+    )
+    parser.add_argument(
+        "-s",
+        "--skip",
+        dest="skip",
+        action="store_false",
+        help="Skip files with existing embeddings in output (default True).",
+    )
+    parser.add_argument(
+        "-a",
+        "--address",
+        required=False,
+        default="localhost:8001",
+        type=str,
+        help="Triton server address (default localhost:8001)",
     )
     parser.add_argument(
         "-t",
         "--tile",
         required=False,
-        default=None,
+        default=224,
         type=int,
-        help="Tile size. Defaults to internal file tile size at scan magnification.",
+        help=("Tile size in pixels (default to internal tile size)."),
     )
     parser.add_argument(
         "-o",
@@ -310,7 +340,7 @@ def main():
         required=False,
         default=0,
         type=int,
-        help="Tile overlap. Defaults to 0 pixels.",
+        help="Tile overlap in pixels (default 0).",
     )
     parser.add_argument(
         "-M",
@@ -318,13 +348,13 @@ def main():
         required=False,
         default=20.0,
         type=float,
-        help="Magnification. Defaults to scan magnification.",
+        help="Magnification (default 20X objective).",
     )
     parser.add_argument(
         "-i",
         "--icc",
-        action="store_true",
-        help="Apply ICC correction. Defaults to False.",
+        action="store_false",
+        help="Apply ICC correction (default True).",
     )
     parser.add_argument(
         "-b",
@@ -332,7 +362,15 @@ def main():
         required=False,
         default=128,
         type=int,
-        help=("Batch size. Defaults 128 tiles."),
+        help=("Batch size (default 128 tiles)."),
+    )
+    parser.add_argument(
+        "-c",
+        "--chunk",
+        required=False,
+        default=4,
+        type=int,
+        help=("Reach chunk size (default 4 tiles)."),
     )
     parser.add_argument(
         "-p",
@@ -350,183 +388,101 @@ def main():
         type=int,
         help=("The number of data loader processes (default 32)."),
     )
-    parser.add_argument(
-        "-ma",
-        "--mask_dir",
-        required=True,
-        default=None,
-        type=str,
-        help=("The directory where the masks are stored"),
-    )
-    parser.add_argument(
-        "-tp",
-        "--target_profile",
-        required=False,
-        default=None,
-        type=str,
-        help=("Target color profile (.npy file)."),
-    )
-    parser.add_argument(
-        "-sp",
-        "--source_profile",
-        required=False,
-        default=None,
-        type=str,
-        help=("Path to source color profiles."),
-    )
     args = parser.parse_args()
 
-    # check if output directory exists
     if not os.path.exists(args.output):
         os.makedirs(args.output)
 
-    # parse inputs - pattern expansion or file containing list of files
-    if isinstance(args.input, list):
-        files = [os.path.join(os.getcwd(), f) for f in args.input]
-    elif os.path.isdir(args.input):
-        files = [os.path.join(args.input, file) for file in os.listdir(args.input)]
-    elif os.path.isfile(args.input):
+    # capture inputs
+    if large_image_source_tiff.canRead(args.input):
+        if args.mask is not None:
+            if not os.path.isfile(args.mask):
+                raise FileNotFoundError(
+                    f"Mask file {args.mask} for image {args.input} not found."
+                )
+            if not os.path.isfile(args.normalization):
+                raise FileNotFoundError(
+                    f"Stain profile file {f[1]} for image {f[0]} not found."
+                )
+            files = [args.input, args.mask, args.normalization]
+    else:
         with open(args.input) as f:
-            files = [line.split()[0] for line in f]
-    else:
-        raise ValueError(
-            "Provide one of a text file containing inputs via -f/--files or a file pattern."
+            files = [line.strip().split("\t") for line in f]
+        for i, f in enumerate(files):
+            if not os.path.isfile(f[0]):
+                raise FileNotFoundError(f"Image file {f[0]} not found.")
+            files[i] = [f[0], *(3 - len(f)) * [None]]
+            if f[1] is not None:
+                if not os.path.isfile(f[1]):
+                    raise FileNotFoundError(
+                        f"Mask file {f[1]} for image {f[0]} not found."
+                    )
+            if f[2] is not None:
+                if not os.path.isfile(f[1]):
+                    raise FileNotFoundError(
+                        f"Stain profile file {f[1]} for image {f[0]} not found."
+                    )
+
+    # optionally skip files with existing embeddings
+    def tfr_name(output, file, model, tile, overlap, magnification):
+        return os.path.join(
+            output,
+            f"{os.path.split(file)[1]}.{model}_{tile}_{overlap}_{magnification}X.tfr",
         )
 
-    # throw an error when mask directory has not been inputted
-    if args.mask_dir is None:
-        raise ValueError("Provide the directory where the masks have been stored.")
-    else:
-        if os.path.isdir(args.mask_dir):
-            mask_files = [
-                os.path.join(args.mask_dir, mask) for mask in os.listdir(args.mask_dir)
-            ]
-        else:
-            mask_files = [args.mask_dir]
-
-    # target color profile
-    if args.target_profile is not None:
-        if os.path.isdir(args.target_profile) or not args.target_profile.endswith(
-            ".npy"
-        ):
-            raise ValueError(
-                "target profile should be a .npy file containing a stain matrix (3x3)."
+    if args.skip:
+        files = [
+            f
+            for f in files
+            if not os.path.isfile(
+                tfr_name(
+                    args.output,
+                    f[0],
+                    args.model,
+                    args.tile,
+                    args.overlap,
+                    str(args.magnification),
+                )
             )
-        target_p = np.load(args.target_profile)
+        ]
+
+    # ensure presence of target stain profile
+    if args.target is None:
+        if not all([f[1] is None for f in files]):
+            raise ValueError("Path to target stain profile is not provided.")
+        target = np.load(args.target)
+        if target.shape != (3, 3):
+            raise ValueError(
+                "Target stain profile expected shape (3, 3), " "found {target.shape}."
+            )
     else:
-        target_p = None
+        target = None
 
-    # source color profiles for slides
-    if args.source_profile is not None:
-        if os.path.isdir(args.source_profile):
-            source_p = [
-                os.path.join(args.source_profile, file)
-                for file in os.listdir(args.source_profile)
-            ]
-        elif os.path.isfile(args.source_profile):
-            source_p = [args.source_profile]
-    else:
-        source_p = None
+    # process each task
+    for file, mask, stains in files:
+        start = time()
 
-    # match files to masks and source profiles and throw an error if a slide is not matched to a maks/profile
-    print("---------------- matching files to masks and source profiles -------------")
-    matched_files = []
-    for file in files:
-
-        # Skip existing tfr files
-        tfr_file = "{}/{}.{}_{}_{}_{}X.tfr".format(
-            args.output,
-            file.split("/")[-1],
-            args.model,
-            args.tile,
-            args.overlap,
-            str(int(args.magnification)),
-        )
-        if args.skip and os.path.exists(tfr_file):
-            continue
-
-        matched_mask = False
-        matched_source = False
-
-        for mask in mask_files:
-            if fnmatch.fnmatch(mask.split("/")[-1], f'*{file.split("/")[-1]}*'):
-                matched_mask = True
-                break
-        if not matched_mask:
-            raise FileNotFoundError(f"No mask file found for {file}")
-
-        if source_p is not None:
-            for prof in source_p:
-                if fnmatch.fnmatch(prof.split("/")[-1], f'*{file.split("/")[-1]}*'):
-                    matched_source = True
-                    break
-            if not matched_source:
-                raise FileNotFoundError(f"No source profile found for {file}")
-            matched_files.append((file, mask, np.load(prof)))
-        else:
-            matched_files.append((file, mask, None))
-
-    # check of model is loaded
-    print("---------------- loading model -------------")
-    model = TritonModel(args.model, args.server)
-    model.unload()
-    model.load()
-    if model.is_loaded:
-        print("The model has already been loaded")
-        pprint(model.get_config())
-    else:
-        try:
-            # load tensorflow model - set maximum batch size
-            model = TritonModel(args.model, args.server)
-
-            # initialize builder with a basic configuration
-            builder = ConfigBuilder(args.model, config={"maxBatchSize": args.batch})
-
-            # increase the number of model instances per GPU to 2
-            builder.add_instance_group(count=2)
-
-            # add automatic mixed precision
-            builder.add_mixed_precision()
-
-            # re-load model with new config
-            model.load(config=builder.config)
-
-            assert model.is_loaded()
-        except Exception as e:
-            print("loading model failed: " + str(e), flush=True)
+        # determine
 
     # iterate through files and masks
-    for file, mask, source_p in matched_files:
+    for file, mask, source in matched_files:
         # start timer
         start = time()
 
-        # determine magnification, tile size if not provided
-        source = large_image_source_tiff.open(file)
-        metadata = source.getMetadata()
-        magnification = (
-            metadata["magnification"]
-            if args.magnification is None
-            else args.magnification
-        )
-        t = (
-            (metadata["tileHeight"], metadata["tileWidth"])
-            if args.tile is None
-            else (args.tile, args.tile)
-        )
-        if (args.tile is None) and (magnification != metadata["magnification"]):
-            raise ValueError(
-                (
-                    "Using default tile size requires native magnification "
-                    f"`None` or {metadata['magnification']}."
+        # load source stains
+        if source is not None:
+            source = np.load(source)
+            if source.shape != (3, 3):
+                raise ValueError(
+                    "Image stain profile expected shape (3, 3), found {target.shape}."
                 )
-            )
 
         # create tile source
         hs_study = study(
             (file, mask),
-            t=t,
-            chunk=t,
-            objective=magnification,
+            t=args.t,
+            chunk=args.c * args.t - (args.c - 1) * o,
+            objective=args.magnification,
         )
 
         # tile iterator
@@ -538,8 +494,8 @@ def main():
         features, metadata, times, failures = inference(
             iterator,
             args.model,
-            w_source=source_p,
-            w_target=target_p,
+            source=source,
+            target=target,
             url=args.server,
             limit=1,
             rest=0.0,
@@ -549,16 +505,8 @@ def main():
         features = np.concatenate(features[0], axis=0)
 
         # write to tfrecord
-        tfr_file = "{}/{}.{}_{}_{}X.tfr".format(
-            args.output,
-            file.split("/")[-1],
-            args.model,
-            t[0],
-            args.overlap,
-            str(int(magnification)),
-        )
         write_record(
-            tfr_file,
+            tfr_name(args.output, file, model, args.t, args.o, args.magnification),
             features,
             metadata,
             labels={},
@@ -569,7 +517,7 @@ def main():
         # display elapsed time
         print(
             (
-                f"{os.path.split(tfr_file)[1]} - "
+                f"{os.path.split(file)[1]} - "
                 f"{features.shape[0]} tiles, elapsed time: {time()-start}"
             )
         )
