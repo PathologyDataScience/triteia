@@ -8,7 +8,6 @@ from simple_triton.tile_iterators import TiffPrefetch
 from simple_triton.model import TritonModel
 import large_image_source_tiff
 from mil.io.writer import write_record
-import tensorflow as tf
 from time import sleep, time
 from tqdm import tqdm
 from pprint import pprint
@@ -207,11 +206,11 @@ def inference(
                         sample = {
                             "input_0": sample,
                             "input_1": np.stack(
-                                sample.shape[0] * [tf.cast(source, tf.float32)],
+                                sample.shape[0] * [np.cast(source, np.float32)],
                                 axis=0,
                             ),
                             "input_2": np.stack(
-                                sample.shape[0] * [tf.cast(target, tf.float32)],
+                                sample.shape[0] * [np.cast(target, np.float32)],
                                 axis=0,
                             ),
                         }
@@ -288,8 +287,17 @@ def main():
         help="Model name.",
     )
     parser.add_argument(
+        "-f",
+        "--float",
+        dest="float",
+        required=False,
+        action="store_true",
+        help="Serialize features in float32 precision. Default is float16"
+    )
+    parser.add_argument(
         "-m",
         "--mask",
+        required=False,
         default=None,
         type=str,
         help="Optional path to a tissue mask image for single image input.",
@@ -399,11 +407,12 @@ def main():
                 raise FileNotFoundError(
                     f"Mask file {args.mask} for image {args.input} not found."
                 )
+        if args.normalization is not None:
             if not os.path.isfile(args.normalization):
                 raise FileNotFoundError(
-                    f"Stain profile file {f[1]} for image {f[0]} not found."
+                    f"Stain profile file {arg.normalization} for image {args.input} not found."
                 )
-            files = [args.input, args.mask, args.normalization]
+        files = [[args.input, args.mask, args.normalization]]
     else:
         with open(args.input, 'r') as f:
             files = [line.strip().split("\t") for line in f]
@@ -460,8 +469,8 @@ def main():
         target = None
 
     # iterate through files and masks
-    for file, mask, stain in files:
-        start = time()
+    for file, mask, stain in (pbar := tqdm(files)):
+        pbar.set_description(f"Processing {os.path.split(file)[1]}")
 
         # load source stains
         if stain is not None:
@@ -503,21 +512,14 @@ def main():
         features = np.concatenate(features[0], axis=0)
 
         # write to tfrecord
+        precision = np.float32 if args.float else np.float16
         write_record(
             tfr_name(args.output, file, args.model, args.tile, args.overlap, args.magnification),
             features,
             metadata,
             labels={},
             structured=False,
-            precision=tf.float16,
-        )
-
-        # display elapsed time
-        print(
-            (
-                f"{os.path.split(file)[1]} - "
-                f"{features.shape[0]} tiles, elapsed time: {time()-start}"
-            )
+            precision=precision,
         )
 
 
