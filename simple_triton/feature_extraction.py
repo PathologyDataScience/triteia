@@ -292,7 +292,7 @@ def main():
         dest="float",
         required=False,
         action="store_true",
-        help="Serialize features in float32 precision. Default is float16"
+        help="Serialize features in float32 precision. Default is float16.",
     )
     parser.add_argument(
         "-m",
@@ -414,7 +414,7 @@ def main():
                 )
         files = [[args.input, args.mask, args.normalization]]
     else:
-        with open(args.input, 'r') as f:
+        with open(args.input, "r") as f:
             files = [line.strip().split("\t") for line in f]
         for i, f in enumerate(files):
             if not os.path.isfile(f[0]):
@@ -451,7 +451,7 @@ def main():
             )
             for f in files
         ]
-        skip = [(f,t) for (f,t) in zip(files, tfrs) if os.path.isfile(t)]
+        skip = [(f, t) for (f, t) in zip(files, tfrs) if os.path.isfile(t)]
         for f, t in skip:
             print(f"Skipping image {f[0]}, output {t} exists.")
         files = [f for f in files if f not in [s[0] for s in skip]]
@@ -514,7 +514,14 @@ def main():
         # write to tfrecord
         precision = np.float32 if args.float else np.float16
         write_record(
-            tfr_name(args.output, file, args.model, args.tile, args.overlap, args.magnification),
+            tfr_name(
+                args.output,
+                file,
+                args.model,
+                args.tile,
+                args.overlap,
+                args.magnification,
+            ),
             features,
             metadata,
             labels={},
