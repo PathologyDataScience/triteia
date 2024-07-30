@@ -1,9 +1,16 @@
+from concurrent.futures import ProcessPoolExecutor, wait
 import histomics_stream as hs
 import numpy as np
+import argparse
 import os
 from simple_triton.inference import Requests
+from simple_triton.config import ConfigBuilder
+from simple_triton.tile_iterators import TiffPrefetch
+from simple_triton.model import TritonModel
+import large_image_source_tiff
+from mil.io.writer import write_record
 from time import sleep, time
-import tensorflow as tf
+from tqdm import tqdm
 
 
 def study(
@@ -117,8 +124,8 @@ def study(
 def inference(
     iterator,
     model_name,
-    w_source=None,
-    w_target=None,
+    source=None,
+    target=None,
     url="localhost:8001",
     pre=None,
     nchw=False,
@@ -138,12 +145,11 @@ def inference(
     model_name : str
         The name of the model to use for inference. Models must be loaded prior to
         inference.
-    w_source : array_like
+    source : array_like
         Stain matrix (3x3) for the input slides. Requires a model with a normalization
         layer. Default value is None.
-    w_target : array_like
-        Ideal stain matrix (3x3) for normalization. Requires a model with a
-        normalization layer. Default value is None.
+    target : array_like
+        Ideal stain matrix (3x3) for normalization. Required if `source` provided.
     url : str
         The url for the triton server grpc port. Default value is `localhost:8001`.
     pre : function
@@ -195,15 +201,15 @@ def inference(
                 try:
                     t_start = time()
                     sample, metadata = next(iterator)
-                    if not ((w_source is None) and (w_target is None)):
+                    if not ((source is None) and (target is None)):
                         sample = {
                             "input_0": sample,
                             "input_1": np.stack(
-                                sample.shape[0] * [tf.cast(w_source, tf.float32)],
+                                sample.shape[0] * [np.cast(source, np.float32)],
                                 axis=0,
                             ),
                             "input_2": np.stack(
-                                sample.shape[0] * [tf.cast(w_target, tf.float32)],
+                                sample.shape[0] * [np.cast(target, np.float32)],
                                 axis=0,
                             ),
                         }
@@ -256,3 +262,289 @@ def inference(
     times = {k: [b["times"][k] for b in batches] for k in batches[0]["times"].keys()}
 
     return features, metadata, times, failed
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description=(
+            "Generate embeddings for tiled representations of TIFF based "
+            "whole-slide images."
+        )
+    )
+    parser.add_argument(
+        "input",
+        type=str,
+        help=(
+            "Path to single image or a tab-delimited file of image paths and "
+            "optional masks and stain profiles."
+        ),
+    )
+    parser.add_argument("output", type=str, help="Output directory.")
+    parser.add_argument(
+        "model",
+        type=str,
+        help="Model name.",
+    )
+    parser.add_argument(
+        "-f",
+        "--float",
+        dest="float",
+        required=False,
+        action="store_true",
+        help="Serialize features in float32 precision. Default is float16.",
+    )
+    parser.add_argument(
+        "-m",
+        "--mask",
+        required=False,
+        default=None,
+        type=str,
+        help="Optional path to a tissue mask image for single image input.",
+    )
+    parser.add_argument(
+        "-n",
+        "--normalization",
+        required=False,
+        default=None,
+        type=str,
+        help="Optional path to an image stain profile for single image input.",
+    )
+    parser.add_argument(
+        "-r",
+        "--target",
+        required=False,
+        default=None,
+        type=str,
+        help=("Optional target stain profile for Macenko normalization."),
+    )
+    parser.add_argument(
+        "-s",
+        "--skip",
+        dest="skip",
+        action="store_true",
+        help="Skip files with existing embeddings in output.",
+    )
+    parser.add_argument(
+        "-a",
+        "--address",
+        required=False,
+        default="localhost:8001",
+        type=str,
+        help="Triton server address (default localhost:8001)",
+    )
+    parser.add_argument(
+        "-t",
+        "--tile",
+        required=False,
+        default=224,
+        type=int,
+        help=("Tile size in pixels (default to internal tile size)."),
+    )
+    parser.add_argument(
+        "-o",
+        "--overlap",
+        required=False,
+        default=0,
+        type=int,
+        help="Tile overlap in pixels (default 0).",
+    )
+    parser.add_argument(
+        "-M",
+        "--magnification",
+        required=False,
+        default=20.0,
+        type=float,
+        help="Magnification (default 20X objective).",
+    )
+    parser.add_argument(
+        "-i",
+        "--icc",
+        action="store_false",
+        help="Apply ICC correction (default True).",
+    )
+    parser.add_argument(
+        "-b",
+        "--batch",
+        required=False,
+        default=64,
+        type=int,
+        help=("Batch size (default 64 tiles)."),
+    )
+    parser.add_argument(
+        "-c",
+        "--chunk",
+        required=False,
+        default=4,
+        type=int,
+        help=("Reach chunk size (default 4 tiles)."),
+    )
+    parser.add_argument(
+        "-p",
+        "--prefetch",
+        required=False,
+        default=4,
+        type=int,
+        help=("The number of batches to prefetch from disk (default 4)."),
+    )
+    parser.add_argument(
+        "-w",
+        "--workers",
+        required=False,
+        default=32,
+        type=int,
+        help=("The number of data loader processes (default 32)."),
+    )
+    args = parser.parse_args()
+
+    if not os.path.exists(args.output):
+        os.makedirs(args.output)
+
+    # capture inputs
+    if large_image_source_tiff.canRead(args.input):
+        if args.mask is not None:
+            if not os.path.isfile(args.mask):
+                raise FileNotFoundError(
+                    f"Mask file {args.mask} for image {args.input} not found."
+                )
+        if args.normalization is not None:
+            if not os.path.isfile(args.normalization):
+                raise FileNotFoundError(
+                    f"Stain profile file {arg.normalization} for image {args.input} not found."
+                )
+        files = [[args.input, args.mask, args.normalization]]
+    else:
+        with open(args.input, "r") as f:
+            files = [line.strip().split("\t") for line in f]
+        for i, f in enumerate(files):
+            if not os.path.isfile(f[0]):
+                raise FileNotFoundError(f"Image file {f[0]} not found.")
+            f = [*f, *(3 - len(f)) * [None]]
+            if f[1] is not None:
+                if not os.path.isfile(f[1]):
+                    raise FileNotFoundError(
+                        f"Mask file {f[1]} for image {f[0]} not found."
+                    )
+            if f[2] is not None:
+                if not os.path.isfile(f[1]):
+                    raise FileNotFoundError(
+                        f"Stain profile file {f[1]} for image {f[0]} not found."
+                    )
+            files[i] = f
+
+    # optionally skip files with existing embeddings
+    def tfr_name(output, file, model, tile, overlap, magnification):
+        return os.path.join(
+            output,
+            f"{os.path.split(file)[1]}.{model}_{tile}_{overlap}_{magnification}X.tfr",
+        )
+
+    if args.skip:
+        tfrs = [
+            tfr_name(
+                args.output,
+                f[0],
+                args.model,
+                args.tile,
+                args.overlap,
+                str(args.magnification),
+            )
+            for f in files
+        ]
+        skip = [(f, t) for (f, t) in zip(files, tfrs) if os.path.isfile(t)]
+        for f, t in skip:
+            print(f"Skipping image {f[0]}, output {t} exists.")
+        files = [f for f in files if f not in [s[0] for s in skip]]
+
+    # ensure presence of target stain profile
+    if args.target is None and any([f[2] is not None for f in files]):
+        raise ValueError("Path to target stain profile not provided.")
+    if args.target is not None:
+        target = np.load(args.target)
+        if target.shape != (3, 3):
+            raise ValueError(
+                "Target stain profile expected shape (3, 3), " "found {target.shape}."
+            )
+    else:
+        target = None
+
+    # create studies in background while waiting for inference to finish
+    with ProcessPoolExecutor(max_workers=1) as pool:
+
+        # create first study in background
+        chunk = args.chunk * args.tile - (args.chunk - 1) * args.overlap
+        kwargs = {
+            "paths": files[0][0] if files[0][1] is None else (files[0][0], files[0][1]),
+            "t": (args.tile, args.tile),
+            "chunk": (chunk, chunk),
+            "overlap": (args.overlap, args.overlap),
+            "objective": args.magnification,
+            "mask_threshold": 0.01,
+        }
+        futures = {0: pool.submit(study, **kwargs)}
+
+        # iterate through files and masks
+        for i, (file, mask, stain) in enumerate(tqdm(files)):
+
+            # prefetch study for next slide
+            if i < len(files) - 1:
+                kwargs.update({"paths": file if mask is None else (file, mask)})
+                futures[(i + 1) % 2] = pool.submit(study, **kwargs)
+
+            # wait on study completion for current job
+            wait([futures[i % 2]])
+            try:
+                hs_study = futures[i % 2].result()
+            except Exception as exc:
+                print(f"Inference error {file}: {exc}")
+                continue
+
+            # tile iterator
+            iterator = TiffPrefetch(
+                hs_study, np.uint8, args.icc, args.batch, args.prefetch, args.workers
+            )
+
+            # load source stains
+            if stain is not None:
+                source = np.load(stain)
+                if source.shape != (3, 3):
+                    raise ValueError(
+                        "Image stain profile expected shape (3, 3), found {target.shape}."
+                    )
+            else:
+                source = None
+
+            # inference
+            features, metadata, times, failures = inference(
+                iterator,
+                args.model,
+                source=source,
+                target=target,
+                url=args.address,
+                limit=1,
+                rest=0.0,
+            )
+
+            # concatenate features
+            features = np.concatenate(features[0], axis=0)
+
+            # write to tfrecord
+            precision = np.float32 if args.float else np.float16
+            write_record(
+                tfr_name(
+                    args.output,
+                    file,
+                    args.model,
+                    args.tile,
+                    args.overlap,
+                    args.magnification,
+                ),
+                features,
+                metadata,
+                labels={},
+                structured=False,
+                precision=precision,
+            )
+
+
+if __name__ == "__main__":
+    main()

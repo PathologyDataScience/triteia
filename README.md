@@ -1,6 +1,6 @@
 # simple-triton
 
-A simple Python client for efficient inference with the NVIDIA Triton inference server.
+A Python client for NVIDIA Triton inference.
 
 See the [user guide](#user-guide) to read about concepts and to get started with examples. Details on testing and implementation are located in the [developer guide](#developer-guide).
 
@@ -54,16 +54,70 @@ where `host_model_repository` is the location of your model repository folder on
 
 > **Note:** The options `--ipc`, `--shm-size`, and `--ulimit memlock` are recommended when using shared memory for client/server communication. This allows Triton to access host system shared memory, increases the default 64MB shared memory limit, and prevents paging of RAM out to disk. If the client is run in a container then the `--ipc` and `--shm-size` options should be passed to the client container run command. Running the client container with `--network=host` is the easiest configuration to allow the client and server to communicate over the host network.
 
+## Command line interface <a name="cli"></a>
+### Inference
+A command-line interface is provided for inference with single or multiple slides and with control of tiling, masking, data loading, and serialization parameters. Models must be loaded prior to inference.
+
+Perform inference with the EfficientNetV2S model on a single slide, outputing serialized embeddings to your home directory
+```console
+$python inference.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow
+```
+
+Optional parameters allow restricting inference to a tissue mask (`-m`)
+```console
+$python inference.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -m TCGA-AN-A0G0-01Z-00-DX1.mask.png
+```
+
+modification tile size (`-t`), add tile overlap (`-o`), and change magnification (`-M`)
+```console
+$python inference.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -t 256 -o 128 -M 10
+```
+
+adjustment of tile reading parameters including ICC correction (`-i`), read chunk size (`-c`), batch size (`-b`), prefetch (`-p`), and multiprocessing workers (`-w`).
+```console
+$python inference.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -i -c 8 -b 128 -p 2 -w 16
+```
+
+Provide image source (`-n`) and target (`-r`) parameters for Macenko color normalization
+```console
+$python inference.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -n ~/TCGA-AN-A0G0-01Z-00-DX1.stain.npy -r ~/standard_stain.npy
+```
+
+Change the address of the Triton inference server
+```console
+$python inference.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -a "foo.edu:8001"
+```
+
+Increase the precision of serialized features to float (default is half float)
+```console
+$python inference.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -f
+```
+
+For large jobs use a tab-delimited file containing input images and optionally their masks and normalization stain profiles
+```console
+$more ~/inputs.tsv
+TCGA-AN-A0G0-01Z-00-DX1.svs    TCGA-AN-A0G0-01Z-00-DX1.mask.py    TCGA-AN-A0G0-01Z-00-DX1.stain.npy    
+TCGA-AN-A0G0-01Z-00-DX2.svs    TCGA-AN-A0G0-01Z-00-DX2.mask.py    TCGA-AN-A0G0-01Z-00-DX1.stain.npy
+TCGA-AN-A0G0-01Z-00-DX3.svs    TCGA-AN-A0G0-01Z-00-DX3.mask.py    TCGA-AN-A0G0-01Z-00-DX1.stain.npy
+TCGA-AN-A0G0-01Z-00-DX4.svs    TCGA-AN-A0G0-01Z-00-DX4.mask.py    TCGA-AN-A0G0-01Z-00-DX1.stain.npy
+$python inference.py ~/inputs.tsv ~/ EfficientNetV2S.tensorflow
+```
+
+Skip images where output already exists
+```console
+$python inference.py ~/inputs.tsv ~/ EfficientNetV2S.tensorflow -s
+```
+
 ## Triton concepts <a name="concepts"></a>
-simple-triton is a Python client that simplifies the loading and configuration of models on the NVIDIA Triton Inference Server, as well as inference requests. Communication between client and server uses the Remote Procedure Call (gRPC) protocol. If the client and server share memory then shared memory can further accelerate communication. For inference tasks that are preprocessing intensive or I/O bound, simple-triton can be used with a multiprocessing data loader to shard loading, preprocessing, and inference requests over multiple processes.
+This client simplifies the loading and configuration of models and submitting inference requests on the NVIDIA Triton Inference Server. Remote Procedure Call (gRPC) protocol is used for efficient communication between client and server. For inference tasks that are preprocessing intensive or I/O bound, simple-triton can be used with a multiprocessing data loader to accelerate loading and preprocessing tasks like the application of color correction or normalization.
 
-The motivation for this project was to accelerate inference-intensive processes like feature extraction from whole-slide images. Machine-learning frameworks like TensorFlow or PyTorch that are primarily intended for model training are not optimal for large inference tasks. Triton provides several advantages over these frameworks including better utilization of hardware. Triton also decouples data loading and preprocessing of inference which improves flexibility in implementing these steps.
+The client is built specifically for inference-intensive tasks like embedding tiles from whole-slide images. Machine-learning frameworks like TensorFlow or PyTorch that are primarily intended for model training are often suboptimal for inference. Triton provides several advantages including better utilization of hardware and better flexibility in data loading and preprocessing.
 
-Some key performance optimizations of Triton that available through simple-triton:
-1. Model concurrency - a single GPU can host multiple instances of a model using CUDA streams, allowing overlap of host/device communication and device computation.
-2. Automatic mixed precision - simple-triton can enable mixed precision for TensorFlow models, improving throughput and GPU memory consumption.
-3. TensorRT - take advantage of quantization, layer and tensor fusion, and kernel tuning for select model types.
-4. Shared memory communication - send data to and receive data from Triton using shared memory when the client and server are on the same machine.
+Benefits of Triton include:
+1. Model concurrency - a single GPU can host multiple instances of a model using CUDA streams, improving the overlap of host/device communication and device computation.
+2. Automatic mixed precision - simple-triton can enable mixed precision for TensorFlow and ONNX models, improving throughput and GPU memory consumption.
+3. TensorRT - take advantage of quantization, layer and tensor fusion, and kernel tuning for TensorFlow and ONNX models.
+4. Shared memory communication - send data to and receive data from Triton using shared memory when loading data directly on the server.
 
 ## Model control <a name="control"></a>
 The `TritonModel` class can be used to load/unload models, to retrieve model configurations or metadata, or to check model if a model is idle or loaded. A model is defined by a model name and server url
@@ -183,68 +237,3 @@ pooch.retrieve(
     path=host_model_repository
 )
 ```
-## Benchmarking <a name="benchmarking"></a>
-
-We provide a benchmark command-line tool to help users identify the most performant parameters for their inference projects. An exhaustive list of evaluable parameters is provided below and includes batch size, precision accelerators, concurrent instances, and workers for data loading and preprocessing. This allows users to quickly tailor parameters to their specific model and dataset given available system resources and environment requirements. For inference jobs that may span days, a few hours of benchmarking can be a worthwhile investment.
-
-In contrast to NVIDIA's [Triton Model Anlyzer](https://github.com/triton-inference-server/model_analyzer) which uses randomly generated arrays for benchmarking, our tool incorporates a whole-slide image dataloader to introduce real IO conditions for more realistic measurements. We also provide options for enabling accelerators like mixed precision or TensorRT conversion. 
-
-With default parameters, the benchmark uses 32 workers to read and batch tiles from a whole-slide image using the [large_image reader](https://github.com/girder/large_image). Each worker maintains a queue of maximum 10 inference requests with 64 tiles per batch and 1 batch per inference request. To explore additional parameters users can provide additional command line arguments or override default values
- 
-```
-python benchmark_interface.py  --gpu-num $gpu_num  --use-trt --precision "FP16" --fileoutput $filename   --iterations 5  --maxbatchsize $maxbatchsize --iterations 3  --model-name "ConvNeXtXLarge"
-```
-
-> **_NOTE:_** Each call to the benchmarking cli runs a model warmup before making timed measurements. The disk cache is cleared between each measurement to ensure that measurements reflect real IO conditions. Results cacheing by Triton is also disabled.
-
-The arguments for the command-line interface are
-```
---model-name:       Set model name, usage: `--model-name ConvNeXtXLarge`
---fileoutput:       output file name with path for results
---batch:            Set inference batch size usage: `--batch 64`, default: 64
---maxbatchsize:     Set max batch size, usage: `--maxbatchsize 64`, default: 64
---use-amp:          Use auto matic mixed precision, usage: `--use-amp`, default: False
---use-trt:          Use tensorRT, usage: `--use-trt`, default: False
---precision:        Choose between Precision FP16 or FP32, usage: `--precision "FP16"`, default: FP16
---kind:             choice between gpu or cpu, usage: `--kind gpu`  default: gpu
---gpu_intance_count:number of instances for a gpu (default: 1), usage: `--gpu-count 1`
---gpu-num:          Number of GPUs to use, usage: `--gpu-num 2`, default: 1
---url:              url for connecting with Triton Inference Server, usage: `--url: "localhost:8001"`, default=localhost:8001
---magnification:    Set magnification size, usage: `--magnification 20`, type=int, default=20
---tile:             Set tile size, usage `--tile 224`, type=int, default=224
---limit:            In the consumer we limit the number of pending requests to avoid flooding the inference server. 
-                    type=int, usage `--limit 10`, default=10
---workers:          worker maintains a max queue of inferences. Worker return result via multiprocessing.queue
-                    type=int, usage `--workers 32`, default=32
---iterations:       Number of iterations to perform inference on a single file
---wsi-path          file name and path for WSI image
---mask-path         File name and path of binary mask image
---check-readines:   check readiness of models. usage: `--check-readines`, default: false
-```
-
-### Output
-
-A single benchmark print the results as dict to parse easily. Results as dict are also store the result in file format "benchmark_output.txt". Set of features stored along with throughput and time elaped are model_name, maxbatchsize, gpu_num, gpu_count, use_amp, use_trt, precision, workers, limit, throughput, elapsed_time. 
-An example output for an experiment run shows,
-```
-model_name: convnextsmall.tensorflow,  maxbatchsize: 64, gpu_num: 8, gpu_intance_count: 1, use_amp: False, use_trt: False, precision: FP16, workers: 32, limit: 10, iterations: 3, throughput(tiles/sec): 195.95287948015198, elapsed_time(sec): 28.640860160191853
-```
-
-Per-inference performance statistics are also displayed with each run. Here, _data loading_ refers to the percent time spend loading data for each inference, _results return_ refers to the percent time spent sending results from the worker to the main process, _in-process_ refers the the percent time between issuing and collecting the completed inference request, _completion_ refers to the percent of in-process time to complete the inference calculations, and _retrieval_ refers to the percent of in-process time a completed request waits to be collected.
-
-```
-                             median    min    max
--------------------------  --------  -----  -----
-total (sec)                    4.01   1.37   7.97
-data loading (% total)        57.63  35.97  83.60
-results return (% total)       0.14   0.05   0.62
-in-process (% total)          42.24  16.05  63.92
-completion (% in-process)     27.59   9.28  96.57
-retrieval (% in-process)      70.85   0.36  89.94
-other (% in-process)           1.68   0.72   7.13
-```
-
-### Benchmarking by scripting
-
-Running multiple experiments is best done using a scripting approach to call the benchmark cli with different parameters. We provide an example shell script ConvNeXtXLarge_amp_Batch64_GPU8_iter5_BatchTest.sh that demonstrates a parameter sweep for a ConvNeXtXLarge model. Users can modify the script to add/remove set of 
-features and update the values.

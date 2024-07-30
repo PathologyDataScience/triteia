@@ -1,9 +1,11 @@
+import argparse
 from functools import partial
 import numpy as np
 import os
 from simple_triton.model import TritonModel
 from simple_triton.tile_iterators import SharedNumpyArray
 from simple_triton.utils import create_client
+
 import time
 from tritonclient.utils import (
     InferenceServerException,
