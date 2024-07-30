@@ -1,3 +1,4 @@
+from concurrent.futures import ProcessPoolExecutor, wait
 import histomics_stream as hs
 import numpy as np
 import argparse
@@ -467,7 +468,7 @@ def main():
         target = None
 
     # create studies in background while waiting for inference to finish
-    with concurrent.futures.ProcessPoolExecutor(max_workers=1) as pool:
+    with ProcessPoolExecutor(max_workers=1) as pool:
 
         # create first study in background
         chunk = args.chunk * args.tile - (args.chunk - 1) * args.overlap
@@ -490,7 +491,7 @@ def main():
                 futures[(i + 1) % 2] = pool.submit(study, **kwargs)
 
             # wait on study completion for current job
-            concurrent.futures.wait([futures[i % 2]])
+            wait([futures[i % 2]])
             try:
                 hs_study = futures[i % 2].result()
             except Exception as exc:
