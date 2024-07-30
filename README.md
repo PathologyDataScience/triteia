@@ -60,54 +60,52 @@ A command-line interface is provided for inference with single or multiple slide
 
 Perform inference with the EfficientNetV2S model on a single slide, outputing serialized embeddings to your home directory
 ```console
-python inference.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow
+$python inference.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow
 ```
 
 Optional parameters allow restricting inference to a tissue mask (`-m`)
 ```console
-python inference.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -m TCGA-AN-A0G0-01Z-00-DX1.mask.png
+$python inference.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -m TCGA-AN-A0G0-01Z-00-DX1.mask.png
 ```
 
 modification tile size (`-t`), add tile overlap (`-o`), and change magnification (`-M`)
 ```console
-python inference.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -t 256 -o 128 -M 10
+$python inference.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -t 256 -o 128 -M 10
 ```
 
 adjustment of tile reading parameters including ICC correction (`-i`), read chunk size (`-c`), batch size (`-b`), prefetch (`-p`), and multiprocessing workers (`-w`).
 ```console
-python inference.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -i -c 8 -b 128 -p 2 -w 16
+$python inference.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -i -c 8 -b 128 -p 2 -w 16
 ```
 
 Provide image source (`-n`) and target (`-r`) parameters for Macenko color normalization
 ```console
-python inference.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -n ~/TCGA-AN-A0G0-01Z-00-DX1.stain.npy -r ~/standard_stain.npy
+$python inference.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -n ~/TCGA-AN-A0G0-01Z-00-DX1.stain.npy -r ~/standard_stain.npy
 ```
 
 Change the address of the Triton inference server
 ```console
-python inference.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -a "foo.edu:8001"
+$python inference.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -a "foo.edu:8001"
 ```
 
 Increase the precision of serialized features to float (default is half float)
 ```console
-python inference.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -f
+$python inference.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -f
 ```
 
 For large jobs use a tab-delimited file containing input images and optionally their masks and normalization stain profiles
 ```console
-more ~/inputs.tsv
-
-    TCGA-AN-A0G0-01Z-00-DX1.svs    TCGA-AN-A0G0-01Z-00-DX1.mask.py
-    TCGA-AN-A0G0-01Z-00-DX2.svs    TCGA-AN-A0G0-01Z-00-DX2.mask.py
-    TCGA-AN-A0G0-01Z-00-DX3.svs    TCGA-AN-A0G0-01Z-00-DX3.mask.py
-    TCGA-AN-A0G0-01Z-00-DX4.svs    TCGA-AN-A0G0-01Z-00-DX4.mask.py
-
-python inference.py ~/inputs.tsv ~/ EfficientNetV2S.tensorflow
+$more ~/inputs.tsv
+TCGA-AN-A0G0-01Z-00-DX1.svs    TCGA-AN-A0G0-01Z-00-DX1.mask.py    TCGA-AN-A0G0-01Z-00-DX1.stain.npy    
+TCGA-AN-A0G0-01Z-00-DX2.svs    TCGA-AN-A0G0-01Z-00-DX2.mask.py    TCGA-AN-A0G0-01Z-00-DX1.stain.npy
+TCGA-AN-A0G0-01Z-00-DX3.svs    TCGA-AN-A0G0-01Z-00-DX3.mask.py    TCGA-AN-A0G0-01Z-00-DX1.stain.npy
+TCGA-AN-A0G0-01Z-00-DX4.svs    TCGA-AN-A0G0-01Z-00-DX4.mask.py    TCGA-AN-A0G0-01Z-00-DX1.stain.npy
+$python inference.py ~/inputs.tsv ~/ EfficientNetV2S.tensorflow
 ```
 
 Skip images where output already exists
 ```console
-python inference.py ~/inputs.tsv ~/ EfficientNetV2S.tensorflow -s
+$python inference.py ~/inputs.tsv ~/ EfficientNetV2S.tensorflow -s
 ```
 
 ## Triton concepts <a name="concepts"></a>
