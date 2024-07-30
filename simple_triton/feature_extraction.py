@@ -10,7 +10,6 @@ import large_image_source_tiff
 from mil.io.writer import write_record
 from time import sleep, time
 from tqdm import tqdm
-from pprint import pprint
 
 
 def study(
