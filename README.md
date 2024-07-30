@@ -1,6 +1,6 @@
 # simple-triton
 
-A simple Python client for efficient inference with the NVIDIA Triton inference server.
+A Python client for NVIDIA Triton inference.
 
 See the [user guide](#user-guide) to read about concepts and to get started with examples. Details on testing and implementation are located in the [developer guide](#developer-guide).
 
@@ -54,16 +54,72 @@ where `host_model_repository` is the location of your model repository folder on
 
 > **Note:** The options `--ipc`, `--shm-size`, and `--ulimit memlock` are recommended when using shared memory for client/server communication. This allows Triton to access host system shared memory, increases the default 64MB shared memory limit, and prevents paging of RAM out to disk. If the client is run in a container then the `--ipc` and `--shm-size` options should be passed to the client container run command. Running the client container with `--network=host` is the easiest configuration to allow the client and server to communicate over the host network.
 
+## Command line interface <a name="cli"></a>
+### Inference
+A command-line interface is provided for inference with single or multiple slides and with control of tiling, masking, data loading, and serialization parameters. Models must be loaded prior to inference.
+
+Perform inference with the EfficientNetV2S model on a single slide, outputing serialized embeddings to your home directory
+```console
+python inference.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow
+```
+
+Optional parameters allow restricting inference to a tissue mask (`-m`)
+```console
+python inference.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -m TCGA-AN-A0G0-01Z-00-DX1.mask.png
+```
+
+modification tile size (`-t`), add tile overlap (`-o`), and change magnification (`-M`)
+```console
+python inference.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -t 256 -o 128 -M 10
+```
+
+adjustment of tile reading parameters including ICC correction (`-i`), read chunk size (`-c`), batch size (`-b`), prefetch (`-p`), and multiprocessing workers (`-w`).
+```console
+python inference.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -i -c 8 -b 128 -p 2 -w 16
+```
+
+Provide image source (`-n`) and target (`-r`) parameters for Macenko color normalization
+```console
+python inference.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -n ~/TCGA-AN-A0G0-01Z-00-DX1.stain.npy -r ~/standard_stain.npy
+```
+
+Change the address of the Triton inference server
+```console
+python inference.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -a "foo.edu:8001"
+```
+
+Increase the precision of serialized features to float (default is half float)
+```console
+python inference.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -f
+```
+
+For large jobs use a tab-delimited file containing input images and optionally their masks and normalization stain profiles
+```console
+more ~/inputs.tsv
+
+    TCGA-AN-A0G0-01Z-00-DX1.svs    TCGA-AN-A0G0-01Z-00-DX1.mask.py
+    TCGA-AN-A0G0-01Z-00-DX2.svs    TCGA-AN-A0G0-01Z-00-DX2.mask.py
+    TCGA-AN-A0G0-01Z-00-DX3.svs    TCGA-AN-A0G0-01Z-00-DX3.mask.py
+    TCGA-AN-A0G0-01Z-00-DX4.svs    TCGA-AN-A0G0-01Z-00-DX4.mask.py
+
+python inference.py ~/inputs.tsv ~/ EfficientNetV2S.tensorflow
+```
+
+Skip images where output already exists
+```console
+python inference.py ~/inputs.tsv ~/ EfficientNetV2S.tensorflow -s
+```
+
 ## Triton concepts <a name="concepts"></a>
-simple-triton is a Python client that simplifies the loading and configuration of models on the NVIDIA Triton Inference Server, as well as inference requests. Communication between client and server uses the Remote Procedure Call (gRPC) protocol. If the client and server share memory then shared memory can further accelerate communication. For inference tasks that are preprocessing intensive or I/O bound, simple-triton can be used with a multiprocessing data loader to shard loading, preprocessing, and inference requests over multiple processes.
+This client simplifies the loading and configuration of models and submitting inference requests on the NVIDIA Triton Inference Server. Remote Procedure Call (gRPC) protocol is used for efficient communication between client and server. For inference tasks that are preprocessing intensive or I/O bound, simple-triton can be used with a multiprocessing data loader to accelerate loading and preprocessing tasks like the application of color correction or normalization.
 
-The motivation for this project was to accelerate inference-intensive processes like feature extraction from whole-slide images. Machine-learning frameworks like TensorFlow or PyTorch that are primarily intended for model training are not optimal for large inference tasks. Triton provides several advantages over these frameworks including better utilization of hardware. Triton also decouples data loading and preprocessing of inference which improves flexibility in implementing these steps.
+The client is built specifically for inference-intensive tasks like embedding tiles from whole-slide images. Machine-learning frameworks like TensorFlow or PyTorch that are primarily intended for model training are often suboptimal for inference. Triton provides several advantages including better utilization of hardware and better flexibility in data loading and preprocessing.
 
-Some key performance optimizations of Triton that available through simple-triton:
-1. Model concurrency - a single GPU can host multiple instances of a model using CUDA streams, allowing overlap of host/device communication and device computation.
-2. Automatic mixed precision - simple-triton can enable mixed precision for TensorFlow models, improving throughput and GPU memory consumption.
-3. TensorRT - take advantage of quantization, layer and tensor fusion, and kernel tuning for select model types.
-4. Shared memory communication - send data to and receive data from Triton using shared memory when the client and server are on the same machine.
+Benefits of Triton include:
+1. Model concurrency - a single GPU can host multiple instances of a model using CUDA streams, improving the overlap of host/device communication and device computation.
+2. Automatic mixed precision - simple-triton can enable mixed precision for TensorFlow and ONNX models, improving throughput and GPU memory consumption.
+3. TensorRT - take advantage of quantization, layer and tensor fusion, and kernel tuning for TensorFlow and ONNX models.
+4. Shared memory communication - send data to and receive data from Triton using shared memory when loading data directly on the server.
 
 ## Model control <a name="control"></a>
 The `TritonModel` class can be used to load/unload models, to retrieve model configurations or metadata, or to check model if a model is idle or loaded. A model is defined by a model name and server url
