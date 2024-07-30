@@ -466,66 +466,83 @@ def main():
     else:
         target = None
 
-    # iterate through files and masks
-    for file, mask, stain in (pbar := tqdm(files)):
-        pbar.set_description(f"Processing {os.path.split(file)[1]}")
+    # create studies in background while waiting for inference to finish
+    with concurrent.futures.ProcessPoolExecutor(max_workers=1) as pool:
 
-        # load source stains
-        if stain is not None:
-            source = np.load(stain)
-            if source.shape != (3, 3):
-                raise ValueError(
-                    "Image stain profile expected shape (3, 3), found {target.shape}."
-                )
-        else:
-            source = None
-
-        # create tile source
+        # create first study in background
         chunk = args.chunk * args.tile - (args.chunk - 1) * args.overlap
-        hs_study = study(
-            file if mask is None else (file, mask),
-            t=(args.tile, args.tile),
-            chunk=(chunk, chunk),
-            overlap=(args.overlap, args.overlap),
-            objective=args.magnification,
-        )
+        kwargs = {
+            "paths": files[0][0] if files[0][1] is None else (files[0][0], files[0][1]),
+            "t": (args.tile, args.tile),
+            "chunk": (chunk, chunk),
+            "overlap": (args.overlap, args.overlap),
+            "objective": args.magnification,
+            "mask_threshold": 0.01,
+        }
+        futures = {0: pool.submit(study, **kwargs)}
 
-        # tile iterator
-        iterator = TiffPrefetch(
-            hs_study, np.uint8, args.icc, args.batch, args.prefetch, args.workers
-        )
+        # iterate through files and masks
+        for i, (file, mask, stain) in enumerate(tqdm(files)):
 
-        # inference
-        features, metadata, times, failures = inference(
-            iterator,
-            args.model,
-            source=source,
-            target=target,
-            url=args.address,
-            limit=1,
-            rest=0.0,
-        )
+            # prefetch study for next slide
+            if i < len(files) - 1:
+                kwargs.update({"paths": file if mask is None else (file, mask)})
+                futures[(i + 1) % 2] = pool.submit(study, **kwargs)
 
-        # concatenate features
-        features = np.concatenate(features[0], axis=0)
+            # wait on study completion for current job
+            concurrent.futures.wait([futures[i % 2]])
+            try:
+                hs_study = futures[i % 2].result()
+            except Exception as exc:
+                print(f"Inference error {file}: {exc}")
+                continue
 
-        # write to tfrecord
-        precision = np.float32 if args.float else np.float16
-        write_record(
-            tfr_name(
-                args.output,
-                file,
+            # tile iterator
+            iterator = TiffPrefetch(
+                hs_study, np.uint8, args.icc, args.batch, args.prefetch, args.workers
+            )
+
+            # load source stains
+            if stain is not None:
+                source = np.load(stain)
+                if source.shape != (3, 3):
+                    raise ValueError(
+                        "Image stain profile expected shape (3, 3), found {target.shape}."
+                    )
+            else:
+                source = None
+
+            # inference
+            features, metadata, times, failures = inference(
+                iterator,
                 args.model,
-                args.tile,
-                args.overlap,
-                args.magnification,
-            ),
-            features,
-            metadata,
-            labels={},
-            structured=False,
-            precision=precision,
-        )
+                source=source,
+                target=target,
+                url=args.address,
+                limit=1,
+                rest=0.0,
+            )
+
+            # concatenate features
+            features = np.concatenate(features[0], axis=0)
+
+            # write to tfrecord
+            precision = np.float32 if args.float else np.float16
+            write_record(
+                tfr_name(
+                    args.output,
+                    file,
+                    args.model,
+                    args.tile,
+                    args.overlap,
+                    args.magnification,
+                ),
+                features,
+                metadata,
+                labels={},
+                structured=False,
+                precision=precision,
+            )
 
 
 if __name__ == "__main__":
