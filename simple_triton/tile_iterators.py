@@ -241,7 +241,7 @@ class TiffPrefetch(object):
             region=dict(left=xr, top=yr, width=wr, height=hr, units="mag_pixels"),
             tile_size=dict(width=wr, height=hr),
         )
-        chunk, _ = source.getRegion(**read_dict)
+        chunk, _ = source.getRegion(**kwargs)
         tiles = [
             chunk[y - yr : y - yr + h, x - xr : x - xr + w, :].astype(dtype)
             for (x, y, w, h) in zip(xt, yt, wt, ht)

@@ -148,8 +148,7 @@ def inference(
         Stain matrix (3x3) for the input slides. Requires a model with a normalization
         layer. Default value is None.
     target : array_like
-        Ideal stain matrix (3x3) for normalization. Requires a model with a
-        normalization layer. Default value is None.
+        Ideal stain matrix (3x3) for normalization. Required if `source` provided.
     url : str
         The url for the triton server grpc port. Default value is `localhost:8001`.
     pre : function
