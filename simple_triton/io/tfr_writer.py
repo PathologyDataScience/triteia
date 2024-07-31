@@ -152,10 +152,9 @@ def inference_metadata(tile_info):
 
     # for each slide, extract slide metadata
     slide_metadata = {
-        k: (
-            np.array([tile_info[k][slide_index == i][0] for i in seq]).ravel()
-        )
-        for k in slide_keys if k in tile_info
+        k: (np.array([tile_info[k][slide_index == i][0] for i in seq]).ravel())
+        for k in slide_keys
+        if k in tile_info
     }
 
     #######################################################
