@@ -26,7 +26,7 @@ dynamic = ["version"]
 examples = ["pooch"]
 
 [project.scripts]
-inference = "simple_triton.inference:main"
+inference = "simple_triton.feature_extraction:main"
 
 [tool.setuptools]
 packages = ["simple_triton"]
