@@ -9,7 +9,7 @@ authors = [
 ]
 description = "A simple and efficient python client for the Triton Inference Server."
 readme = "README.md"
-requires-python = ">=3.7"
+requires-python = ">=3.8"
 keywords = ["mlops", "digital pathology"]
 license = {text = "Apache-2.0"}
 dependencies = [
