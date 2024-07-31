@@ -306,38 +306,13 @@ class TiffPrefetch(object):
                     batches = math.ceil((len(reads) + offset) / self.batch)
 
                     # create additional arrays if this read spans multiple batches
-                    if self._nchw:
-                        tiles = [
-                            *tiles,
-                            *[
-                                SharedNumpyArray(
-                                    [
-                                        self.batch,
-                                        3,
-                                        reads[0]["tile_height"],
-                                        reads[0]["tile_width"],
-                                    ],
-                                    self.dtype,
-                                )
-                                for _ in range(batches - 1)
-                            ],
-                        ]
-                    else:
-                        tiles = [
-                            *tiles,
-                            *[
-                                SharedNumpyArray(
-                                    [
-                                        self.batch,
-                                        reads[0]["tile_height"],
-                                        reads[0]["tile_width"],
-                                        3,
-                                    ],
-                                    self.dtype,
-                                )
-                                for _ in range(batches - 1)
-                            ],
-                        ]
+                    tiles = [
+                        *tiles,
+                        *[
+                            SharedNumpyArray(dims, self.dtype)
+                            for _ in range(batches - 1)
+                        ],
+                    ]
 
                     """submit job - read into first array in `tiles` at slice `offset`.
                     overflow to subsequent arrays if this read spans multiple batches.
