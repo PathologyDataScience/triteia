@@ -166,14 +166,14 @@ class Requests(object):
                 provided.shape[offset:], _int(expected["dims"])
             ):
                 if batching:
-                    output = [-1, *_int(expected["dims"])]
+                    input = [-1, *_int(expected["dims"])]
                 else:
-                    output = _int(expected["dims"])
+                    input = _int(expected["dims"])
                 raise Exception(
                     (
                         f"Model {model_dict['name']} input "
-                        f"{model_dict['input'][i]['name']} "
-                        f"expects shape {output}, received input with "
+                        f"{model_dict['input'][0]['name']} "
+                        f"expects shape {input}, received input with "
                         f"shape {list(provided.shape)}."
                     )
                 )
