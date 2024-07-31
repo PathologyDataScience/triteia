@@ -280,26 +280,15 @@ class TiffPrefetch(object):
                 else:
                     """last read aligned with batch boundary, create new shared array,
                     and read_kwargs, futures containers"""
+                    dims = [
+                        self.batch,
+                        self.read_kwargs[self.pos][0]["tile_height"],
+                        self.read_kwargs[self.pos][0]["tile_width"],
+                        3,
+                    ]
                     if self._nchw:
-                        tiles = SharedNumpyArray(
-                            [
-                                self.batch,
-                                3,
-                                self.read_kwargs[self.pos][0]["tile_height"],
-                                self.read_kwargs[self.pos][0]["tile_width"],
-                            ],
-                            self.dtype,
-                        )
-                    else:
-                        tiles = SharedNumpyArray(
-                            [
-                                self.batch,
-                                self.read_kwargs[self.pos][0]["tile_height"],
-                                self.read_kwargs[self.pos][0]["tile_width"],
-                                3,
-                            ],
-                            self.dtype,
-                        )
+                        dims = [dims[0], 3, dims[1], dims[2]]
+                    tiles = SharedNumpyArray(dims, self.dtype)
                     futures = []
                     batch_kwargs = []
 
