@@ -1,5 +1,5 @@
 from simple_triton.io import slide_keys, tile_keys
-from simple_triton.io.transforms import flatten, structure
+from simple_triton.io.tfr_transforms import flatten, structure
 import numpy as np
 import tensorflow as tf
 import warnings

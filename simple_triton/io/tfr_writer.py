@@ -1,7 +1,7 @@
 from datetime import datetime
 from simple_triton.io import slide_keys, tile_keys
-from simple_triton.io.reader import peek, read_record
-from simple_triton.io.transforms import flatten, structure
+from simple_triton.io.tfr_reader import peek, read_record
+from simple_triton.io.tfr_transforms import flatten, structure
 import numpy as np
 import tensorflow as tf
 
