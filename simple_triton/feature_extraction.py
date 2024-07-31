@@ -1,14 +1,14 @@
+import argparse
 from concurrent.futures import ProcessPoolExecutor, wait
 import histomics_stream as hs
-import numpy as np
-import argparse
-import os
-from simple_triton.inference import Requests
-from simple_triton.config import ConfigBuilder
-from simple_triton.tile_iterators import TiffPrefetch
-from simple_triton.model import TritonModel
 import large_image_source_tiff
-from mil.io.writer import write_record
+import numpy as np
+import os
+from simple_triton.config import ConfigBuilder
+from simple_triton.io.tfr_writer import write_record
+from simple_triton.inference import Requests
+from simple_triton.model import TritonModel
+from simple_triton.tile_iterators import TiffPrefetch
 from time import sleep, time
 from tqdm import tqdm
 
