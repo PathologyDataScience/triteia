@@ -13,12 +13,17 @@ requires-python = ">=3.7"
 keywords = ["mlops", "digital pathology"]
 license = {text = "Apache-2.0"}
 dependencies = [
+    "mil @ git+https://github.com/PathologyDataScience/mil.git@dev",
     "numpy>=1.21",
-    "tabulate",
-    "tritonclient[all]>=2.30.0",
     "protobuf",
+    "tabulate",
+    "tensorflow<2.16",
+    "tritonclient[all]>=2.30.0",
 ]
 dynamic = ["version"]
+
+[project.optional-dependencies]
+examples = ["pooch"]
 
 [project.scripts]
 inference = "simple_triton.inference:main"
