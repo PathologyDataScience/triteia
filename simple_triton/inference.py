@@ -409,7 +409,6 @@ class Requests(object):
 
                     # inference generated an exception
                     if type(results) == InferenceServerException:
-
                         # capture error in request
                         if request["attempts"] == 1:
                             request["errors"] = []
@@ -424,7 +423,6 @@ class Requests(object):
 
                     # inference generated a result
                     else:
-
                         # convert responses to numpy arrays
                         for j, output in enumerate(
                             self.model_dicts[request["model_name"]]["output"]
