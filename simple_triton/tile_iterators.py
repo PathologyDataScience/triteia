@@ -171,13 +171,15 @@ class TiffPrefetch(object):
     dtype : type
         Desired numpy datatype for outputs. Default value is `np.uint8`.
     icc : bool
-        Whether to attempt ICC correction.
+        Whether to attempt ICC correction. Default value is False.
+    nchw : bool
+	Transpose from NHWC to NCHW for ONNX and Torch models. Default value is False.
     batch : int
-        The batch size. A partial batch at the end will not be padded.
+        The batch size. A partial batch at the end will not be padded. Default value is 64.
     prefetch : int
-        The target number of prefetched batches.
+        The target number of prefetched batches. Default value is 2.
     workers : int
-        The number of multiprocessing workers.
+        The number of multiprocessing workers. Default value is 16.
     """
 
     def __init__(
@@ -187,7 +189,7 @@ class TiffPrefetch(object):
         icc=False,
         nchw=False,
         batch=64,
-        prefetch=16,
+        prefetch=2,
         workers=16,
     ):
         if len(study["slides"]) > 1:
@@ -277,6 +279,12 @@ class TiffPrefetch(object):
                 and read_kwargs to start the current batch"""
                 if self.overflow:
                     futures, tiles, batch_kwargs = self.queue.popleft()
+                    dims = [
+                        len(batch_kwargs),
+                        self.read_kwargs[self.pos][0]["tile_height"],
+                        self.read_kwargs[self.pos][0]["tile_width"],
+                        3,
+                    ] 
                 else:
                     """last read aligned with batch boundary, create new shared array,
                     and read_kwargs, futures containers"""
@@ -288,9 +296,9 @@ class TiffPrefetch(object):
                     ]
                     if self._nchw:
                         dims = [dims[0], 3, dims[1], dims[2]]
-                    tiles = SharedNumpyArray(dims, self.dtype)
                     futures = []
                     batch_kwargs = []
+                tiles = SharedNumpyArray(dims, self.dtype)
 
                 """submit enough jobs to fill at least one batch - a single job may 
                 fill multiple batches - or multiple jobs may be needed to fill one 
