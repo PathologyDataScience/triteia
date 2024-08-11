@@ -13,7 +13,6 @@ requires-python = ">=3.8"
 keywords = ["mlops", "digital pathology"]
 license = {text = "Apache-2.0"}
 dependencies = [
-    "mil @ git+https://github.com/PathologyDataScience/mil.git@dev",
     "numpy>=1.21",
     "protobuf",
     "tabulate",
