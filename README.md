@@ -24,12 +24,9 @@ simple-triton is tested with [Triton version 23.03](https://github.com/triton-in
 
 ## Quick start <a name="quick-start"></a>
 
-simple-triton is pip installable. Use of the whole slide image reader requires installation of `histomcs_stream` and `large_image` with tiff or openslide tile sources 
+simple-triton requires installation of `histomcs_stream` and `large_image` with the tiff tile source
 ```
-sudo apt update
-sudo apt install -y python3-openslide openslide-tools
-pip install histomics_stream 'large_image[tiff]' \
-  scikit_image --find-links https://girder.github.io/large_image_wheels
+pip install histomics_stream 'large_image[tiff]'
 ```
 
 ### Example <a name="example"></a>
