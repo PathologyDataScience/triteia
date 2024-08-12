@@ -340,4 +340,3 @@ class TiffPrefetch(object):
         except Exception as error:
             self.pool.shutdown(wait=False, cancel_futures=True)
             raise
-
