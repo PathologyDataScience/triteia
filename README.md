@@ -17,16 +17,18 @@ simple-triton is tested with [Triton version 23.03](https://github.com/triton-in
 - [Triton concepts](#concepts)
     - [Model control](#control)
     - [Model configuration](#config)
-- [Inference](#inference)
+- [Command-line interfaces](#cli)
+    - [Inference](#inference)
 - [Developer guide](#developer-guide)
     - [Testing](#testing)
     - [Benchmarking](#benchmarking)
 
 ## Quick start <a name="quick-start"></a>
 
-simple-triton requires installation of `histomcs_stream` and `large_image` with the tiff tile source
+simple-triton requires `histomcs_stream` and `large_image` packages with the tiff reader
 ```
-pip install histomics_stream 'large_image[tiff]'
+git clone https://github.com/PathologyDataScience/simple_triton.git
+pip install ./simple_triton histomics_stream 'large_image[tiff]'
 ```
 
 ### Example <a name="example"></a>
@@ -51,8 +53,8 @@ where `host_model_repository` is the location of your model repository folder on
 
 > **Note:** The options `--ipc`, `--shm-size`, and `--ulimit memlock` are recommended when using shared memory for client/server communication. This allows Triton to access host system shared memory, increases the default 64MB shared memory limit, and prevents paging of RAM out to disk. If the client is run in a container then the `--ipc` and `--shm-size` options should be passed to the client container run command. Running the client container with `--network=host` is the easiest configuration to allow the client and server to communicate over the host network.
 
-## Command line interface <a name="cli"></a>
-### Inference
+## Command-line interface <a name="cli"></a>
+### Inference <a name="inference"></a>
 A command-line interface is provided for inference with single or multiple slides and with control of tiling, masking, data loading, and serialization parameters. Models must be loaded prior to inference.
 
 Perform inference with the EfficientNetV2S model on a single slide, outputing serialized embeddings to your home directory
