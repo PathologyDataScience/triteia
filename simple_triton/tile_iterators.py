@@ -183,7 +183,14 @@ class TiffPrefetch(object):
     """
 
     def __init__(
-        self, study, dtype=np.uint8, nchw=False, icc=False, batch=64, prefetch=4, workers=16
+        self,
+        study,
+        dtype=np.uint8,
+        nchw=False,
+        icc=False,
+        batch=64,
+        prefetch=4,
+        workers=16,
     ):
         if len(study["slides"]) > 1:
             raise ValueError("Multi-slide studies not supported.")
@@ -252,8 +259,7 @@ class TiffPrefetch(object):
         for i, tile in enumerate(tiles):
             sharr_index, slice_index = divmod(offset + i, batch)
             sharrs[sharr_index].insert(
-                tile if not nhcw else np.transpose(tile, [0,3,1,2]), 
-                slice_index
+                tile if not nhcw else np.transpose(tile, [0, 3, 1, 2]), slice_index
             )
 
     def _submitfn(self, read_kwargs, sharrs, offset):
@@ -283,7 +289,7 @@ class TiffPrefetch(object):
                         self.batch,
                         self.read_kwargs[self.pos][0]["tile_height"],
                         self.read_kwargs[self.pos][0]["tile_width"],
-                        3
+                        3,
                     ]
                     if self.nchw:
                         dims = [dims[0], dims[3], dims[1], dims[2]]
@@ -305,7 +311,12 @@ class TiffPrefetch(object):
                     batches = math.ceil((len(reads) + offset) / self.batch)
 
                     # create additional arrays if this read spans multiple batches
-                    dims = [self.batch, reads[0]["tile_height"], reads[0]["tile_width"], 3]
+                    dims = [
+                        self.batch,
+                        reads[0]["tile_height"],
+                        reads[0]["tile_width"],
+                        3,
+                    ]
                     if self.nchw:
                         dims = [dims[0], dims[3], dims[1], dims[2]]
                     tiles = [
