@@ -170,22 +170,25 @@ class TiffPrefetch(object):
         A histomics stream study.
     dtype : type
         Desired numpy datatype for outputs. Default value is `np.uint8`.
+    nchw : bool
+        Format outputs as batch-channel-height-width. Default value is False.
     icc : bool
-        Whether to attempt ICC correction.
+        Whether to attempt ICC correction. Default value is False.
     batch : int
-        The batch size. A partial batch at the end will not be padded.
+        Batch size. Default value is 64. Partial batches are not be padded.
     prefetch : int
-        The target number of prefetched batches.
+        The target number of prefetched batches. Default value is 4.
     workers : int
-        The number of multiprocessing workers.
+        The number of multiprocessing workers. Default value is 16.
     """
 
     def __init__(
-        self, study, dtype=np.uint8, icc=False, batch=64, prefetch=16, workers=16
+        self, study, dtype=np.uint8, nchw=False, icc=False, batch=64, prefetch=4, workers=16
     ):
         if len(study["slides"]) > 1:
             raise ValueError("Multi-slide studies not supported.")
         self.dtype = dtype
+        self.nchw = nchw
         self.pool = ProcessPoolExecutor(max_workers=workers)
         slide = list(study["slides"].values())[0]
         self.source = large_image_source_tiff.open(
@@ -225,7 +228,7 @@ class TiffPrefetch(object):
         return tiles, read_kwargs
 
     @staticmethod
-    def read(source, dtype, read_kwargs, sharrs, offset, batch):
+    def read(source, dtype, nhcw, read_kwargs, sharrs, offset, batch):
         # read followed by crops
         xt = [k["tile_left"] for k in read_kwargs]
         yt = [k["tile_top"] for k in read_kwargs]
@@ -248,12 +251,16 @@ class TiffPrefetch(object):
         ]
         for i, tile in enumerate(tiles):
             sharr_index, slice_index = divmod(offset + i, batch)
-            sharrs[sharr_index].insert(tile, slice_index)
+            sharrs[sharr_index].insert(
+                tile if not nhcw else np.transpose(tile, [0,3,1,2]), 
+                slice_index
+            )
 
     def _submitfn(self, read_kwargs, sharrs, offset):
         return self.pool.submit(
             self.read,
             self.source,
+            self.nchw,
             self.dtype,
             read_kwargs,
             sharrs,
@@ -272,15 +279,15 @@ class TiffPrefetch(object):
                 else:
                     """last read aligned with batch boundary, create new shared array,
                     and read_kwargs, futures containers"""
-                    tiles = SharedNumpyArray(
-                        [
-                            self.batch,
-                            self.read_kwargs[self.pos][0]["tile_height"],
-                            self.read_kwargs[self.pos][0]["tile_width"],
-                            3,
-                        ],
-                        self.dtype,
-                    )
+                    dims = [
+                        self.batch,
+                        self.read_kwargs[self.pos][0]["tile_height"],
+                        self.read_kwargs[self.pos][0]["tile_width"],
+                        3
+                    ]
+                    if self.nchw:
+                        dims = [dims[0], dims[3], dims[1], dims[2]]
+                    tiles = SharedNumpyArray(dims, self.dtype)
                     futures = []
                     batch_kwargs = []
 
@@ -298,18 +305,13 @@ class TiffPrefetch(object):
                     batches = math.ceil((len(reads) + offset) / self.batch)
 
                     # create additional arrays if this read spans multiple batches
+                    dims = [self.batch, reads[0]["tile_height"], reads[0]["tile_width"], 3]
+                    if self.nchw:
+                        dims = [dims[0], dims[3], dims[1], dims[2]]
                     tiles = [
                         *tiles,
                         *[
-                            SharedNumpyArray(
-                                [
-                                    self.batch,
-                                    reads[0]["tile_height"],
-                                    reads[0]["tile_width"],
-                                    3,
-                                ],
-                                self.dtype,
-                            )
+                            SharedNumpyArray(dims, self.dtype)
                             for _ in range(batches - 1)
                         ],
                     ]
