@@ -15,7 +15,6 @@ simple-triton is a Python client for inference with the NVIDIA Triton server. It
     - [Inference](#inference)
 - [Developer guide](#developer-guide)
     - [Testing](#testing)
-    - [Benchmarking](#benchmarking)
 
 ## Quick start <a name="quick-start"></a>
 
