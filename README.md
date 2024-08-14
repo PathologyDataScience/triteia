@@ -31,6 +31,19 @@ git clone https://github.com/PathologyDataScience/simple_triton.git
 pip install ./simple_triton histomics_stream 'large_image[tiff]'
 ```
 
+Or, you can try the docker image:
+```bash
+# optional: download test data
+python download_test_data.py
+
+# simple_triton_client will be the name of the docker image
+docker build . -t simple_triton_client:latest
+docker run --init --security-opt seccomp:unconfined --network=container:<name of tritonserver docker image> --shm-size=1g -v ${PWD}/test_data:/data:ro --rm --name tritonclient --gpus all -it simple_triton_client:latest
+```
+
+`--init` ensures that the docker container has a "master process" to do clean multi-processing. `--network=` lets the docker image see ports from other containers, in this case the triton server. The default shared memory size is now 64MB, so `--shm-size=` is necessary if you are reading large WSIs. `--security-opt seccomp:unconfined` might only be necessary on bigger machines, but it gives your process access to [openblas](https://www.openblas.net/) threads. `--rm` removes the container on exit, beware.
+
+
 ### Example <a name="example"></a>
 
 The notebook `examples\feature_extraction.ipynb` demonstrates whole-slide image feature extraction. This example requires installation of the `mil` library and a running Triton container on the client machine.

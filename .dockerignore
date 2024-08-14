@@ -1,0 +1,8 @@
+venv
+UNKNOWN*
+Dockerfile
+build
+.github
+*.egg-info
+.git/
+**/__pycache__
