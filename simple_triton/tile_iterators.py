@@ -28,7 +28,7 @@ class SharedNumpyArray:
         self.buf[i] = arr
 
     def copy(self, arr):
-        self.shape = arry.shape
+        self.shape = arr.shape
         self.buf = np.ndarray(self.shape, dtype=self.dtype, buffer=self.shm.buf)
         self.buf[:] = arr[:]
 
