@@ -1,7 +1,6 @@
 from collections import deque
 from concurrent.futures import ProcessPoolExecutor, ALL_COMPLETED, wait
 import functools
-import histomics_stream as hs
 import large_image_source_tiff
 import math
 import multiprocessing.shared_memory
