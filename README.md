@@ -244,7 +244,7 @@ Testing requires running a Triton server on the local machine. Tests are run usi
 import pooch
 pooch.retrieve(
     fname="EfficientNetV2S.tensorflow.zip",
-    url="https://drive.google.com/uc?export=download&id=1Mmm2sRGzdzCEAODjABiiPIiBdg40EPwC&confirm=t&uuid=b11e409a-64b2-4146-b45d-4f229093cb5a&at=ANzk5s7UvBzB7zpqm7AvngovJwS8:1681783040828",
+    url="https://drive.usercontent.google.com/download?id=1Mmm2sRGzdzCEAODjABiiPIiBdg40EPwC&export=download&confirm=t",
     known_hash="a6ed53d8343498b4ebfe7ff1a9ccbcabef23d6a164d2a521916774af49996f7e",
     path=host_model_repository
 )
