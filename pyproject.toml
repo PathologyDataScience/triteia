@@ -28,9 +28,11 @@ examples = ["pooch"]
 inference = "simple_triton.feature_extraction:main"
 
 [tool.setuptools]
-packages = ["simple_triton"]
+packages = ["simple_triton", "simple_triton.io"]
 
 [tool.setuptools_scm]
 
 [project.urls]
 "Github" = "https://github.com/PathologyDataScience/simple_triton"
+
+
