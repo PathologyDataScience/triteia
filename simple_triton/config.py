@@ -1,393 +1,500 @@
+from google.protobuf import json_format, text_format
 import numpy as np
-from simple_triton.model import TritonModel
+import os
+from tritonclient.utils import np_to_triton_dtype
+from tritonclient.grpc import model_config_pb2
 
 
-class ConfigBuilder(object):
-    """Build a configuration for a Triton hosted model.
+class DynamicBatching(object):
+    """Dynamic batching configuration.
 
-    The model configuration defines hosting resources like GPUs and CPUs,
-    number of model instances per resource, model input and output names,
-    shapes, and type, optimizations like TensorRT and Automatic Mixed
-    Precision, and dynamic batching and queuing preferences.
+    Dynamic batching allows the aggregation of multiple requests into a single
+    inference for optimization.
 
     Parameters
     ----------
-    model_name : string
-        The name of the model to query as hosted in triton or stored in
-        the model repository.
-    config : dict
-        An initial configuration. If `None`, an rpc server url must be
-        provided to obtain a configuration from the loaded model. Default
-        value is `None`.
-    url : string
-        The url for the remote-procedure call port of the Triton server.
-        Default value is "localhost:8001".
-
-    Attributes
-    ----------
-    config : dict
-        A model configuration. Can be used to alter the configuration of
-        a hosted model by reloading.
-
-    Methods
-    -------
-    response_cache(enable=False)
-        Sets caching of inference results on-server.
-    add_input(name, datatype, dims)
-        Add or modify a model input given input name and dims.
-    add_output(name, datatype, dims)
-        Add or modify a model output given output name and dims.
-    remove_inputs()
-        Remove all inputs.
-    remove_outputs()
-        Remove all outputs.
-    max_batch_size(samples)
-        Set the maximum batch size.
-    add_instance_group(count=1, kind="gpu", gpus=None)
-        Add an instance group defining the model hardware resources and
-        instances.
-    remove_instance_groups()
-        Remove all instance groups and default to 1 instance per GPU.
-    add_mixed_precision()
-        Enable automatic mixed precision for half-float operations.
-    remove_mixed_precision
-        Disable automatic mixed precision for half-float operations.
-    add_trt(precision="FP16")
-        Enable TensorRT optimization.
-    remove_trt(self, precision="FP16")
-        Disable TensorRT optimization.
-
-    Notes
-    -----
-    This class is not typically used to build a configuration from
-    scratch. Most often it will be used to modify an auto-generated
-    configuration produced by Triton when a model is loaded. When
-    launching Triton we recommend using `--model-control-mode=explicit`
-    to enable the configuration of loaded models to be modified without
-    restart, and `--strict-model-config=false` which relaxes the
-    requirements of a valid configuration, so that not every setting
-    needs to be provided by the client or user.
+    preferred_batch_size : list
+        A list of one or more preferred batch sizes. Default value is [64].
+    max_queue_delay_microseconds : int
+        The maximimum wait time for dynamic batching. After expiration a request will proceed even
+        if the aggregated requests do not meet the preferred batch size. Default value is 0.
+    preserve_ordering : bool
+        Preserve the order of batches as they are received. Default value is True.
 
     References
     ----------
-    The ModelConfig protobuf https://github.com/triton-inference-server/common/blob/main/protobuf/model_config.proto
+    https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#dynamic-batcher
     """
 
-    def __init__(self, model_name, config=None, url="localhost:8001"):
-        """Initialize from provided config or as hosted."""
+    def __init__(
+        self,
+        preferred_batch_size=[64],
+        max_queue_delay_microseconds=0,
+        preserve_ordering=True,
+    ):
+        self.config = {
+            "PreferredBatchSize": preferred_batch_size,
+            "max_queue_delay_microseconds": max_queue_delay_microseconds,
+            "preserve_ordering": preserve_ordering,
+        }
 
-        if config is not None:
-            if not isinstance(config, dict):
-                raise ValueError("config must be a dict")
-            self.config = config
-        else:
-            model = TritonModel(model_name, url)
-            self.config = TritonModel.get_config()
-        self.config["name"] = model_name
 
-    def _gpu_accelerator_status(self, accelerator):
-        """Test if a gpuExecutionAccelerator is present."""
+class ModelInput(object):
+    """Model input configuration.
 
-        if "optimization" in self.config:
-            if "executionAccelerators" in self.config["optimization"]:
-                if (
-                    "gpuExecutionAccelerator"
-                    in self.config["optimization"]["executionAccelerators"]
-                ):
-                    for d in self.config["optimization"]["executionAccelerators"][
-                        "gpuExecutionAccelerator"
-                    ]:
-                        if "name" in d:
-                            if d["name"] == accelerator:
-                                return True
-                    return False
-                else:
-                    return False
-            else:
-                return False
-        else:
-            return False
+    Configuration of one model input. Pass a list of these inputs for a multi-input model.
 
-    def _gpu_accelerator_delete(self, accelerator):
-        """Delete a gpuExecutionAccelerator and cleanup empty parents"""
+    Parameters
+    ----------
+    name : str
+        Model input name.
+    shape : list or tuple of int
+        The shape of the input not including batch dimension. Variable dimensions are set to -1.
+    dtype : numpy.dtype
+        The numpy dtype of the model input.
+    optional : bool
+        Whether this input is optional. Default value is False.
+    """
 
-        if self._gpu_accelerator_status(accelerator):
-            gpuexecacc = self.config["optimization"]["executionAccelerators"][
-                "gpuExecutionAccelerator"
-            ]
-            keep = []
-            for i, d in enumerate(gpuexecacc):
-                if "name" in enumerate(d):
-                    if d["name"] != accelerator:
-                        keep.append(i)
-            self.config["optimization"]["executionAccelerators"][
-                "gpuExecutionAccelerator"
-            ] = [gpuexecacc[i] for i in keep]
-            if (
-                len(
-                    self.config["optimization"]["executionAccelerators"][
-                        "gpuExecutionAccelerator"
-                    ]
-                )
-                == 0
-            ):
-                del self.config["optimization"]["executionAccelerators"][
-                    "gpuExecutionAccelerator"
-                ]
-            if self.config["optimization"]["executionAccelerators"] == {}:
-                del self.config["optimization"]["executionAccelerators"]
-            if self.config["optimization"] == {}:
-                del self.config["optimization"]
-
-    def _gpu_accelerator_add(self, accelerator):
-        """Adds a gpu accelerator to the config"""
-        if self._gpu_accelerator_status(accelerator["name"]):
-            self._gpu_accelerator_delete(accelerator["name"])
-        if "optimization" not in self.config:
-            self.config["optimization"] = {}
-        if "executionAccelerators" not in self.config["optimization"]:
-            self.config["optimization"]["executionAccelerators"] = {}
-        if (
-            "gpuExecutionAccelerator"
-            not in self.config["optimization"]["executionAccelerators"]
-        ):
-            self.config["optimization"]["executionAccelerators"][
-                "gpuExecutionAccelerator"
-            ] = []
-        self.config["optimization"]["executionAccelerators"][
-            "gpuExecutionAccelerator"
-        ].append(accelerator)
-
-    @staticmethod
-    def _gpu_accelerator_trt(precision="FP16"):
-        """Returns a TensorRT accelerator"""
-        if precision.upper() == "FP16" or precision.upper() == "FP32":
-            return {
-                "name": "tensorrt",
-                "parameters": {"precision_mode": f"{precision.upper()}"},
-            }
-        else:
-            raise ValueError(
-                "precision must be one of None, numpy.float16, numpy.float32"
-            )
-
-    @staticmethod
-    def _gpu_accelerator_amp():
-        """Returns an amp acccelerator"""
-        return {"name": "auto_mixed_precision"}
-
-    def response_cache(self, enable=False):
-        """Set model response cache.
-
-        When enabled, the result of prior inferences will be cached and returned
-        if the same input is received. This can intefere with benchmarking and is
-        disabled by default.
-
-        Parameters
-        ----------
-        enable : bool
-            If `True` the response cache will be enabled. Default value is `False`.
-        """
-        if not isinstance(enable, bool):
-            raise ValueError("enable must be bool")
-        self.config["responseCache"] = {"enable": enable}
-
-    def _add_io(self, name, datatype, dims, key="input"):
-        """Add a new input/output or set the properties of an existing one."""
-
-        # check for valid inputs
+    def __init__(self, name, shape, dtype, optional=False):
         if not isinstance(name, str):
             raise ValueError("name must be str")
-        if not isinstance(name, str):
-            raise ValueError("datatype must be str")
-        if not isinstance(dims, (list, np.ndarray)):
-            raise ValueError("dims must be a list or np.ndarray of int")
-        if not all([isinstance(i, (int, np.integer)) for i in dims]):
-            raise ValueError("elements of dims must be int")
+        if not isinstance(shape, (list, tuple, np.ndarray)):
+            raise ValueError("shape must be type list or type np.ndarray of type int")
+        if not all([isinstance(i, (int, np.integer)) for i in shape]):
+            raise ValueError("elements of shape must be type int")
+        dtype = f"TYPE_{np_to_triton_dtype(dtype().dtype)}"
+        input = {
+            "name": name,
+            "dataType": dtype,
+            "dims": shape,
+        }
+        if optional:
+            input["optional":True]
+        self.config = input
 
-        if not key in self.config:
-            self.config[key] = []
-        inputs = [i["name"] for i in self.config[key]]
-        if name in inputs:
-            index = inputs.index(name)
-            self.config[key][index]["dataType"] = datatype
-            self.config[key][index]["dims"] = dims
-        else:
-            inputs = {
-                "name": name,
-            }
-            self.config[key].append({"name": name, "dataType": datatype, "dims": dims})
 
-    def _remove_io(self, key="input"):
-        """Removes all inputs from config."""
-        if key in self.config:
-            del self.config[key]
+class ModelOutput(ModelInput):
+    """Model output configuration.
 
-    def add_input(self, name, datatype, dims):
-        """Add a new input or set the properties of an existing input.
+    Configuration of one model output. Pass a list of these inputs for a multi-output model.
 
-        Parameters
-        ----------
-        name : str
-            The input name. Used to check if the input already exists. And existing
-            input will be overwritten while a new input will be added.
-        datatype : str
-            A valid triton datatype (see below).
-        dims : array-like
-            A list of integers indicating the model input sizes sans batch. Variable
-            sizes should be indicated with a `-1`.
+    Parameters
+    ----------
+    name : str
+        Model output name.
+    shape : list or tuple of int
+        The shape of the input not including batch dimension. Variable dimensions are set to -1.
+    dtype : numpy.dtype
+        The numpy dtype of the model input.
+    """
 
-        Notes
-        -----
-        See Triton for valid `datatype` values:
-        https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#datatypes
-        """
+    def __init__(self, name, shape, dtype):
+        super().__init__(name, shape, dtype, False)
 
-        self._add_io(name, datatype, dims, key="input")
 
-    def remove_inputs(self):
-        """Removes all inputs from config."""
+class InstanceGroup(object):
+    """Instance group configuration.
 
-        self._remove_io(key="input")
+    Configures the number and type (CPU/GPU) of processors and the number of model instances
+    hosted on each.
 
-    def add_output(self, name, datatype, dims):
-        """Add a new output or set the properties of an existing output.
+    Parameters
+    ----------
+    count : int
+        The number of model instances to run concurrently. Default value is 1.
+    kind : str {"cpu", "gpu"}
+        Default value of "gpu" specifies that `count` models be hosted on each
+        available gpu. Default value is `gpu`.
+    gpus : list of int
+        If specified, `count` instances will be hosted on each of the listed
+        gpus. For example, [0, 1] would specify serving on gpus zero and one.
+        Default value of `None` means that `count` instances will be served on
+        each available gpu.
 
-        Parameters
-        ----------
-        name : str
-            The output name. Used to check if the output already exists. And existing
-            output will be overwritten while a new input will be added.
-        datatype : str
-            A valid triton datatype (see below).
-        dims : array-like
-            A list of integers indicating the model output sizes sans batch. Variable
-            sizes should be indicated with a `-1`.
+    References
+    ----------
+    https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#instance-groups
+    """
 
-        Notes
-        -----
-        See Triton for valid `datatype` values:
-        https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#datatypes
-        """
-
-        self._add_io(name, datatype, dims, key="output")
-
-    def remove_outputs(self):
-        """Removes all outputs from config."""
-
-        self._remove_io(key="output")
-
-    def max_batch_size(self, samples):
-        """Sets the maximum batch size for the config.
-
-        Batch sizes exceeding this value will trigger an inference exception.
-
-        Parameters
-        ----------
-        samples : int
-            The maximum batch size for the model.
-        """
-
-        if not isinstance(samples, int):
-            raise ValueError("argument 'samples' must be int.")
-        self.config["maxBatchSize"] = samples
-
-    def add_instance_group(self, count=1, kind="gpu", gpus=None):
-        """Adds an instance group to the config.
-
-        The instance group specifies the number of model instances hosted on each
-        CPU and GPU. By default, 1 model instance will be hosted on each available
-        GPU. Specific GPUs can be set using the `gpus` argument. Each call adds to
-        the existing instance group specification.
-
-        Parameters
-        ----------
-        count : int
-            The number of model instances to run concurrently.
-        kind : str {"cpu", "gpu"}
-            Default value of "gpu" specifies that `count` models be hosted on each
-            available gpu.
-        gpus : list of int
-            If specified, `count` instances will be hosted on each of the listed
-            gpus. For example, [0, 1] would specify serving on gpus zero and one.
-            Default value of `None` means that `count` instances will be served on
-            each available gpu.
-
-        References
-        ----------
-        https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#instance-groups
-        """
-
-        # check input validity
+    def __init__(self, count=1, kind="gpu", gpus=None):
         if not isinstance(count, int):
-            raise ValueError("argument 'count' must be int.")
-        if kind.lower() not in ["cpu", "kind_cpu", "gpu", "kind_gpu"]:
-            raise ValueError("argument 'kind' must be one of 'cpu', 'gpu'.")
+            raise ValueError("`count` must be int.")
+        if kind.lower() not in {"cpu", "kind_cpu", "gpu", "kind_gpu"}:
+            raise ValueError("`kind` must be one of 'cpu', 'gpu'.")
         elif kind in {"cpu", "kind_cpu"}:
             kind = "KIND_CPU"
         else:
             kind = "KIND_GPU"
         if gpus is not None:
             if not isinstance(gpus, list):
-                raise ValueError("argument 'gpus' must be list of int.")
+                raise ValueError("argument 'gpus' must be list of type int.")
             if not all([isinstance(inst, int) for inst in gpus]):
-                raise ValueError("elements of 'gpus' must be int.")
+                raise ValueError("elements of 'gpus' must be type int.")
 
         # set count, kind, and optionally GPUs
         instance = {"count": count, "kind": kind}
         if gpus is not None:
             instance["gpus"] = gpus
+        self.config = instance
 
-        # assign
-        if "instanceGroup" not in self.config:
-            self.config["instanceGroup"] = [instance]
-        else:
-            self.config["instanceGroup"].append(instance)
 
-    def remove_instance_groups(self):
-        """Removes all instance groups from config."""
-        if "instanceGroup" in self.config:
-            del self.config["instanceGroup"]
+class PythonOptimization(object):
+    """Python backend optimization configuration.
 
-    def add_mixed_precision(self):
-        """Add an automatic mixed-precision accelerator to the config.
+    For the python backend page locking of memory used in host-device transfer is the only
+    optimization avaialble.
 
-        This enables the model to perform half-precision operations to
-        accelerate inference and decrease memory consumption. Cannot be
-        used simultaneously with TensorRT accelerator.
+    Parameters
+    ----------
+    input_pinned : bool
+        Page lock memory used to send model inputs. Default value is True.
+    output_pinned : bool
+        Page lock memory used to recieve model outputs. Default value is True.
+
+    References
+    ----------
+    https://developer.nvidia.com/blog/how-optimize-data-transfers-cuda-cc/#pinned_host_memory
+    """
+
+    def __init__(self, input_pinned=True, output_pinned=True):
+        self.config = {
+            "inputPinnedMemory": {"enable": input_pinned},
+            "outputPinnedMemory": {"enable": output_pinned},
+        }
+
+
+class PythonConfig(object):
+    """A model configuration for the python backend.
+
+    This class can generate JSON format dictionaries for use with model loading
+    functions, and can save and load configurations in protocol buffer format
+    for file-based configuration.
+
+    Parameters
+    ----------
+    name : str
+        Model name as stored in the model repository.
+    max_batch_size : int
+        The maximum number of samples in a request. Use 0 for a non-batching model.
+    input : ModelInput or list
+        Model inputs.
+    output : ModelOutput or list
+        Model outputs.
+    instance_group : InstanceGroup
+        An instance group configuration defining model resources.
+    optimization : PythonOptimization
+        Python backend optimization configuration. Default value None enables
+        pinned memory by default.
+    response_cache : bool
+        Whether to cache model input-output pairs. See reference below. Default value
+        is False for no caching.
+
+    References
+    ----------
+    https://github.com/triton-inference-server/server/blob/main/docs/user_guide/response_cache.md
+    """
+
+    def __init__(
+        self,
+        name,
+        max_batch_size,
+        input=None,
+        output=None,
+        instance_group=None,
+        dynamic_batching=None,
+        optimization=None,
+        response_cache=False,
+    ):
+        if not isinstance(name, str):
+            raise ValueError("`name` must be type str.")
+        if not isinstance(max_batch_size, int):
+            raise ValueError("`max_batch_size` must be type int.")
+        if input is not None:
+            if not isinstance(input, (ModelInput, list)):
+                raise ValueError(
+                    "`input` must be a ModelInput object or a list of ModelInput objects."
+                )
+            if isinstance(input, list):
+                if not all([isinstance(i, (ModelInput)) for i in input]):
+                    raise ValueError("elements of `input` must be a ModelInput object.")
+        if output is not None:
+            if not isinstance(output, (ModelOutput, list)):
+                raise ValueError(
+                    "`output` must be a ModelOutput object or a list of ModelOutput objects."
+                )
+            if isinstance(output, list):
+                if not all([isinstance(i, (ModelOutput)) for i in output]):
+                    raise ValueError(
+                        "elements of `output` must be a ModelOutput object."
+                    )
+        if instance_group is not None:
+            if not isinstance(instance_group, InstanceGroup):
+                raise ValueError("`instance_group` must be an InstanceGroup object.")
+        if not isinstance(response_cache, bool):
+            raise ValueError("`response_cache` must be type bool.")
+        self.config = {
+            "name": name,
+            "versionPolicy": {"latest": {"numVersions": 1}},
+            "maxBatchSize": max_batch_size,
+            "responseCache": {"enable": response_cache},
+            "backend": "python",
+        }
+        if input is not None:
+            self.config["input"] = (
+                [i.config for i in input] if input is list else [input.config]
+            )
+        if output is not None:
+            self.config["output"] = (
+                [o.config for o in output] if output is list else [output.config]
+            )
+        if instance_group is not None:
+            self.config["instanceGroup"] = [instance_group.config]
+        if optimization is not None:
+            print(optimization)
+            self.config["optimization"] = optimization.config
+
+    def json(self):
+        """Return the python model configuration as a JSON dictionary.
+
+        The JSON dictionary can be used with model loading functions.
         """
 
-        if self._gpu_accelerator_status("tensorrt"):
-            self._gpu_accelerator_delete("tensorrt")
-        self._gpu_accelerator_add(self._gpu_accelerator_amp())
+        return self.config
 
-    def remove_mixed_precision(self):
-        """Remove an automatic mixed-precision accelerator from the config."""
-        if self._gpu_accelerator_status("auto_mixed_precision"):
-            self._gpu_accelerator_delete("auto_mixed_precision")
+    def protobuffer(self):
+        """Return the python model configuratoin as a protocol buffer."""
 
-    def add_trt(self, precision="FP16"):
-        """Add an TensorRT accelerator to the config.
+        return json_format.ParseDict(self.json(), model_config_pb2.ModelConfig())
 
-        This analyzes the model using TensorRT (TRT) to optimize inference
-        via quantization, layer and tensor fusion, and kernel tuning.
-        TRT can be applied to produce either an FP32 or FP16 model.
+    def save(self, path):
+        """Save the configuration in protobuffer text (config.pbtxt) format.
 
         Parameters
         ----------
-        precision : str {"FP16", "FP32"}
-            Precision to use when applying TensorRT. Default value is `"FP16"`.
+        path : str
+            Path for the output file. File naming is automatic.
         """
 
-        if precision.upper() not in {"FP16", "FP32"}:
-            raise ValueError("precision must be one of 'FP16', 'FP32'.")
-        if self._gpu_accelerator_status("auto_mixed_precision"):
-            self._gpu_accelerator_delete("auto_mixed_precision")
-        if self._gpu_accelerator_status("tensorrt"):
-            self._gpu_accelerator_delete("tensorrt")
-        self._gpu_accelerator_add(self._gpu_accelerator_trt(precision))
+        message = json_format.ParseDict(self.json(), model_config_pb2.ModelConfig())
+        if not os.path.isdir(path):
+            raise ValueError(f"`path` {path} does not exist.")
+        with open(os.path.join(path, "config.pbtxt"), "w") as output:
+            text_format.PrintMessage(message, output)
 
-    def remove_trt(self):
-        """Remove a TensorRT accelerator from the config."""
-        if self._gpu_accelerator_status("tensorrt"):
-            self._gpu_accelerator_delete("tensorrt")
+
+class TensorRt(object):
+    """TensorRT configuration.
+
+    For use with the TensorFlow and ONNX backends.
+
+    Parameters
+    ----------
+    precision_mode : str {FP16, FP32}
+        Model precision either half-float (FP16) or float (FP32). Default value is "FP16".
+    max_cached_engines : int
+        The maximum cached TensorRT engines in TensorRT operations. Default value is 100.
+    minimum_segment_size : int
+        The smallest subgraph size considered for TensorRT optimization. Default value is 3.
+    max_workspace_size : int
+        The maximum GPU memory available during model execution. Default value is 4 GB.
+
+    References
+    ----------
+    https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/user_guide/optimization.html#onnx-with-tensorrt-optimization-ort-trt
+    https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/user_guide/optimization.html#tensorflow-with-tensorrt-optimization-tf-trt
+    https://github.com/triton-inference-server/common/blob/main/protobuf/model_config.proto
+    """
+
+    def __init__(
+        self,
+        precision_mode="FP16",
+        max_cached_engines=100,
+        minimum_segment_size=3,
+        max_workspace_size_bytes=4294967296,
+    ):
+        if precision_mode.upper() not in {"FP16", "FP32"}:
+            raise ValueError("`precision_mode` must be one of 'FP16' or 'FP32'.")
+        if not isinstance(max_cached_engines, int):
+            raise ValueError("`max_cached_engines` must be type int.")
+        if not isinstance(minimum_segment_size, int):
+            raise ValueError("`minimum_segment_size` must be type int.")
+        if not isinstance(max_workspace_size_bytes, int):
+            raise ValueError("`max_workspace_size_bytes` must be type int.")
+        self.config = {
+            "executionAccelerators": {
+                "gpuExecutionAccelerator": [
+                    {
+                        "name": "tensorrt",
+                        "parameters": {
+                            "precision_mode": f"{precision_mode.upper()}",
+                            "max_cached_engines": str(max_cached_engines),
+                            "minimum_segment_size": str(minimum_segment_size),
+                            "max_workspace_size_bytes": str(max_workspace_size_bytes),
+                        },
+                    }
+                ],
+            },
+        }
+
+
+class TensorflowXla(object):
+    """Tensorflow XLA graph optimization.
+
+    Sets the level of XLA just in time compilation of tensorflow models.
+
+    Parameters
+    ----------
+    level : int {-1, 0, 1, 2}
+        The optimization level can be off (-1), off but delayed (0), moderate
+        optimization(1), or higher optimization (2).
+    """
+
+    def __init__(self, level=0):
+        if not isinstance(level, int) or not level in {-1, 0, 1, 2}:
+            raise ValueError("`level` must be type int with of -1, 0, 1, or 2.")
+        self.config = {"graph": {"level": level}}
+
+
+class TensorflowMixedPrecision(object):
+    """Tensorflow automatic mixed precision configuration.
+
+    A configuration that activates automatic mixed precision for half-float inference.
+    """
+
+    def __init__(self):
+        self.config = {
+            "executionAccelerators": {
+                "gpuExecutionAccelerator": [{"name": "auto_mixed_precision"}]
+            }
+        }
+
+
+class TensorflowOptimization(PythonOptimization):
+    """Tensorflow backend optimization configuration.
+
+    The Tensorflow backend supports the memory page locking as well as mixed precision,
+    tensorrt, and xla compilation. The default optimization enables page locking and
+    mixed precision.
+
+    Parameters
+    ----------
+    input_pinned : bool
+        Page lock memory used to send model inputs. Default value is True.
+    output_pinned : bool
+        Page lock memory used to recieve model outputs. Default value is True.
+    amp : TensorflowMixedPrecision
+        An TensorflowMixedPrecision configuration to enable half-float inference.
+        Default value is None.
+    trt : TensorRt
+        A TensorRt configuration to enable reduced precision and operation fusion.
+        Default value is None.
+    xla : TensorflowXLA
+        A TensorflowXla configuration for XLA jit compilation.
+        Default value is None.
+
+    References
+    ----------
+    https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/user_guide/optimization.html#tensorflow-with-tensorrt-optimization-tf-trt
+    https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/user_guide/optimization.html#tensorflow-automatic-fp16-optimization
+    https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/user_guide/optimization.html#tensorflow-jit-graph-optimizations
+    """
+
+    def __init__(
+        self,
+        input_pinned=True,
+        output_pinned=True,
+        amp=None,
+        trt=None,
+        xla=None,
+    ):
+        super(TensorflowOptimization, self).__init__(input_pinned, output_pinned)
+        if amp is not None and trt is not None:
+            raise ValueError("`trt` cannot be enabled concurrently with `amp`.")
+        if amp is not None:
+            if not isinstance(amp, TensorflowMixedPrecision):
+                raise ValueError("`amp` must be a TensorflowMixedPrecision object.")
+            self.config.update(amp.config)
+        if trt is not None:
+            if not isinstance(trt, TensorRt):
+                raise ValueError("`trt` must be a TensorRt object.")
+            self.config.update(trt.config)
+        if xla is not None:
+            if not isinstance(xla, TensorflowXla):
+                raise ValueError("`xla` must be a TensorflowXla object.")
+            self.config.update(xla.config)
+
+
+class TensorflowConfig(PythonConfig):
+    """A model configuration for the tensorflow backend.
+
+    This class can generate JSON format dictionaries for use with model loading
+    functions, and can save and load configurations in protocol buffer format
+    for file-based configuration.
+
+    Parameters
+    ----------
+    name : str
+        Model name as stored in the model repository.
+    input : ModelInput or list
+        Model inputs.
+    output : ModelOutput or list
+        Model outputs.
+    instance_group : InstanceGroup
+        An instance group configuration defining model resources.
+    max_batch_size : int
+        The maximum number of samples in a request. Use 0 for a non-batching model.
+    optimization : TensorflowOptimization
+        Python backend optimization configuration. Default value None enables
+        pinned memory by default.
+    response_cache : bool
+        Whether to cache model input-output pairs. See reference below. Default value
+        is False for no caching.
+
+    References
+    ----------
+    https://github.com/triton-inference-server/server/blob/main/docs/user_guide/response_cache.md
+    """
+
+    def __init__(
+        self,
+        name,
+        max_batch_size,
+        input=None,
+        output=None,
+        instance_group=None,
+        dynamic_batching=None,
+        optimization=None,
+        response_cache=False,
+    ):
+        super(TensorflowConfig, self).__init__(
+            name=name,
+            input=input,
+            output=output,
+            instance_group=instance_group,
+            max_batch_size=max_batch_size,
+            dynamic_batching=dynamic_batching,
+            response_cache=response_cache,
+        )
+        if optimization is not None:
+            if not isinstance(optimization, TensorflowOptimization):
+                raise ValueError(
+                    "`optimization` must be a TensorflowOptimization object."
+                )
+            self.config["optimization"] = optimization.config
+        self.config["backend"] = "tensorflow"
+        self.config["platform"] = "tensorflow_savedmodel"
+
+
+def load(path):
+    """Load a JSON dictionary configuration from a protobuffer text file.
+
+    Parameters
+    ----------
+    path : str
+        Path for the input file.
+    """
+
+    with open(path, "rb") as f:
+        protobuf = text_format.Parse(f.read(), model_config_pb2.ModelConfig())
+    return json_format.MessageToDict(protobuf)
