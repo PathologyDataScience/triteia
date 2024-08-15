@@ -35,10 +35,11 @@ docker run --init --security-opt seccomp:unconfined --network=container:<name of
 ```
 > **_NOTE:_**  `--init` ensures that the docker container has a "master process" to do clean multi-processing. `--network=` lets the docker image see ports from other containers, in this case the triton server. The default shared memory size is now 64MB, so `--shm-size=` is necessary if you are reading large WSIs. `--security-opt seccomp:unconfined` might only be necessary on bigger machines, but it gives your process access to [openblas](https://www.openblas.net/) threads. `--rm` removes the container on exit, beware.
 
+> If you want to run this in an ipython notebook, you need to expose the jupyter port (8888) from the triton _server_ docker container using -p <your port>:8888
 
 ### Example <a name="example"></a>
 
-The notebook `examples\feature_extraction.ipynb` demonstrates whole-slide image feature extraction. This example requires installation of the `mil` library and a running Triton container on the client machine.
+The notebook `examples\feature_extraction.ipynb` demonstrates whole-slide image feature extraction. This example requires a running Triton container on the client machine.
 
 ### Running the Triton container <a name="container"></a>
 
