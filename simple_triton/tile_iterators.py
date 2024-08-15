@@ -183,7 +183,14 @@ class TiffPrefetch(object):
     """
 
     def __init__(
-        self, study, dtype=np.uint8, nchw=False, icc=False, batch=64, prefetch=16, workers=16
+        self,
+        study,
+        dtype=np.uint8,
+        nchw=False,
+        icc=False,
+        batch=64,
+        prefetch=16,
+        workers=16,
     ):
         if len(study["slides"]) > 1:
             raise ValueError("Multi-slide studies not supported.")
@@ -347,4 +354,3 @@ class TiffPrefetch(object):
         except Exception as error:
             self.pool.shutdown(wait=False, cancel_futures=True)
             raise
-
