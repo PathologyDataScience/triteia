@@ -252,7 +252,7 @@ class TiffPrefetch(object):
         for i, tile in enumerate(tiles):
             sharr_index, slice_index = divmod(offset + i, batch)
             if nchw:
-                sharrs[sharr_index].insert(np.transpose(tile, [0, 3, 1, 2]), slice_index)
+                sharrs[sharr_index].insert(np.transpose(tile, [2, 0, 1]), slice_index)
             else:
                 sharrs[sharr_index].insert(tile, slice_index)
 
