@@ -173,24 +173,17 @@ class TiffPrefetch(object):
     nchw : bool
         Format outputs as batch-channel-height-width. Default value is False.
     icc : bool
-        Whether to attempt ICC correction. Default value is False.
+        Whether to attempt ICC correction.
     batch : int
-        Batch size. Default value is 64. Partial batches are not be padded.
+        The batch size. A partial batch at the end will not be padded.
     prefetch : int
-        The target number of prefetched batches. Default value is 4.
+        The target number of prefetched batches.
     workers : int
-        The number of multiprocessing workers. Default value is 16.
+        The number of multiprocessing workers.
     """
 
     def __init__(
-        self,
-        study,
-        dtype=np.uint8,
-        nchw=False,
-        icc=False,
-        batch=64,
-        prefetch=4,
-        workers=16,
+        self, study, dtype=np.uint8, nchw=False, icc=False, batch=64, prefetch=16, workers=16
     ):
         if len(study["slides"]) > 1:
             raise ValueError("Multi-slide studies not supported.")
@@ -235,7 +228,7 @@ class TiffPrefetch(object):
         return tiles, read_kwargs
 
     @staticmethod
-    def read(source, dtype, nhcw, read_kwargs, sharrs, offset, batch):
+    def read(source, dtype, nchw, read_kwargs, sharrs, offset, batch):
         # read followed by crops
         xt = [k["tile_left"] for k in read_kwargs]
         yt = [k["tile_top"] for k in read_kwargs]
@@ -258,16 +251,17 @@ class TiffPrefetch(object):
         ]
         for i, tile in enumerate(tiles):
             sharr_index, slice_index = divmod(offset + i, batch)
-            sharrs[sharr_index].insert(
-                tile if not nhcw else np.transpose(tile, [0, 3, 1, 2]), slice_index
-            )
+            if nchw:
+                sharrs[sharr_index].insert(np.transpose(tile, [0, 3, 1, 2]), slice_index)
+            else:
+                sharrs[sharr_index].insert(tile, slice_index)
 
     def _submitfn(self, read_kwargs, sharrs, offset):
         return self.pool.submit(
             self.read,
             self.source,
-            self.nchw,
             self.dtype,
+            self.nchw,
             read_kwargs,
             sharrs,
             offset,
@@ -353,3 +347,4 @@ class TiffPrefetch(object):
         except Exception as error:
             self.pool.shutdown(wait=False, cancel_futures=True)
             raise
+
