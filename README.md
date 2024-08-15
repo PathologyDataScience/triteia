@@ -148,7 +148,13 @@ For a non-batching model, set the maximum batch size to zero
 config = TensorflowConfig(name, max_batch_size=0)
 ```
 
-Configuration classes can also save their configuration to a config.pbtxt that can be stored in the model root folder to automate configuration. This is a helpful option when distributing models. JSON format is used when configuring and loading model from Python. Configuration files use the protocol buffer format. Configuration classes handle conversion between these formats.
+Configuration classes can also save their configuration to a config.pbtxt for automatic file-based configuration
+
+```python
+config.save("/model_repository/mymodel.tensorflow/")
+```
+
+File-based configuration is useful for distributing models. When configuring and loading models directly in Python, a JSON formatted dictionary is used. Configuration files use the protocol buffer format. Configuration classes handle conversion between these formats.
 
 ## Model control <a name="control"></a>
 The `TritonModel` class can be used to load/unload models, to retrieve model configurations or metadata, or to check model if a model is idle or loaded. A model is defined by a model name and server url
