@@ -4,7 +4,6 @@ import histomics_stream as hs
 import large_image_source_tiff
 import numpy as np
 import os
-from simple_triton.config import ConfigBuilder
 from simple_triton.io.tfr_writer import write_record
 from simple_triton.inference import Requests
 from simple_triton.model import TritonModel
