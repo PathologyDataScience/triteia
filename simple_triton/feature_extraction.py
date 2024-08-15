@@ -513,7 +513,7 @@ def main():
                 print(f"Inference error {file}: {exc}")
                 continue
 
-            precision = np.dtype('float32') if args.float else np.dtype('float16')
+            precision = np.dtype("float32") if args.float else np.dtype("float16")
 
             # tile iterator
             iterator = TiffPrefetch(
