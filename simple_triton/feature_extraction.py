@@ -10,7 +10,6 @@ from simple_triton.model import TritonModel
 from simple_triton.tile_iterators import TiffPrefetch
 from time import sleep, time
 from tqdm import tqdm
-import tensorflow as tf
 
 
 def study(
@@ -543,7 +542,7 @@ def main():
             features = np.concatenate(features[0], axis=0)
 
             # write to tfrecord
-            precision = tf.float32 if args.float else tf.float16
+            precision = np.float32 if args.float else np.float16
             write_record(
                 tfr_name(
                     args.output,
