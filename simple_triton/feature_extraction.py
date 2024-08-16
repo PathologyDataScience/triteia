@@ -10,6 +10,7 @@ from simple_triton.model import TritonModel
 from simple_triton.tile_iterators import TiffPrefetch
 from time import sleep, time
 from tqdm import tqdm
+import tensorflow as tf
 
 
 def study(
@@ -408,6 +409,13 @@ def main():
     if not os.path.exists(args.output):
         os.makedirs(args.output)
 
+    # parse model's configurations
+    model = TritonModel(args.model, args.address)
+    config = model.get_config()
+    dtype = (
+        np.float32 if config["input"][0]["dataType"] == "TYPE_FP32" else np.uint8
+    )  # input data type
+
     # capture inputs
     if large_image_source_tiff.canRead(args.input):
         if args.mask is not None:
@@ -507,7 +515,7 @@ def main():
 
             # tile iterator
             iterator = TiffPrefetch(
-                hs_study, np.uint8, args.icc, args.batch, args.prefetch, args.workers
+                hs_study, dtype, args.icc, args.batch, args.prefetch, args.workers
             )
 
             # load source stains
@@ -535,7 +543,7 @@ def main():
             features = np.concatenate(features[0], axis=0)
 
             # write to tfrecord
-            precision = np.float32 if args.float else np.float16
+            precision = tf.float32 if args.float else tf.float16
             write_record(
                 tfr_name(
                     args.output,
