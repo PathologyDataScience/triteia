@@ -63,6 +63,11 @@ Optional parameters allow restricting inference to a tissue mask (`-m`)
 $python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -m TCGA-AN-A0G0-01Z-00-DX1.mask.png
 ```
 
+Store features in float32 precision rather than default float16 (`-f`)
+```console
+$python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -f
+```
+
 modification tile size (`-t`), add tile overlap (`-o`), and change magnification (`-M`)
 ```console
 $python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -t 256 -o 128 -M 10
