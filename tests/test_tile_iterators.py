@@ -21,27 +21,40 @@ mask_path = pooch.retrieve(
 )
 
 
+# slide parameters
+tile = 224
+batch = 64
+magnification = 20.0
+chunk = 896
+mask_threshold = 0.5
+prefetch = 4
+workers = 16
+icc = True
+nchw = False
+
+
+# create a histomics-stream study from a wsi/mask pair
+hs_study = study(
+    (wsi_path, mask_path),
+    t=(tile, tile),
+    chunk=(chunk, chunk),
+    objective=magnification,
+    mask_threshold=mask_threshold,
+)
+
+
+def test_nonzero():
+    """Ensure that tiles are nonzero"""
+
+    # create tile iterators and pull tiles
+    iterator = TiffPrefetch(hs_study, np.uint8, nchw, icc, batch, prefetch, workers)
+    tiles = [t for (t, m) in iterator]
+    for t in tiles:
+        assert not np.array_equal(t.view(), np.zeros(t.shape, t.dtype))
+
+
 def test_nchw():
     """Ensure that transposed nchw/nhwc batches have the same contents"""
-
-    # slide parameters
-    tile = 224
-    batch = 64
-    magnification = 20.0
-    chunk = 896
-    mask_threshold = 0.5
-    prefetch = 4
-    workers = 16
-    icc = True
-
-    # create a histomics-stream study from a wsi/mask pair
-    hs_study = study(
-        (wsi_path, mask_path),
-        t=(tile, tile),
-        chunk=(chunk, chunk),
-        objective=magnification,
-        mask_threshold=mask_threshold,
-    )
 
     # create tile iterators and pull tiles
     iterator = TiffPrefetch(hs_study, np.uint8, False, icc, batch, prefetch, workers)
