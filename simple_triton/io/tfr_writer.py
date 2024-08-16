@@ -199,7 +199,7 @@ def _write(
     # generate protobuffer
     if isinstance(precision, tf.DType):
         size = precision.size
-    elif precision in [np.float16, np.float32]:
+    elif isinstance(precision, np.dtype):
         size = np.dtype(precision).itemsize
     else:
         raise ValueError("precision must be a tensorflow or numpy dtype.")
