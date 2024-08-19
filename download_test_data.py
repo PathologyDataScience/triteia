@@ -3,6 +3,7 @@
 import pooch
 from pathlib import Path
 import os
+import shutil
 import stat
 
 test_data_dir="test_data"
@@ -12,12 +13,24 @@ wsi_files=os.path.join(test_data_dir, "wsi")
 def main():
     Path(host_model_repository).mkdir(parents=True, exist_ok=True)
 
-    pooch.retrieve(
-        fname="EfficientNetV2S.tensorflow.zip",
-        url="https://drive.usercontent.google.com/download?id=1Mmm2sRGzdzCEAODjABiiPIiBdg40EPwC&export=download&confirm=t",
-        known_hash="b115917b7d0e480fe080077d60913d90c4b596c5a1e3c74745c22f21ed14df63",
-        path=host_model_repository
-    )
+    model_fname = "EfficientNetV2S.tensorflow.zip"
+    model_name = model_fname.removesuffix(".zip")
+    model_dir = os.path.join(host_model_repository, model_name)
+    if not os.path.exists(model_dir):
+        pooch.retrieve(
+            fname=model_fname,
+            url="https://drive.usercontent.google.com/download?id=1Mmm2sRGzdzCEAODjABiiPIiBdg40EPwC&export=download&confirm=t",
+            known_hash="b115917b7d0e480fe080077d60913d90c4b596c5a1e3c74745c22f21ed14df63",
+            processor=pooch.Unzip(extract_dir=model_name),
+            path=host_model_repository
+        )
+        # Unzipping creates a directory "EfficientNetV2S.tensorflow/EfficientNetV2s.tensorflow"
+        # the next lines move the contents of the inner directory to the parent directory
+        inner_dir = os.path.join(host_model_repository, model_name, model_name)
+        shutil.move(os.path.join(inner_dir, "1"), os.path.join(inner_dir, ".."))
+        os.rmdir(inner_dir)
+        os.remove(os.path.join(host_model_repository, model_fname))
+
     print(f"Downloaded EfficientNet to {host_model_repository}")
     
     Path(wsi_files).mkdir(parents=True, exist_ok=True)
