@@ -33,21 +33,14 @@ The notebook `examples\feature_extraction.ipynb` demonstrates whole-slide image 
 
 simple-triton is tested with [Triton version 23.03](https://github.com/triton-inference-server/server/releases/tag/v2.32.0).
 
-The simplest way to deploy Triton is to run a Triton Docker container from the Nvidia GPU Cloud (NGC). See the NVIDIA Triton [quick start guide](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/getting_started/quickstart.html) for more information on running and verifying the container, including specifying a model repository.
-
-Two Triton server container runtime options are important for use with simple-triton:
-1. `--model-control-mode=explicit` is required to be able to load and modify models at runtime
-2. `--strict-model-config=false` allows Triton to auto-fill many options for model configuration
-
-for example,
-
+Download and launch the Triton Docker container from the NVIDIA GPU Cloud (NGC)
 ```
-docker run --gpus=all --rm -p 8000:8000 -p 8001:8001 -p 8002:8002 -p 8003:8003 --shm-size=1g --ulimit memlock=-1 --ipc=host -v host_model_repository:/models nvcr.io/nvidia/tritonserver:23.03-py3 tritonserver --model-repository=/models --model-control-mode=explicit --exit-on-error=false --disable-auto-complete-config=false
+docker run --gpus=all -d --rm -p 8000:8000 -p 8001:8001 -p 8002:8002 -p 8003:8003 --shm-size=1g --ulimit memlock=-1 --ipc=host -v $HOME/models:/models nvcr.io/nvidia/tritonserver:23.03-py3 tritonserver --model-repository=/models --model-control-mode=explicit --exit-on-error=false
 ```
 
-where `host_model_repository` is the location of your model repository folder on the host machine.
+This sets the host path `~/models` as the model repository. The `--model-control-mode=explicit` argument is required to load and modify models at runtime.
 
-> **Note:** The options `--ipc`, `--shm-size`, and `--ulimit memlock` are recommended when using shared memory for client/server communication. This allows Triton to access host system shared memory, increases the default 64MB shared memory limit, and prevents paging of RAM out to disk. If the client is run in a container then the `--ipc` and `--shm-size` options should be passed to the client container run command. Running the client container with `--network=host` is the easiest configuration to allow the client and server to communicate over the host network.
+> **Note:** The options `--ipc`, `--shm-size`, and `--ulimit memlock` are recommended when using shared memory for client/server communication. This allows Triton to access host shared memory, increasing the default 64MB limit, and prevents paging of RAM out to disk. If running the client in a container then `--ipc` and `--shm-size` should also be used to launch the client container. Running the client container with `--network=host` is the simplest option to allow the client and server to communicate using the host network.
 
 ## Command-line interface <a name="cli"></a>
 ### Inference <a name="inference"></a>
