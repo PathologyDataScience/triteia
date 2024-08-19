@@ -6,7 +6,7 @@ import tempfile
 
 """Data for testing and examples are hosted on Google Drive. Pooch is used to download
 this data by parsing registry.csv and prefetching these data once per testing session.
-Downloads are ."""
+Downloads are deleted when tests are completed."""
 
 
 MODELS = {"EfficientNetV2S.tensorflow.zip", "densenet_onnx.zip"}
