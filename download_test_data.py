@@ -15,7 +15,7 @@ def main():
     pooch.retrieve(
         fname="EfficientNetV2S.tensorflow.zip",
         url="https://drive.usercontent.google.com/download?id=1Mmm2sRGzdzCEAODjABiiPIiBdg40EPwC&export=download&confirm=t",
-        known_hash="a6ed53d8343498b4ebfe7ff1a9ccbcabef23d6a164d2a521916774af49996f7e",
+        known_hash="b115917b7d0e480fe080077d60913d90c4b596c5a1e3c74745c22f21ed14df63",
         path=host_model_repository
     )
     print(f"Downloaded EfficientNet to {host_model_repository}")
