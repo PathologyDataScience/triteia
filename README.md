@@ -25,6 +25,18 @@ git clone https://github.com/PathologyDataScience/simple_triton.git
 pip install ./simple_triton histomics_stream 'large_image[tiff]'
 ```
 
+Or, you can try the docker image:
+```bash
+# optional: download test data
+python download_test_data.py
+
+# simple_triton_client will be the name of the docker image
+docker build . -t simple_triton_client:latest
+docker run --init --security-opt seccomp:unconfined --network=container:<name of tritonserver docker image> --shm-size=1g -v ${PWD}/test_data:/data:ro --rm --name tritonclient -it simple_triton_client:latest
+```
+> **_NOTE:_**  `--init` ensures that the docker container has a "master process" to do clean multi-processing. `--network=` lets the docker image see ports from other containers, in this case the triton server. The default shared memory size is now 64MB, so `--shm-size=` is necessary if you are reading large WSIs. `--security-opt seccomp:unconfined` might only be necessary on bigger machines, but it gives your process access to [openblas](https://www.openblas.net/) threads. `--rm` removes the container on exit, beware.
+
+
 ### Example <a name="example"></a>
 
 The notebook `examples\feature_extraction.ipynb` demonstrates whole-slide image feature extraction. This example requires installation of the `mil` library and a running Triton container on the client machine.
@@ -213,8 +225,8 @@ Testing requires running a Triton server on the local machine. Tests are run usi
 import pooch
 pooch.retrieve(
     fname="EfficientNetV2S.tensorflow.zip",
-    url="https://drive.google.com/uc?export=download&id=1Mmm2sRGzdzCEAODjABiiPIiBdg40EPwC&confirm=t&uuid=b11e409a-64b2-4146-b45d-4f229093cb5a&at=ANzk5s7UvBzB7zpqm7AvngovJwS8:1681783040828",
-    known_hash="a6ed53d8343498b4ebfe7ff1a9ccbcabef23d6a164d2a521916774af49996f7e",
+    url="https://drive.usercontent.google.com/download?id=1Mmm2sRGzdzCEAODjABiiPIiBdg40EPwC&export=download&confirm=t",
+    known_hash="b115917b7d0e480fe080077d60913d90c4b596c5a1e3c74745c22f21ed14df63",
     path=host_model_repository
 )
 ```
