@@ -524,7 +524,7 @@ def main():
 
             # tile iterator
             iterator = TiffPrefetch(
-                hs_study, dtype, args.icc, args.batch, args.prefetch, args.workers
+                study=hs_study, dtype=dtype, icc=args.icc, batch=args.batch, prefetch=args.prefetch, workers=args.workers
             )
 
             # load source stains
