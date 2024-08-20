@@ -45,9 +45,11 @@ RUN apt-get update && \
 RUN useradd --create-home myuser
 COPY --from=builder-image --chown=myuser:myuser /home/myuser/venv /home/myuser/venv
 
-USER myuser
 WORKDIR /home/myuser/simple_triton
+RUN chown -R myuser:myuser /home/myuser/simple_triton
 COPY --chown=myuser:myuser . .
+
+USER myuser
 
 # make sure all messages always reach console
 ENV PYTHONUNBUFFERED=1
