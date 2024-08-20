@@ -75,10 +75,18 @@ class Benchmark:
             gpus = list(range(start, end, intval))
             instances = InstanceGroup(count=count, kind="gpu", gpus=gpus)
         else:
-            instances=None
+            instances = None
 
-        optimization = TensorflowOptimization(amp = TensorflowMixedPrecision() if self.args_dict["use_amp"] else None)
-        config = TensorflowConfig(name=args_dict["model_name"], max_batch_size=maxBatchSize, instance_group=instances, response_cache=False, optimization=optimization)
+        optimization = TensorflowOptimization(
+            amp=TensorflowMixedPrecision() if self.args_dict["use_amp"] else None
+        )
+        config = TensorflowConfig(
+            name=args_dict["model_name"],
+            max_batch_size=maxBatchSize,
+            instance_group=instances,
+            response_cache=False,
+            optimization=optimization,
+        )
         # load tensorflow model with larger batch size
         model.load(config=config.json())
         assert model.is_loaded()
@@ -121,7 +129,9 @@ class Benchmark:
             self.args_dict["mask_path"][0],
         )
         dtype = np.uint8
-        iterator = TiffPrefetch(self.hs_study, dtype=dtype, batch=batch, workers=workers)
+        iterator = TiffPrefetch(
+            self.hs_study, dtype=dtype, batch=batch, workers=workers
+        )
         # warm up Model
         print("Warmup Model")
         (

@@ -23,7 +23,7 @@ def main():
             url="https://drive.usercontent.google.com/download?id=1Mmm2sRGzdzCEAODjABiiPIiBdg40EPwC&export=download&confirm=t",
             known_hash="b115917b7d0e480fe080077d60913d90c4b596c5a1e3c74745c22f21ed14df63",
             processor=pooch.Unzip(extract_dir=model_name),
-            path=host_model_repository
+            path=host_model_repository,
         )
         # Unzipping creates a directory "EfficientNetV2S.tensorflow/EfficientNetV2s.tensorflow"
         # the next lines move the contents of the inner directory to the parent directory
