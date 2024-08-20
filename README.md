@@ -35,7 +35,7 @@ docker run --init --security-opt seccomp:unconfined --network=container:<name of
 ```
 > **_NOTE:_**  `--init` ensures that the docker container has a "master process" to do clean multi-processing. `--network=` lets the docker image see ports from other containers, in this case the triton server. The default shared memory size is now 64MB, so `--shm-size=` is necessary if you are reading large WSIs. `--security-opt seccomp:unconfined` might only be necessary on bigger machines, but it gives your process access to [openblas](https://www.openblas.net/) threads. `--rm` removes the container on exit, beware.
 
-> With the above command, if you want to run the client in an ipython notebook, you need to expose the jupyter port (8888) from the triton _server_ docker container using -p <your port>:8888
+> The client docker utilizes the server docker network so any ports required by the client must be exposed when launching the _server_ container. For example, running a jupyter notebook on the client requires exposing the jupyter port (8888) on the server using -p <your port>:8888.
 
 ### Example <a name="example"></a>
 
