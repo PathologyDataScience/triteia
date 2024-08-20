@@ -1,5 +1,8 @@
 import argparse
+import os
 from concurrent.futures import ProcessPoolExecutor, wait
+from time import sleep, time
+
 import histomics_stream as hs
 import large_image_source_tiff
 import numpy as np
@@ -11,6 +14,10 @@ from simple_triton.tile_iterators import TiffPrefetch
 from time import sleep, time
 from tqdm import tqdm
 import tensorflow as tf
+
+from simple_triton.inference import Requests
+from simple_triton.io.tfr_writer import write_record
+from simple_triton.tile_iterators import TiffPrefetch
 
 
 def study(
@@ -426,7 +433,7 @@ def main():
         if args.normalization is not None:
             if not os.path.isfile(args.normalization):
                 raise FileNotFoundError(
-                    f"Stain profile file {arg.normalization} for image {args.input} not found."
+                    f"Stain profile file {args.normalization} for image {args.input} not found."
                 )
         files = [[args.input, args.mask, args.normalization]]
     else:
@@ -513,9 +520,16 @@ def main():
                 print(f"Inference error {file}: {exc}")
                 continue
 
+            precision = np.dtype("float32") if args.float else np.dtype("float16")
+
             # tile iterator
             iterator = TiffPrefetch(
-                hs_study, dtype, args.icc, args.batch, args.prefetch, args.workers
+                study=hs_study,
+                dtype=dtype,
+                icc=args.icc,
+                batch=args.batch,
+                prefetch=args.prefetch,
+                workers=args.workers,
             )
 
             # load source stains

@@ -200,14 +200,14 @@ def _write(
     if isinstance(precision, tf.DType):
         size = precision.size
     elif isinstance(precision, np.dtype):
-        size = np.dtype(precision).itemsize
+        size = precision.itemsize
     else:
         raise ValueError("precision must be a tensorflow or numpy dtype.")
     record = {
         "features": _train_variable(tf.reshape(features, [-1]).numpy(), serialize=True),
         "shape": _train_variable(tf.reshape(shape, [-1]).numpy()),
         "slide_index": _train_variable(tf.reshape(slide_index, [-1]).numpy()),
-        "precision": _train_variable(tf.reshape(8 * precision.size, [-1]).numpy()),
+        "precision": _train_variable(tf.reshape(8 * size, [-1]).numpy()),
         **file_proto,
         **slide_proto,
         **tile_proto,

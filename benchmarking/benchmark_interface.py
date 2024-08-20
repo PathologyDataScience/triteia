@@ -1,10 +1,9 @@
 import argparse
-from mil.io.utils import study
+from simple_triton.feature_extraction import study, inference
+from simple_triton.tile_iterators import TiffPrefetch
 from simple_triton.model import TritonModel
-from simple_triton.feature_extraction import histomics_stream_inference
 from simple_triton.utils import analyze
-from simple_triton.config import ConfigBuilder
-from simple_triton.feature_extraction import feature_extractor
+from simple_triton.config import *
 from large_image.cache_util import cachesClear
 import tensorflow as tf
 import time
@@ -12,6 +11,7 @@ import subprocess
 import sys
 import os
 import functools
+import numpy as np
 
 
 class Benchmark:
@@ -42,8 +42,7 @@ class Benchmark:
             (wsi_path, mask_path),
             t=(tile, tile),
             chunk=(tile, tile),
-            target=20,
-            source="exact",
+            objective=20.0,
         )
 
     def create_load_model(self):
@@ -63,39 +62,33 @@ class Benchmark:
         url = self.args_dict["url"]  # url for grpc access to triton server
         model_name = self.args_dict["model_name"]
         maxBatchSize = self.args_dict["maxbatchsize"]  # set max batch size
-        count = self.args_dict["gpu_count"]  # set gpu count
+        count = self.args_dict["gpu_instance_count"]  # set gpu count
         kind = self.args_dict["kind"]  # set gpu kind
         gpus = self.args_dict["gpu_num"]  # set number of gpus
-        precision = self.args_dict["precision"]
         model = TritonModel(model_name, url)
         model.load({"maxBatchSize": maxBatchSize})
         assert model.is_loaded()
-        config = model.get_config()
-        config_builder = ConfigBuilder(model_name=model_name, config=config, url=url)
-        # Add/remove an automatic mixed-precision accelerator to the config.
-        if self.args_dict["use_amp"] == True:
-            config_builder.add_mixed_precision()
-        elif self.args_dict["use_amp"] == False:
-            config_builder.remove_instance_groups()
-        # Add an TensorRT accelerator to the config.
-        if self.args_dict["use_trt"] == True:
-            config_builder.add_trt(precision)
-        elif self.args_dict["use_trt"] == False:
-            config_builder.remove_trt
+
         #  Add an instance group defining the model hardware resources and instances.
         if kind == "gpu":
             start, end, intval = 0, gpus, 1
             gpus = list(range(start, end, intval))
-            config_builder.remove_instance_groups()
-            config_builder.add_instance_group(count, kind, gpus)
-        if kind == "cpu":
-            config_builder.remove_instance_groups()
-            config_builder.add_instance_group(kind=kind)
+            instances = InstanceGroup(count=count, kind="gpu", gpus=gpus)
+        else:
+            instances = None
+
+        optimization = TensorflowOptimization(
+            amp=TensorflowMixedPrecision() if self.args_dict["use_amp"] else None
+        )
+        config = TensorflowConfig(
+            name=args_dict["model_name"],
+            max_batch_size=maxBatchSize,
+            instance_group=instances,
+            response_cache=False,
+            optimization=optimization,
+        )
         # load tensorflow model with larger batch size
-        config_builder.max_batch_size(maxBatchSize)
-        config_builder.response_cache(False)
-        model.load(config=config_builder.config)
-        print(model.get_config())
+        model.load(config=config.json())
         assert model.is_loaded()
 
     def inference_measure_throughput(self):
@@ -135,6 +128,10 @@ class Benchmark:
             self.args_dict["wsi_path"][0],
             self.args_dict["mask_path"][0],
         )
+        dtype = np.uint8
+        iterator = TiffPrefetch(
+            self.hs_study, dtype=dtype, batch=batch, workers=workers
+        )
         # warm up Model
         print("Warmup Model")
         (
@@ -142,12 +139,10 @@ class Benchmark:
             self.tile_info,
             self.times,
             self.failed,
-        ) = histomics_stream_inference(
-            self.hs_study,
+        ) = inference(
+            iterator,
             model_name,
-            args_dict["url"],
-            batch=batch,
-            workers=workers,
+            url=args_dict["url"],
             limit=limit,
         )
         # inference for number of iterations
@@ -165,6 +160,9 @@ class Benchmark:
                 self.args_dict["wsi_path"][0],
                 self.args_dict["mask_path"][0],
             )
+            iterator = TiffPrefetch(
+                self.hs_study, dtype=dtype, batch=batch, workers=workers
+            )
             # start timer
             start = time.time()
             (
@@ -172,12 +170,10 @@ class Benchmark:
                 self.tile_info,
                 self.times,
                 self.failed,
-            ) = histomics_stream_inference(
-                self.hs_study,
+            ) = inference(
+                iterator,
                 model_name,
-                args_dict["url"],
-                batch=batch,
-                workers=workers,
+                url=args_dict["url"],
                 limit=limit,
             )
             elapsed_time_single = time.time() - start
@@ -281,9 +277,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--precision",
         choices=["FP32", "FP16"],
-        default="FP16",
+        default="FP32",
         required=False,
-        help="Choose between Precision FP16 or FP32 , default: FP16",
+        help="Choose between Precision FP16 or FP32 , default: FP32",
     )
     parser.add_argument(
         "--kind",
@@ -349,7 +345,7 @@ if __name__ == "__main__":
     print(f"Have", args_dict["wsi_path"])
     print(f"Have", args_dict["mask_path"])
 
-    # show rediness if check is true
+    # show readiness if check is true
     if args_dict["check_readiness"] == True:
         check_readiness(args_dict)
         exit()  # exit after showing readiness
@@ -374,13 +370,12 @@ if __name__ == "__main__":
     )
     f = open(args_dict["fileoutput"], "a")
     f.write(
-        "model_name: {},  maxbatchsize: {}, gpu_num: {}, gpu_intance_count: {}, use_amp: {}, use_trt: {}, precision: {}, workers: {}, limit: {}, iterations: {}, throughput(tiles/sec): {}, elapsed_time(sec): {} \n".format(
+        "model_name: {},  maxbatchsize: {}, gpu_num: {}, gpu_intance_count: {}, use_amp: {}, precision: {}, workers: {}, limit: {}, iterations: {}, throughput(tiles/sec): {}, elapsed_time(sec): {} \n".format(
             args_dict["model_name"],
             args_dict["maxbatchsize"],
             args_dict["gpu_num"],
-            args_dict["gpu_intance_count"],
+            args_dict["gpu_instance_count"],
             args_dict["use_amp"],
-            args_dict["use_trt"],
             args_dict["precision"],
             args_dict["workers"],
             args_dict["limit"],

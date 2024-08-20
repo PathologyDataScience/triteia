@@ -6,9 +6,10 @@ import os
 import shutil
 import stat
 
-test_data_dir="test_data"
-host_model_repository=os.path.join(test_data_dir, "model_repository")
-wsi_files=os.path.join(test_data_dir, "wsi")
+test_data_dir = "test_data"
+host_model_repository = os.path.join(test_data_dir, "model_repository")
+wsi_files = os.path.join(test_data_dir, "wsi")
+
 
 def main():
     Path(host_model_repository).mkdir(parents=True, exist_ok=True)
@@ -22,7 +23,7 @@ def main():
             url="https://drive.usercontent.google.com/download?id=1Mmm2sRGzdzCEAODjABiiPIiBdg40EPwC&export=download&confirm=t",
             known_hash="b115917b7d0e480fe080077d60913d90c4b596c5a1e3c74745c22f21ed14df63",
             processor=pooch.Unzip(extract_dir=model_name),
-            path=host_model_repository
+            path=host_model_repository,
         )
         # Unzipping creates a directory "EfficientNetV2S.tensorflow/EfficientNetV2s.tensorflow"
         # the next lines move the contents of the inner directory to the parent directory
@@ -32,25 +33,25 @@ def main():
         os.remove(os.path.join(host_model_repository, model_fname))
 
     print(f"Downloaded EfficientNet to {host_model_repository}")
-    
+
     Path(wsi_files).mkdir(parents=True, exist_ok=True)
 
-    wsi_fname="TCGA-AN-A0G0-01Z-00-DX1.svs"
+    wsi_fname = "TCGA-AN-A0G0-01Z-00-DX1.svs"
     wsi_path = pooch.retrieve(
         fname=wsi_fname,
         url="https://drive.usercontent.google.com/download?id=19agE_0cWY582szhOVxp9h3kozRfB4CvV&export=download&confirm=t",
         known_hash="d046f952759ff6987374786768fc588740eef1e54e4e295a684f3bd356c8528f",
         path=wsi_files,
-        )
+    )
     print(f"Downloaded {wsi_fname} to {wsi_files}")
 
-    mask_fname="TCGA-AN-A0G0-01Z-00-DX1.mask.png"
+    mask_fname = "TCGA-AN-A0G0-01Z-00-DX1.mask.png"
     mask_path = pooch.retrieve(
         fname=mask_fname,
         url="https://drive.usercontent.google.com/download?id=17GOOHbL8Bo3933rdIui82akr7stbRfta&export=download&confirm=t",
         known_hash="bb657ead9fd3b8284db6ecc1ca8a1efa57a0e9fd73d2ea63ce6053fbd3d65171",
         path=wsi_files,
-        )
+    )
     print(f"Downloaded {mask_fname} to {wsi_files}")
 
     for filename in [wsi_path, mask_path]:
