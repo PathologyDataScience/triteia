@@ -9,15 +9,6 @@ this data by parsing registry.csv and prefetching these data once per testing se
 Downloads are deleted when tests are completed."""
 
 
-MODELS = {"EfficientNetV2S.tensorflow.zip", "densenet_onnx.zip"}
-DATA = {
-    "TCGA-AN-A0G0-01Z-00-DX1.svs.tile_hash.pkl"
-    "TCGA-AN-A0G0-01Z-00-DX1.svs.EfficientNetB0.tensorflow_224_0_20X.tfr"
-    "TCGA-AN-A0G0-01Z-00-DX1.svs"
-    "TCGA-AN-A0G0-01Z-00-DX1.mask.png"
-}
-
-
 """Parse the filename, sha256, and hyperlinks for hosted files"""
 
 
@@ -41,7 +32,10 @@ class PrefetchPooch(pooch.Pooch):
         files = self.registry.keys() if not files else files
         for file in files:
             self._assert_file_in_registry(file)
-            self.fetch(file)
+            self.fetch(
+                fname=file,
+                processor=pooch.Unzip(extract_dir="./") if os.path.splitext(file)[1] == ".zip" else None
+            )
 
 
 """This fixture prefetches hosted data to a temporary folder that is deleted on 
@@ -60,3 +54,4 @@ def data(path=None, files=None):
         )
         data.prefetch(files)
         yield data
+
