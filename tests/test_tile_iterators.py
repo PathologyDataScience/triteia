@@ -10,11 +10,18 @@ from simple_triton.feature_extraction import study
 from simple_triton.tile_iterators import TiffPrefetch
 
 
-HASH_KEYS = {"tile_height", "tile_width", "tile_top", "tile_left", "target_magnification"}
+HASH_KEYS = {
+    "tile_height",
+    "tile_width",
+    "tile_top",
+    "tile_left",
+    "target_magnification",
+}
 
 
 def hash_dict(d):
     """hash a possibly nested dictionary"""
+
     def immutify(d):
         d_new = {}
         for k, v in d.items():
@@ -31,6 +38,7 @@ def hash_dict(d):
                 else:
                     d_new[k] = v
         return dict(sorted(d_new.items(), key=lambda item: item[0]))
+
     d_hashable = immutify(d)
     s_hashable = json.dumps(d_hashable).encode("utf-8")
     m = hashlib.sha256(s_hashable).hexdigest()
@@ -46,8 +54,8 @@ def compare_dict(x, y):
 def meta_tile_dict(batched):
     """build a dictionary linking tile metadata hashes with tile pixel hashes"""
     linked = {}
-    for (batch, metadata) in batched:
-        for (tile, m) in zip(batch, metadata):
+    for batch, metadata in batched:
+        for tile, m in zip(batch, metadata):
             linked[hash_dict(m)] = hashlib.sha256(tile.tobytes()).hexdigest()
     return linked
 
@@ -55,7 +63,13 @@ def meta_tile_dict(batched):
 def pkl_tiles(path, kwargs):
     """pickle a hashed version of tile iterator outputs"""
     iterator = TiffPrefetch(**kwargs)
-    keys = {"tile_height", "tile_width", "tile_top", "tile_left", "target_magnification"}
+    keys = {
+        "tile_height",
+        "tile_width",
+        "tile_top",
+        "tile_left",
+        "target_magnification",
+    }
     batches = [(i, [{k: s[k] for k in keys} for s in m]) for (i, m) in iterator]
     hashed = meta_tile_dict(batches)
     with open(path, "wb") as f:
@@ -79,7 +93,9 @@ def test_contents_icc_batched(data):
 
 def test_contents_noicc_batched(data):
     """Compare tile contents to gold-standard without ICC correction"""
-    kwargs, hashed = unpkl_tiles(data.fetch("TCGA-AN-A0G0-01Z-00-DX1.svs.hash_no_icc.pkl"))
+    kwargs, hashed = unpkl_tiles(
+        data.fetch("TCGA-AN-A0G0-01Z-00-DX1.svs.hash_no_icc.pkl")
+    )
     iterator = TiffPrefetch(**kwargs)
     batches = [(i, [{k: s[k] for k in HASH_KEYS} for s in m]) for (i, m) in iterator]
     compare_dict(meta_tile_dict(batches), hashed)
@@ -105,4 +121,3 @@ def test_nchw(data):
     nchw = [t for (t, m) in iterator]
     for f, t in zip(nhwc, nchw):
         assert np.array_equal(f.view(), np.transpose(t.view(), [0, 2, 3, 1]))
-

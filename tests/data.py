@@ -34,7 +34,11 @@ class PrefetchPooch(pooch.Pooch):
             self._assert_file_in_registry(file)
             self.fetch(
                 fname=file,
-                processor=pooch.Unzip(extract_dir="./") if os.path.splitext(file)[1] == ".zip" else None
+                processor=(
+                    pooch.Unzip(extract_dir="./")
+                    if os.path.splitext(file)[1] == ".zip"
+                    else None
+                ),
             )
 
 
@@ -54,4 +58,3 @@ def data(path=None, files=None):
         )
         data.prefetch(files)
         yield data
-
