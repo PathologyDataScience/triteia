@@ -71,16 +71,16 @@ Parameters
 - `-n` model name
 - `-b` backend one of `tensorflow`, `python`, or `onnx`
 - `-m` maximum batch size (default 64 samples per batch, 0 for a non-batching model)
-- `d` dynamic batching preferred batch size(s) and delay (default disable dynamic batching)
-- `r` cache outputs (default outputs are not cached)
-- `i` model instances per gpu / cpu (default 1)
-- `c` use cpu (default runs inference on GPU)
-- `g` number or list of gpus to use (default all GPUs)
-- `p` disable pin memory optimization (default enables page-locked memory for model inputs/outputs)
-- `a` automatic mixed precision optimization (TensorFlow) (default 32-bit precision)
-- `t` TensorRt optimization (TensorFlow, ONNX) (default disable TRT)
-- `x` XLA optimization (TensorFlow) one of -1 (disable) 0 (default), 1 (moderate), or 2 (intense) (default is 0 for backend default)
-- `u` Unload a model (requires only model name parameter)
+- `-d` dynamic batching preferred batch size(s) and delay (default disable dynamic batching)
+- `-r` cache outputs (default outputs are not cached)
+- `-i` model instances per gpu / cpu (default 1)
+- `-c` use cpu (default runs inference on GPU)
+- `-g` number or list of gpus to use (default all GPUs)
+- `-p` disable pin memory optimization (default enables page-locked memory for model inputs/outputs)
+- `-a` automatic mixed precision optimization (TensorFlow) (default 32-bit precision)
+- `-t` TensorRt optimization (TensorFlow, ONNX) (default disable TRT)
+- `-x` XLA optimization (TensorFlow) one of -1 (disable) 0 (default), 1 (moderate), or 2 (intense) (default is 0 for backend default)
+- `-u` Unload a model (requires only model name parameter)
 
 Load a model named EfficientNetV2S on the TensorFlow backend
 ```console
