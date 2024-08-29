@@ -81,7 +81,7 @@ def unpkl_tiles(path):
     with open(path, "rb") as f:
         contents = pickle.load(f)
     for image in contents["kwargs"]["study"]["slides"].keys():
-        filename = os.path.split(kwargs["study"]["slides"][image]["filename"])[1]
+        filename = os.path.split(contents["kwargs"]["study"]["slides"][image]["filename"])[1]
         filename = os.path.join(os.path.split(path)[0], os.path.split(filename)[1])
         if os.path.isfile(filename):
             contents["kwargs"]["study"]["slides"][image]["filename"] = filename
