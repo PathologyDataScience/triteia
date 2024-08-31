@@ -540,6 +540,8 @@ class OnnxOptimization(PythonOptimization):
         graph=None,
     ):
         super(OnnxOptimization, self).__init__(input_pinned, output_pinned)
+        if graph is not None and trt is not None:
+            raise ValueError("`trt` cannot be enabled concurrently with `graph`.")
         if trt is not None:
             if not isinstance(trt, TensorRt):
                 raise ValueError("`trt` must be a TensorRt object.")
