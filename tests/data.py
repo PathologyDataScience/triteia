@@ -47,7 +47,7 @@ completion"""
 
 
 @pytest.fixture(scope="session")
-def data(path=None, files=None):
+def data(files=None):
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         hashes, urls = registry()
         data = PrefetchPooch(
