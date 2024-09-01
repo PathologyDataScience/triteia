@@ -548,9 +548,15 @@ class OnnxOptimization(PythonOptimization):
         if trt is not None:
             if not isinstance(trt, TensorRt):
                 raise ValueError("`trt` must be a TensorRt object.")
-            parameters = trt.config["executionAccelerators"]["gpuExecutionAccelerator"][0]["parameters"]
-            parameters = {k:v for k,v in parameters.items() if k in ONNX_TRT_WHITELIST}
-            trt.config["executionAccelerators"]["gpuExecutionAccelerator"][0]["parameters"] = parameters
+            parameters = trt.config["executionAccelerators"]["gpuExecutionAccelerator"][
+                0
+            ]["parameters"]
+            parameters = {
+                k: v for k, v in parameters.items() if k in ONNX_TRT_WHITELIST
+            }
+            trt.config["executionAccelerators"]["gpuExecutionAccelerator"][0][
+                "parameters"
+            ] = parameters
             self.config.update(trt.config)
         if graph is not None:
             if not isinstance(graph, OnnxGraph):
@@ -628,4 +634,3 @@ def load(path):
     with open(path, "rb") as f:
         protobuf = text_format.Parse(f.read(), model_config_pb2.ModelConfig())
     return json_format.MessageToDict(protobuf)
-
