@@ -206,42 +206,6 @@ Inference is performed using `inference.inference`. This function consumes data 
 
 > **Note:** For multi-input models all inputs require uniform batch dimensions. Duplicate singleton values where necessary to satisfy this requirement.
 
-# Python Backend Models <a name="backend-models"></a>
-Supported Python Backend models are wrapped in TritonModel class provided in model.py.
-
-## UNI Preparation <a name="uni-prep"></a>
-- **Obtain Personal Token:** To run UNI you will need to submit a request for permission on `huggingface_hub` https://github.com/mahmoodlab/UNI. You will need to submit your request using your institutional email to get approval. Once approved, go to your profile settings under the `Access Tokens` tab and copy your token string. 
-
-- **Set Environment Variable:** 
-
-Set the environment variable `TOKEN` on the server you are working on. 
-```bash
-$ export TOKEN="your_token_string"
-```
-Pass the environment variable `TOKEN` to Docker (`-e TOKEN=$TOKEN`)
-```bash
-docker run --gpus=8 --rm -p 8000:8000 -p 8001:8001 -p 8002:8002 -p 8003:8003 --shm-size=1g --ulimit memlock=-1 -e TOKEN=$TOKEN --ipc=host -v host_model_repository:/models nvcr.io/nvidia/tritonserver:23.03-py3 tritonserver --model-repository=/models --model-control-mode=explicit --exit-on-error=false --strict-model-config=false
-```
-The UNI TritonPythonModel will then login using your TOKEN and will save the token and the model into `/.cache/huggingface/`
-
-## Run Python-Backend Models (Phikon and UNI) <a name="run-python-backend"></a>
-To run either Phikon or UNI models using the Python backend in the Triton server container, follow these steps:
-
-- **Install Dependencies:** In the Triton server container, install all required packages from `requirements.txt`. You may need to move to your `host_model_repository` directory to perform the installation.
-```bash
-$ pip install -r requirements.txt
-```
-- **Prepare Model Directory:** Each model is located in `backend-models` folder.  The model's folder should be moved to `host_model_repository`. The model's folder contains `model.py` that should be inside folder `1` and `config.pbtxt` should be on the same level of folder `1`. 
-
-```plaintext
-    .
-    ├── ...
-    ├── phikon                  # Phikon Model
-    │   ├── config.pbtxt        # Default configuration file
-    │   ├── 1                   # Version 1 of the model
-    │       ├── model.py        # TritonPythonModel Class adapted for Phikon
-```
-
 # Developer guide <a name="developer-guide"></a>
 
 ## Testing <a name="testing"></a>
