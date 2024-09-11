@@ -1,10 +1,8 @@
-import triton_python_backend_utils as pb_utils
-import torch
 import json
-from transformers import AutoImageProcessor, ViTModel
 import numpy as np
-import subprocess
-import sys
+import torch
+from transformers import AutoImageProcessor, ViTModel
+import triton_python_backend_utils as pb_utils
 import tritonclient.utils as triton_utils
 
 
@@ -24,6 +22,7 @@ class TritonPythonModel:
         pb_utils.ModelConfig
           An object containing the auto-completed model configuration
         """
+        
         inputs = [
             {
                 "name": "input_0",
@@ -47,32 +46,19 @@ class TritonPythonModel:
         return model_config
 
     def initialize(self, args):
-        """
-        This function initializes pre-trained phikon model from hugging face.
-        The initialization is depending on the configuration from 'config.pbtxt'
-        "https://huggingface.co/owkin/phikon"
-        """
-
-        # Load Model configuration
+        """Initialize the phikon model from https://huggingface.co/owkin/phikon"""
         self.model_config = model_config = json.loads(args["model_config"])
-
-        # Get output_0 configuration
         output0_config = pb_utils.get_output_config_by_name(model_config, "output_0")
         self.gpu_id = args.get("model_instance_device_id", 0)
-
-        # Convert Triton types to numpy types
         self.output0_dtype = pb_utils.triton_string_to_numpy(
             output0_config["data_type"]
         )
-
-        # Initialize the pretrained Phikon Model
         self.model = ViTModel.from_pretrained("owkin/phikon", add_pooling_layer=False)
         self.model = self.model.to(torch.device(f"cuda:{self.gpu_id}"))
         self.image_processor = AutoImageProcessor.from_pretrained("owkin/phikon")
 
     def execute(self, requests):
-        """
-        This function receives the requests (tiles) 'pb_utils.InfrerenceRequest'
+        """This function receives the requests (tiles) 'pb_utils.InfrerenceRequest'
         and performs the inference and returns the features for further processing.
         """
 
