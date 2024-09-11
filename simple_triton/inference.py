@@ -1,9 +1,11 @@
+import argparse
 from functools import partial
 import numpy as np
 import os
 from simple_triton.model import TritonModel
 from simple_triton.tile_iterators import SharedNumpyArray
 from simple_triton.utils import create_client
+
 import time
 from tritonclient.utils import (
     InferenceServerException,
@@ -164,14 +166,14 @@ class Requests(object):
                 provided.shape[offset:], _int(expected["dims"])
             ):
                 if batching:
-                    output = [-1, *_int(expected["dims"])]
+                    input = [-1, *_int(expected["dims"])]
                 else:
-                    output = _int(expected["dims"])
+                    input = _int(expected["dims"])
                 raise Exception(
                     (
                         f"Model {model_dict['name']} input "
-                        f"{model_dict['input'][i]['name']} "
-                        f"expects shape {output}, received input with "
+                        f"{model_dict['input'][0]['name']} "
+                        f"expects shape {input}, received input with "
                         f"shape {list(provided.shape)}."
                     )
                 )
@@ -407,7 +409,6 @@ class Requests(object):
 
                     # inference generated an exception
                     if type(results) == InferenceServerException:
-
                         # capture error in request
                         if request["attempts"] == 1:
                             request["errors"] = []
@@ -422,7 +423,6 @@ class Requests(object):
 
                     # inference generated a result
                     else:
-
                         # convert responses to numpy arrays
                         for j, output in enumerate(
                             self.model_dicts[request["model_name"]]["output"]

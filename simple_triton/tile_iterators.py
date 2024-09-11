@@ -1,7 +1,6 @@
 from collections import deque
 from concurrent.futures import ProcessPoolExecutor, ALL_COMPLETED, wait
 import functools
-import histomics_stream as hs
 import large_image_source_tiff
 import math
 import multiprocessing.shared_memory
@@ -28,7 +27,7 @@ class SharedNumpyArray:
         self.buf[i] = arr
 
     def copy(self, arr):
-        self.shape = arry.shape
+        self.shape = arr.shape
         self.buf = np.ndarray(self.shape, dtype=self.dtype, buffer=self.shm.buf)
         self.buf[:] = arr[:]
 
@@ -170,6 +169,8 @@ class TiffPrefetch(object):
         A histomics stream study.
     dtype : type
         Desired numpy datatype for outputs. Default value is `np.uint8`.
+    nchw : bool
+        Format outputs as batch-channel-height-width. Default value is False.
     icc : bool
         Whether to attempt ICC correction.
     batch : int
@@ -181,11 +182,19 @@ class TiffPrefetch(object):
     """
 
     def __init__(
-        self, study, dtype=np.uint8, icc=False, batch=64, prefetch=16, workers=16
+        self,
+        study,
+        dtype=np.uint8,
+        nchw=False,
+        icc=False,
+        batch=64,
+        prefetch=16,
+        workers=16,
     ):
         if len(study["slides"]) > 1:
             raise ValueError("Multi-slide studies not supported.")
         self.dtype = dtype
+        self.nchw = nchw
         self.pool = ProcessPoolExecutor(max_workers=workers)
         slide = list(study["slides"].values())[0]
         self.source = large_image_source_tiff.open(
@@ -225,7 +234,7 @@ class TiffPrefetch(object):
         return tiles, read_kwargs
 
     @staticmethod
-    def read(source, dtype, read_kwargs, sharrs, offset, batch):
+    def read(source, dtype, nchw, read_kwargs, sharrs, offset, batch):
         # read followed by crops
         xt = [k["tile_left"] for k in read_kwargs]
         yt = [k["tile_top"] for k in read_kwargs]
@@ -241,20 +250,24 @@ class TiffPrefetch(object):
             region=dict(left=xr, top=yr, width=wr, height=hr, units="mag_pixels"),
             tile_size=dict(width=wr, height=hr),
         )
-        chunk, _ = source.getRegion(**read_dict)
+        chunk, _ = source.getRegion(**kwargs)
         tiles = [
             chunk[y - yr : y - yr + h, x - xr : x - xr + w, :].astype(dtype)
             for (x, y, w, h) in zip(xt, yt, wt, ht)
         ]
         for i, tile in enumerate(tiles):
             sharr_index, slice_index = divmod(offset + i, batch)
-            sharrs[sharr_index].insert(tile, slice_index)
+            if nchw:
+                sharrs[sharr_index].insert(np.transpose(tile, [2, 0, 1]), slice_index)
+            else:
+                sharrs[sharr_index].insert(tile, slice_index)
 
     def _submitfn(self, read_kwargs, sharrs, offset):
         return self.pool.submit(
             self.read,
             self.source,
             self.dtype,
+            self.nchw,
             read_kwargs,
             sharrs,
             offset,
@@ -272,15 +285,15 @@ class TiffPrefetch(object):
                 else:
                     """last read aligned with batch boundary, create new shared array,
                     and read_kwargs, futures containers"""
-                    tiles = SharedNumpyArray(
-                        [
-                            self.batch,
-                            self.read_kwargs[self.pos][0]["tile_height"],
-                            self.read_kwargs[self.pos][0]["tile_width"],
-                            3,
-                        ],
-                        self.dtype,
-                    )
+                    dims = [
+                        self.batch,
+                        self.read_kwargs[self.pos][0]["tile_height"],
+                        self.read_kwargs[self.pos][0]["tile_width"],
+                        3,
+                    ]
+                    if self.nchw:
+                        dims = [dims[0], dims[3], dims[1], dims[2]]
+                    tiles = SharedNumpyArray(dims, self.dtype)
                     futures = []
                     batch_kwargs = []
 
@@ -298,18 +311,18 @@ class TiffPrefetch(object):
                     batches = math.ceil((len(reads) + offset) / self.batch)
 
                     # create additional arrays if this read spans multiple batches
+                    dims = [
+                        self.batch,
+                        reads[0]["tile_height"],
+                        reads[0]["tile_width"],
+                        3,
+                    ]
+                    if self.nchw:
+                        dims = [dims[0], dims[3], dims[1], dims[2]]
                     tiles = [
                         *tiles,
                         *[
-                            SharedNumpyArray(
-                                [
-                                    self.batch,
-                                    reads[0]["tile_height"],
-                                    reads[0]["tile_width"],
-                                    3,
-                                ],
-                                self.dtype,
-                            )
+                            SharedNumpyArray(dims, self.dtype)
                             for _ in range(batches - 1)
                         ],
                     ]

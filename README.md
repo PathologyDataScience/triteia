@@ -1,11 +1,6 @@
 # simple-triton
 
-A simple Python client for efficient inference with the NVIDIA Triton inference server.
-
-See the [user guide](#user-guide) to read about concepts and to get started with examples. Details on testing and implementation are located in the [developer guide](#developer-guide).
-
-## Supported Triton version
-simple-triton is tested with [Triton version 23.03](https://github.com/triton-inference-server/server/releases/tag/v2.32.0).
+simple-triton is a Python client for inference with the NVIDIA Triton server. It provides model deployment, configuration, and optimization capabilities for the TensorFlow, ONNX, and Python triton backends directly from Python. This was developed to address limitations of the [PyTriton](https://github.com/triton-inference-server/pytriton) package that only suppports deployments with the Python backend where TensorRT, XLA, and mixed precision are not available.
 
 # User guide <a name="user-guide"></a>
 
@@ -14,59 +9,162 @@ simple-triton is tested with [Triton version 23.03](https://github.com/triton-in
 - [Quick start](#quick-start)
     - [Example](#example)
     - [Running the Triton container](#container)
-- [Triton concepts](#concepts)
-    - [Model control](#control)
-    - [Model configuration](#config)
-- [Inference](#inference)
-- [Python Backend Models](#python-backend-models)
-    - [UNI](#uni-preparation)
-    - [Run Python-Backend Models (Phikon and UNI)](#run-python-backend-models-phikon-and-uni)
+- [Model configuration](#config)
+- [Model control](#control)
+- [Command-line interfaces](#cli)
+    - [Inference](#inference)
 - [Developer guide](#developer-guide)
     - [Testing](#testing)
-    - [Benchmarking](#benchmarking)
 
 ## Quick start <a name="quick-start"></a>
 
-simple-triton is pip installable. Use of the whole slide image reader requires installation of `histomcs_stream` and `large_image` with tiff or openslide tile sources 
+simple-triton requires `histomcs_stream` and `large_image` packages with the tiff reader
 ```
-sudo apt update
-sudo apt install -y python3-openslide openslide-tools
-pip install histomics_stream 'large_image[tiff]' \
-  scikit_image --find-links https://girder.github.io/large_image_wheels
+git clone https://github.com/PathologyDataScience/simple_triton.git
+pip install ./simple_triton histomics_stream 'large_image[tiff]'
 ```
+
+Or, you can try the docker image:
+```bash
+# optional: download test data
+python download_test_data.py
+
+# simple_triton_client will be the name of the docker image
+docker build . -t simple_triton_client:latest
+docker run --init --security-opt seccomp:unconfined --network=container:<name of tritonserver docker container> --shm-size=1g -v ${PWD}/test_data:/data:ro --rm --name tritonclient -it simple_triton_client:latest
+```
+> **_NOTE:_**  `--init` ensures that the docker container has a "master process" to do clean multi-processing. `--network=` lets the docker image see ports from other containers, in this case the triton server. The default shared memory size is now 64MB, so `--shm-size=` is necessary if you are reading large WSIs. `--security-opt seccomp:unconfined` might only be necessary on bigger machines, but it gives your process access to [openblas](https://www.openblas.net/) threads. `--rm` removes the container on exit, beware.
+
+> The client docker utilizes the server docker network so any ports required by the client must be exposed when launching the _server_ container. For example, running a jupyter notebook on the client requires exposing the jupyter port (8888) on the server using -p <your port>:8888.
 
 ### Example <a name="example"></a>
 
-The notebook `examples\feature_extraction.ipynb` demonstrates whole-slide image feature extraction. This example requires installation of the `mil` library and a running Triton container on the client machine.
+The notebook `examples\feature_extraction.ipynb` demonstrates whole-slide image feature extraction. This example requires a running Triton container on the client machine.
 
 ### Running the Triton container <a name="container"></a>
 
-The simplest way to deploy Triton is to run a Triton Docker container from the Nvidia GPU Cloud (NGC). See the NVIDIA Triton [quick start guide](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/getting_started/quickstart.html) for more information on running and verifying the container, including specifying a model repository.
+simple-triton is tested with [Triton version 23.03](https://github.com/triton-inference-server/server/releases/tag/v2.32.0).
 
-Two Triton server container runtime options are important for use with simple-triton:
-1. `--model-control-mode=explicit` is required to be able to load and modify models at runtime
-2. `--strict-model-config=false` allows Triton to auto-fill many options for model configuration
-
-for example,
-
+Download and launch the Triton Docker container from the NVIDIA GPU Cloud (NGC)
 ```
-docker run --gpus=8 --rm -p 8000:8000 -p 8001:8001 -p 8002:8002 -p 8003:8003 --shm-size=1g --ulimit memlock=-1 --ipc=host -v host_model_repository:/models nvcr.io/nvidia/tritonserver:23.03-py3 tritonserver --model-repository=/models --model-control-mode=explicit --exit-on-error=false --strict-model-config=false
+docker run --gpus=all -d --rm -p 8000:8000 -p 8001:8001 -p 8002:8002 -p 8003:8003 --shm-size=1g --ulimit memlock=-1 --ipc=host -v $HOME/models:/models nvcr.io/nvidia/tritonserver:23.03-py3 tritonserver --model-repository=/models --model-control-mode=explicit --exit-on-error=false
 ```
 
-where `host_model_repository` is the location of your model repository folder on the host machine.
+This sets the host path `~/models` as the model repository. The `--model-control-mode=explicit` argument is required to load and modify models at runtime.
 
-> **Note:** The options `--ipc`, `--shm-size`, and `--ulimit memlock` are recommended when using shared memory for client/server communication. This allows Triton to access host system shared memory, increases the default 64MB shared memory limit, and prevents paging of RAM out to disk. If the client is run in a container then the `--ipc` and `--shm-size` options should be passed to the client container run command. Running the client container with `--network=host` is the easiest configuration to allow the client and server to communicate over the host network.
+> **Note:** The options `--ipc`, `--shm-size`, and `--ulimit memlock` are recommended when using shared memory for client/server communication. This allows Triton to access host shared memory, increasing the default 64MB limit, and prevents paging of RAM out to disk. If running the client in a container then `--ipc` and `--shm-size` should also be used to launch the client container. Running the client container with `--network=host` is the simplest option to allow the client and server to communicate using the host network.
 
-## Triton concepts <a name="concepts"></a>
-simple-triton is a Python client that simplifies the loading and configuration of models on the NVIDIA Triton Inference Server, as well as inference requests. Communication between client and server uses the Remote Procedure Call (gRPC) protocol. If the client and server share memory then shared memory can further accelerate communication. For inference tasks that are preprocessing intensive or I/O bound, simple-triton can be used with a multiprocessing data loader to shard loading, preprocessing, and inference requests over multiple processes.
+## Command-line interface <a name="cli"></a>
+### Inference <a name="inference"></a>
+A command-line interface is provided for inference with single or multiple slides and with control of tiling, masking, data loading, and serialization parameters. Models must be loaded prior to inference.
 
-The motivation for this project was to accelerate inference-intensive processes like feature extraction from whole-slide images. Machine-learning frameworks like TensorFlow or PyTorch that are primarily intended for model training are not optimal for large inference tasks. Triton provides several advantages over these frameworks including better utilization of hardware. Triton also decouples data loading and preprocessing of inference which improves flexibility in implementing these steps.
+Perform inference with the EfficientNetV2S model on a single slide, outputing serialized embeddings to your home directory
+```console
+$python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow
+```
 
-Some key performance optimizations of Triton that available through simple-triton:
-1. Model concurrency - a single GPU can host multiple instances of a model using CUDA streams, allowing overlap of host/device communication and device computation.
-2. Automatic mixed precision - simple-triton can enable mixed precision for TensorFlow models, improving throughput and GPU memory consumption.
-3. TensorRT - take advantage of quantization, layer and tensor fusion, and kernel tuning for select model types.
-4. Shared memory communication - send data to and receive data from Triton using shared memory when the client and server are on the same machine.
+Optional parameters allow restricting inference to a tissue mask (`-m`)
+```console
+$python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -m TCGA-AN-A0G0-01Z-00-DX1.mask.png
+```
+
+Store features in float32 precision rather than default float16 (`-f`)
+```console
+$python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -f
+```
+
+modification tile size (`-t`), add tile overlap (`-o`), and change magnification (`-M`)
+```console
+$python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -t 256 -o 128 -M 10
+```
+
+adjustment of tile reading parameters including ICC correction (`-i`), read chunk size (`-c`), batch size (`-b`), prefetch (`-p`), and multiprocessing workers (`-w`).
+```console
+$python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -i -c 8 -b 128 -p 2 -w 16
+```
+
+Provide image source (`-n`) and target (`-r`) parameters for Macenko color normalization
+```console
+$python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -n ~/TCGA-AN-A0G0-01Z-00-DX1.stain.npy -r ~/standard_stain.npy
+```
+
+Change the address of the Triton inference server
+```console
+$python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -a "foo.edu:8001"
+```
+
+Increase the precision of serialized features to float (default is half float)
+```console
+$python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -f
+```
+
+For large jobs use a tab-delimited file containing input images and optionally their masks and normalization stain profiles
+```console
+$more ~/inputs.tsv
+TCGA-AN-A0G0-01Z-00-DX1.svs    TCGA-AN-A0G0-01Z-00-DX1.mask.py    TCGA-AN-A0G0-01Z-00-DX1.stain.npy    
+TCGA-AN-A0G0-01Z-00-DX2.svs    TCGA-AN-A0G0-01Z-00-DX2.mask.py    TCGA-AN-A0G0-01Z-00-DX2.stain.npy
+TCGA-AN-A0G0-01Z-00-DX3.svs    TCGA-AN-A0G0-01Z-00-DX3.mask.py    TCGA-AN-A0G0-01Z-00-DX3.stain.npy
+TCGA-AN-A0G0-01Z-00-DX4.svs    TCGA-AN-A0G0-01Z-00-DX4.mask.py    TCGA-AN-A0G0-01Z-00-DX4.stain.npy
+$python feature_extraction.py ~/inputs.tsv ~/ EfficientNetV2S.tensorflow
+```
+
+Skip images where output already exists
+```console
+$python feature_extraction.py ~/inputs.tsv ~/ EfficientNetV2S.tensorflow -s
+```
+
+## Model configuration <a name="config"></a>
+`simple_triton.config` contains model configuration classes that implement backend-specific configuration options. These classes enable configuration of batching behavior, specification of model input/output shapes and types, and backend optimizations. See the Triton documentation on [model configuration](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/user_guide/model_configuration.html#model-configuration) and [optimization](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/user_guide/optimization.html) for more details.
+
+Configuration classes like `PythonConfiguration` and `TensorflowConfiguration` take as inputs additional data classes that configure batching and caching behavior, hardware resources, and model input/output signatures.
+
+When Triton is launched with the `--strict-model-config=false` the server will automatically configure basic information like the input/output signatures and the configuration can omit these
+```python
+from simple_triton.config import TensorflowConfig
+from simple_triton.model import TritonModel
+name = "mymodel.tensorflow"
+config = TensorflowConfig(name, max_batch_size=64)
+model = TritonModel(name, "localhost:8001")
+model.load(config=config.json())
+```
+
+Alternatively, model inputs and output signatures can be defined using the `ModelInput` and `ModelOutput` classes
+```python
+from simple_triton.config import ModelInput
+input = [ModelInput(name="input_0", shape=[224, 224, 3], dtype=np.float32, optional=False)]
+config = TensorflowConfig(name, max_batch_size=64, input=input)
+```
+Variable sized input dimensions can be indicated using a value of -1. 
+
+The `InstanceGroup` class configures the use of CPU or GPU resources GPU resources and the number of model instances hosted on each GPU 
+```python
+from simple_triton.config import InstanceGroup
+instances = InstanceGroup(count=2, kind="gpu", gpus=[0,1,2,3])
+config = TensorflowConfig(name=name, instance_group=instances)
+```
+
+`TensorflowOptimization` can be used with `TensorflowMixedPrecision`, `TensorflowXla`, and `TensorRt` to activate automatic mixed precision, XLA compilation, or TensorRT optimization 
+```python
+from simple_triton.config import TensorflowMixedPrecision, TensorflowXla, TensorflowOptimization
+amp = TensorflowMixedPrecision()
+xla = TensorflowXla(level=2)
+optimizer = TensorflowOptimization(amp=amp, xla=xla)
+ampxla_config = TensorflowConfig(name=name, max_batch_size=64, optimization=optimization)
+```
+TensorRt cannot be used concurrently with XLA and mixed precision.
+
+For a non-batching model, set the maximum batch size to zero
+```python
+config = TensorflowConfig(name, max_batch_size=0)
+```
+
+Configuration classes can also save their configuration to a config.pbtxt for automatic file-based configuration
+
+```python
+config.save("/model_repository/mymodel.tensorflow/")
+```
+
+File-based configuration is useful for distributing models. When configuring and loading models directly in Python, a JSON formatted dictionary is used. Configuration files use the protocol buffer format. Configuration classes handle conversion between these formats.
 
 ## Model control <a name="control"></a>
 The `TritonModel` class can be used to load/unload models, to retrieve model configurations or metadata, or to check model if a model is idle or loaded. A model is defined by a model name and server url
@@ -100,110 +198,13 @@ The current hosted model configuration can also be queried
 model.get_config()
 ```
 
-## Model configuration <a name="config"></a>
-The `ConfigBuilder` class is an interface to define hardware resources, optimizations, and model inputs/outputs for a model. This configuration can be used with the model control functions to alter the configuration of hosted models.
-
-Each model should have a maximum batch size that defines the upper limit on the number of samples in a single request
-
-```python
-from simple_triton.config import ConfigBuilder
-builder = ConfigBuilder("EfficientNetV2S.tensorflow")
-
-# set max batch size to 64
-builder.max_batch_size(64)
-model.load(config=builder.config)
-
-# for non-batching models, set batch size to zero
-builder.max_batch_size(0)
-nonbatching_model.load(config=builder.config)
-```
-
-Triton also has an inference results cache (should be disabled for benchmarking)
-
-```python
-# disabe inference result cache
-builder.response_cache(False)
-model.load(config=builder.config)
-```
-
-Automatic mixed precision or TensorRT optimization can also be enabled
-
-```python
-# enable automatic mixed precision
-builder.add_mixed_precision()
-model.load(config=builder.config)
-
-# remove AMP and add TensorRT FP16
-builder.remove_mixed_precision()
-builder.add_trt("FP16")
-model.load(config=builder.config)
-```
-
-Assignment of hardware resources is handled with *instance groups*. Each group defines CPU and GPU resources, and the number of concurrently hosted models on each resource. By default, Triton will create a single model instance on each GPU. 
-
-```python
-# add a second concurrent model instance on each GPU
-builder.add_instance_group(count=2, kind="GPU")
-model.load(config=builder.config)
-
-# restrict to GPUs 0, 1, 2, 3
-builder.add_instance_group(count=2, kind="GPU", gpus=[0, 1, 2, 3])
-model.load(config=builder.config)
-
-# add CPU instances to the GPU instances
-builder.add_instance_group(count=2, kind="CPU")
-model.load(config=builder.config)
-
-# remove all instances groups and return to default 1 instance / gpu for all GPUs
-builder.remove_instance_groups()
-model.load(config=builder.config)
-```
-
-The dimensions of model inputs and outputs can also be altered using `ConfigBuilder` methods. This is helpful when dealing with models that have variable-sized inputs/outputs that can be misinterpreted by Triton during loading.
-
 # Inference <a name="inference"></a>
 
 Inference is performed using `inference.inference`. This function consumes data from a simple iterator that emits data/metadata pairs. For single input models, data is provided as a numpy array. For multi-input models, data is provided as a dict of key value pairs linking numpy arrays to model input names (visible from `Model.get_config()`).
 
 `inference` can apply preprocessing functions to data after loading and prior to inference by passing a callable to the `pre` argument. 
 
-> **Note:** For multi-input models all inputs are required to uniform batch dimensions. Duplicate singleton values where necessary to satisfy this requirement.
-
-# Python Backend Models <a name="backend-models"></a>
-Supported Python Backend models are wrapped in TritonModel class provided in model.py.
-
-## UNI Preparation <a name="uni-prep"></a>
-- **Obtain Personal Token:** To run UNI you will need to submit a request for permission on `huggingface_hub` https://github.com/mahmoodlab/UNI. You will need to submit your request using your institutional email to get approval. Once approved, go to your profile settings under the `Access Tokens` tab and copy your token string. 
-
-- **Set Environment Variable:** 
-
-Set the environment variable `TOKEN` on the server you are working on. 
-```bash
-$ export TOKEN="your_token_string"
-```
-Pass the environment variable `TOKEN` to Docker (`-e TOKEN=$TOKEN`)
-```bash
-docker run --gpus=8 --rm -p 8000:8000 -p 8001:8001 -p 8002:8002 -p 8003:8003 --shm-size=1g --ulimit memlock=-1 -e TOKEN=$TOKEN --ipc=host -v host_model_repository:/models nvcr.io/nvidia/tritonserver:23.03-py3 tritonserver --model-repository=/models --model-control-mode=explicit --exit-on-error=false --strict-model-config=false
-```
-The UNI TritonPythonModel will then login using your TOKEN and will save the token and the model into `/.cache/huggingface/`
-
-## Run Python-Backend Models (Phikon and UNI) <a name="run-python-backend"></a>
-To run either Phikon or UNI models using the Python backend in the Triton server container, follow these steps:
-
-- **Install Dependencies:** In the Triton server container, install all required packages from `requirements.txt`. You may need to move to your `host_model_repository` directory to perform the installation.
-```bash
-$ pip install -r requirements.txt
-```
-- **Prepare Model Directory:** Each model is located in `backend-models` folder.  The model's folder should be moved to `host_model_repository`. The model's folder contains `model.py` that should be inside folder `1` and `config.pbtxt` should be on the same level of folder `1`. 
-
-```plaintext
-    .
-    ├── ...
-    ├── phikon                  # Phikon Model
-    │   ├── config.pbtxt        # Default configuration file
-    │   ├── 1                   # Version 1 of the model
-    │       ├── model.py        # TritonPythonModel Class adapted for Phikon
-```
+> **Note:** For multi-input models all inputs require uniform batch dimensions. Duplicate singleton values where necessary to satisfy this requirement.
 
 # Developer guide <a name="developer-guide"></a>
 
@@ -217,73 +218,8 @@ Testing requires running a Triton server on the local machine. Tests are run usi
 import pooch
 pooch.retrieve(
     fname="EfficientNetV2S.tensorflow.zip",
-    url="https://drive.google.com/uc?export=download&id=1Mmm2sRGzdzCEAODjABiiPIiBdg40EPwC&confirm=t&uuid=b11e409a-64b2-4146-b45d-4f229093cb5a&at=ANzk5s7UvBzB7zpqm7AvngovJwS8:1681783040828",
-    known_hash="a6ed53d8343498b4ebfe7ff1a9ccbcabef23d6a164d2a521916774af49996f7e",
+    url="https://drive.usercontent.google.com/download?id=1Mmm2sRGzdzCEAODjABiiPIiBdg40EPwC&export=download&confirm=t",
+    known_hash="b115917b7d0e480fe080077d60913d90c4b596c5a1e3c74745c22f21ed14df63",
     path=host_model_repository
 )
 ```
-## Benchmarking <a name="benchmarking"></a>
-
-We provide a benchmark command-line tool to help users identify the most performant parameters for their inference projects. An exhaustive list of evaluable parameters is provided below and includes batch size, precision accelerators, concurrent instances, and workers for data loading and preprocessing. This allows users to quickly tailor parameters to their specific model and dataset given available system resources and environment requirements. For inference jobs that may span days, a few hours of benchmarking can be a worthwhile investment.
-
-In contrast to NVIDIA's [Triton Model Anlyzer](https://github.com/triton-inference-server/model_analyzer) which uses randomly generated arrays for benchmarking, our tool incorporates a whole-slide image dataloader to introduce real IO conditions for more realistic measurements. We also provide options for enabling accelerators like mixed precision or TensorRT conversion. 
-
-With default parameters, the benchmark uses 32 workers to read and batch tiles from a whole-slide image using the [large_image reader](https://github.com/girder/large_image). Each worker maintains a queue of maximum 10 inference requests with 64 tiles per batch and 1 batch per inference request. To explore additional parameters users can provide additional command line arguments or override default values
- 
-```
-python benchmark_interface.py  --gpu-num $gpu_num  --use-trt --precision "FP16" --fileoutput $filename   --iterations 5  --maxbatchsize $maxbatchsize --iterations 3  --model-name "ConvNeXtXLarge"
-```
-
-> **_NOTE:_** Each call to the benchmarking cli runs a model warmup before making timed measurements. The disk cache is cleared between each measurement to ensure that measurements reflect real IO conditions. Results cacheing by Triton is also disabled.
-
-The arguments for the command-line interface are
-```
---model-name:       Set model name, usage: `--model-name ConvNeXtXLarge`
---fileoutput:       output file name with path for results
---batch:            Set inference batch size usage: `--batch 64`, default: 64
---maxbatchsize:     Set max batch size, usage: `--maxbatchsize 64`, default: 64
---use-amp:          Use auto matic mixed precision, usage: `--use-amp`, default: False
---use-trt:          Use tensorRT, usage: `--use-trt`, default: False
---precision:        Choose between Precision FP16 or FP32, usage: `--precision "FP16"`, default: FP16
---kind:             choice between gpu or cpu, usage: `--kind gpu`  default: gpu
---gpu_intance_count:number of instances for a gpu (default: 1), usage: `--gpu-count 1`
---gpu-num:          Number of GPUs to use, usage: `--gpu-num 2`, default: 1
---url:              url for connecting with Triton Inference Server, usage: `--url: "localhost:8001"`, default=localhost:8001
---magnification:    Set magnification size, usage: `--magnification 20`, type=int, default=20
---tile:             Set tile size, usage `--tile 224`, type=int, default=224
---limit:            In the consumer we limit the number of pending requests to avoid flooding the inference server. 
-                    type=int, usage `--limit 10`, default=10
---workers:          worker maintains a max queue of inferences. Worker return result via multiprocessing.queue
-                    type=int, usage `--workers 32`, default=32
---iterations:       Number of iterations to perform inference on a single file
---wsi-path          file name and path for WSI image
---mask-path         File name and path of binary mask image
---check-readines:   check readiness of models. usage: `--check-readines`, default: false
-```
-
-### Output
-
-A single benchmark print the results as dict to parse easily. Results as dict are also store the result in file format "benchmark_output.txt". Set of features stored along with throughput and time elaped are model_name, maxbatchsize, gpu_num, gpu_count, use_amp, use_trt, precision, workers, limit, throughput, elapsed_time. 
-An example output for an experiment run shows,
-```
-model_name: convnextsmall.tensorflow,  maxbatchsize: 64, gpu_num: 8, gpu_intance_count: 1, use_amp: False, use_trt: False, precision: FP16, workers: 32, limit: 10, iterations: 3, throughput(tiles/sec): 195.95287948015198, elapsed_time(sec): 28.640860160191853
-```
-
-Per-inference performance statistics are also displayed with each run. Here, _data loading_ refers to the percent time spend loading data for each inference, _results return_ refers to the percent time spent sending results from the worker to the main process, _in-process_ refers the the percent time between issuing and collecting the completed inference request, _completion_ refers to the percent of in-process time to complete the inference calculations, and _retrieval_ refers to the percent of in-process time a completed request waits to be collected.
-
-```
-                             median    min    max
--------------------------  --------  -----  -----
-total (sec)                    4.01   1.37   7.97
-data loading (% total)        57.63  35.97  83.60
-results return (% total)       0.14   0.05   0.62
-in-process (% total)          42.24  16.05  63.92
-completion (% in-process)     27.59   9.28  96.57
-retrieval (% in-process)      70.85   0.36  89.94
-other (% in-process)           1.68   0.72   7.13
-```
-
-### Benchmarking by scripting
-
-Running multiple experiments is best done using a scripting approach to call the benchmark cli with different parameters. We provide an example shell script ConvNeXtXLarge_amp_Batch64_GPU8_iter5_BatchTest.sh that demonstrates a parameter sweep for a ConvNeXtXLarge model. Users can modify the script to add/remove set of 
-features and update the values.
