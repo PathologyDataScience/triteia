@@ -9,10 +9,11 @@ simple-triton is a Python client for inference with the NVIDIA Triton server. It
 - [Quick start](#quick-start)
     - [Example](#example)
     - [Running the Triton container](#container)
-- [Model configuration](#config)
-- [Model control](#control)
 - [Command-line interfaces](#cli)
     - [Inference](#inference)
+- [Model wrappers](#wrappers)
+- [Model configuration](#config)
+- [Model control](#control)
 - [Developer guide](#developer-guide)
     - [Testing](#testing)
 
@@ -59,58 +60,84 @@ This sets the host path `~/models` as the model repository. The `--model-control
 A command-line interface is provided for inference with single or multiple slides and with control of tiling, masking, data loading, and serialization parameters. Models must be loaded prior to inference.
 
 Perform inference with the EfficientNetV2S model on a single slide, outputing serialized embeddings to your home directory
-```console
-$python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow
+```bash
+>python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow
 ```
 
 Optional parameters allow restricting inference to a tissue mask (`-m`)
-```console
-$python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -m TCGA-AN-A0G0-01Z-00-DX1.mask.png
+```bash
+>python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -m TCGA-AN-A0G0-01Z-00-DX1.mask.png
 ```
 
 Store features in float32 precision rather than default float16 (`-f`)
-```console
-$python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -f
+```bash
+>python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -f
 ```
 
 modification tile size (`-t`), add tile overlap (`-o`), and change magnification (`-M`)
-```console
-$python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -t 256 -o 128 -M 10
+```bash
+>python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -t 256 -o 128 -M 10
 ```
 
 adjustment of tile reading parameters including ICC correction (`-i`), read chunk size (`-c`), batch size (`-b`), prefetch (`-p`), and multiprocessing workers (`-w`).
-```console
-$python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -i -c 8 -b 128 -p 2 -w 16
+```bash
+>python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -i -c 8 -b 128 -p 2 -w 16
 ```
 
 Provide image source (`-n`) and target (`-r`) parameters for Macenko color normalization
-```console
-$python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -n ~/TCGA-AN-A0G0-01Z-00-DX1.stain.npy -r ~/standard_stain.npy
+```bash
+>python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -n ~/TCGA-AN-A0G0-01Z-00-DX1.stain.npy -r ~/standard_stain.npy
 ```
 
 Change the address of the Triton inference server
-```console
-$python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -a "foo.edu:8001"
+```bash
+>python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -a "foo.edu:8001"
 ```
 
 Increase the precision of serialized features to float (default is half float)
-```console
-$python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -f
+```bash
+>python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -f
 ```
 
 For large jobs use a tab-delimited file containing input images and optionally their masks and normalization stain profiles
-```console
-$more ~/inputs.tsv
+```bash
+>more ~/inputs.tsv
 TCGA-AN-A0G0-01Z-00-DX1.svs    TCGA-AN-A0G0-01Z-00-DX1.mask.py    TCGA-AN-A0G0-01Z-00-DX1.stain.npy    
 TCGA-AN-A0G0-01Z-00-DX2.svs    TCGA-AN-A0G0-01Z-00-DX2.mask.py    TCGA-AN-A0G0-01Z-00-DX2.stain.npy
 TCGA-AN-A0G0-01Z-00-DX3.svs    TCGA-AN-A0G0-01Z-00-DX3.mask.py    TCGA-AN-A0G0-01Z-00-DX3.stain.npy
 TCGA-AN-A0G0-01Z-00-DX4.svs    TCGA-AN-A0G0-01Z-00-DX4.mask.py    TCGA-AN-A0G0-01Z-00-DX4.stain.npy
-$python feature_extraction.py ~/inputs.tsv ~/ EfficientNetV2S.tensorflow
+>python feature_extraction.py ~/inputs.tsv ~/ EfficientNetV2S.tensorflow
 ```
 
 Skip images where output already exists
-```console
-$python feature_extraction.py ~/inputs.tsv ~/ EfficientNetV2S.tensorflow -s
+```bash
+>python feature_extraction.py ~/inputs.tsv ~/ EfficientNetV2S.tensorflow -s
+```
+
+## Model wrappers <a name="wrappers"></a>
+simple-triton contains wrappers for serving popular pathology models like [UNI](https://huggingface.co/owkin/phikon) and [Phikon](https://huggingface.co/owkin/phikon) on the [Python backend](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/python_backend/README.html).
+
+A [dockerfile](models/models.Dockerfile) built on Triton Server container v23.03 encapsulates all requirements for serving these models
+```bash
+>docker build -t model-tritonserver -f models.Dockerfile .
+```
+
+Each folder in the `/models` directory contains a `model.py` file containing the logic for model loading, inference, and cleanup. The `model.py` files need to be copied into the model repository for serving
+
+```plaintext
+    models
+    └── phikon                  # Phikon model folder
+        └── 1                   # version 1
+            └── model.py        # TritonPythonModel Class adapted for Phikon
+```
+
+A `config.pbtxt` file is not required.
+
+### Huggingface tokens
+A [huggingface token](https://huggingface.co/settings/tokens) is required to access the UNI model. This is passed to the server by setting the environment variable `UNI_TOKEN` on the server, and passing the environment variable when running the 
+```bash
+>export UNI_TOKEN=hf_##################################
+>docker run ... -e UNI_TOKEN=$UNI_TOKEN ... model-tritonserver tritonserver ...
 ```
 
 ## Model configuration <a name="config"></a>
