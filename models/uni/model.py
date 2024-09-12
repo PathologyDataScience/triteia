@@ -51,7 +51,7 @@ class TritonPythonModel:
 
     def initialize(self, args):
         """This function initializes the uni model from hugging face.
-        Requires setting environment variable `UNI_TOKEN` with read-access to the
+        Requires setting environment variable `HF_TOKEN` with read-access to the
         huggingface uni repository https://huggingface.co/MahmoodLab/UNI
         """
 
@@ -62,7 +62,7 @@ class TritonPythonModel:
             output0_config["data_type"]
         )
         login(
-            os.getenv("UNI_TOKEN")
+            os.getenv("HF_TOKEN")
         )  # User Access Token, found at https://huggingface.co/settings/tokens
         self.model = timm.create_model(
             "hf-hub:MahmoodLab/uni",
@@ -89,9 +89,9 @@ class TritonPythonModel:
                 input_np = in_0.as_numpy()
 
                 batch_size = input_np.shape[0]
-                PIL_images = [Image.fromarray(input_np[i]) for i in range(batch_size)]
+                pil_images = [Image.fromarray(input_np[i]) for i in range(batch_size)]
                 transformed_images = torch.stack(
-                    [self.transform(img) for img in PIL_images]
+                    [self.transform(img) for img in pil_images]
                 )
                 input_norm = transformed_images.float().to(
                     torch.device(f"cuda:{self.gpu_id}")
