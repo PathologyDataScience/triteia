@@ -134,6 +134,7 @@ Each folder in the `/models` directory contains a `model.py` file containing the
 Model characteristics
 
 | Model | Input | Output | Size |
+|---|---|---|---|
 | [UNI](https://huggingface.co/MahmoodLab/UNI) | (224, 224, 3) | 1024 | 1.21 GB |
 | [Phikon](https://huggingface.co/owkin/phikon) | (224, 224, 3) | 768 | 0.346 GB |
 | [hibou-L](https://huggingface.co/histai/hibou-L) | (224, 224, 3) | 1024 | 1.21 GB |
