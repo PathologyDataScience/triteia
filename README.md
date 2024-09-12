@@ -115,7 +115,7 @@ Skip images where output already exists
 ```
 
 ## Model wrappers <a name="wrappers"></a>
-simple-triton contains wrappers for serving popular pathology models like [UNI](https://huggingface.co/MahmoodLab/UNI), [gigapath](https://huggingface.co/prov-gigapath/prov-gigapath),  [hibou-L](https://huggingface.co/histai/hibou-L), and [Phikon](https://huggingface.co/owkin/phikon) on the [Python backend](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/python_backend/README.html).
+simple-triton contains wrappers for serving popular pathology models including UNI, gigapath, hibou-L, and Phikon on the [Python backend](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/python_backend/README.html).
 
 | Model | Input | Output | Size |
 |---|---|---|---|
