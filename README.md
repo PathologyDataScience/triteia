@@ -115,7 +115,7 @@ Skip images where output already exists
 ```
 
 ## Model wrappers <a name="wrappers"></a>
-simple-triton contains wrappers for serving popular pathology models like [UNI](https://huggingface.co/owkin/phikon) and [Phikon](https://huggingface.co/owkin/phikon) on the [Python backend](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/python_backend/README.html).
+simple-triton contains wrappers for serving popular pathology models like [UNI](https://huggingface.co/owkin/phikon), [gigapath](https://huggingface.co/prov-gigapath/prov-gigapath),  [hibou-L](https://huggingface.co/histai/hibou-L), and [Phikon](https://huggingface.co/owkin/phikon) on the [Python backend](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/python_backend/README.html).
 
 A [dockerfile](models/models.Dockerfile) built on Triton Server container v23.03 encapsulates all requirements for serving these models
 ```bash
@@ -134,10 +134,10 @@ Each folder in the `/models` directory contains a `model.py` file containing the
 A `config.pbtxt` file is not required.
 
 ### Huggingface tokens
-A [huggingface token](https://huggingface.co/settings/tokens) is required to access the UNI model. This is passed to the server by setting the environment variable `UNI_TOKEN` on the server, and passing the environment variable when running the 
+A [huggingface token](https://huggingface.co/settings/tokens) is required to access the UNI, gigapath, and hibou-L models. This is passed to the server by setting the environment variable `HF_TOKEN` on the server, and passing the environment variable when running the 
 ```bash
->export UNI_TOKEN=hf_##################################
->docker run ... -e UNI_TOKEN=$UNI_TOKEN ... model-tritonserver tritonserver ...
+>export HF_TOKEN=hf_**********************************
+>docker run -e HF_TOKEN=$HF_TOKEN ...
 ```
 
 ## Model configuration <a name="config"></a>
