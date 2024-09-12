@@ -117,6 +117,13 @@ Skip images where output already exists
 ## Model wrappers <a name="wrappers"></a>
 simple-triton contains wrappers for serving popular pathology models like [UNI](https://huggingface.co/MahmoodLab/UNI), [gigapath](https://huggingface.co/prov-gigapath/prov-gigapath),  [hibou-L](https://huggingface.co/histai/hibou-L), and [Phikon](https://huggingface.co/owkin/phikon) on the [Python backend](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/python_backend/README.html).
 
+| Model | Input | Output | Size |
+|---|---|---|---|
+| [UNI](https://huggingface.co/MahmoodLab/UNI) | (224, 224, 3) | 1024 | 1.21 GB |
+| [Phikon](https://huggingface.co/owkin/phikon) | (224, 224, 3) | 768 | 0.346 GB |
+| [hibou-L](https://huggingface.co/histai/hibou-L) | (224, 224, 3) | 1024 | 1.21 GB |
+| [gigapath](https://huggingface.co/prov-gigapath/prov-gigapath) | (224, 224, 3) | 1536 | 4.54 GB |
+
 A [dockerfile](models/models.Dockerfile) built on Triton Server container v23.03 encapsulates all requirements for serving these models
 ```bash
 >docker build -t model-tritonserver -f models.Dockerfile .
@@ -131,14 +138,6 @@ Each folder in the `/models` directory contains a `model.py` file containing the
             └── model.py        # TritonPythonModel Class adapted for Phikon
 ```
 
-Model characteristics
-
-| Model | Input | Output | Size |
-|---|---|---|---|
-| [UNI](https://huggingface.co/MahmoodLab/UNI) | (224, 224, 3) | 1024 | 1.21 GB |
-| [Phikon](https://huggingface.co/owkin/phikon) | (224, 224, 3) | 768 | 0.346 GB |
-| [hibou-L](https://huggingface.co/histai/hibou-L) | (224, 224, 3) | 1024 | 1.21 GB |
-| [gigapath](https://huggingface.co/prov-gigapath/prov-gigapath) | (224, 224, 3) | 1536 | 4.54 GB |
 
 ### Huggingface tokens
 A [huggingface token](https://huggingface.co/settings/tokens) is required to access the UNI, gigapath, and hibou-L models. This is passed to the server by setting the environment variable `HF_TOKEN` on the server, and passing the environment variable when running the 
