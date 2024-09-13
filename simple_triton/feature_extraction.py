@@ -509,7 +509,7 @@ def main():
         futures = {0: pool.submit(study, **kwargs)}
 
         # iterate through files and masks
-        for i, (file, mask, stain) in enumerate(tqdm(files)):
+        for i, (file, mask, stain) in enumerate(tqdm(files, desc="Slides ")):
             # prefetch study for next slide
             if i < len(files) - 1:
                 kwargs.update({"paths": file if mask is None else (file, mask)})
