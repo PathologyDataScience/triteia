@@ -336,7 +336,7 @@ class TiffPrefetch(object):
                     self.pos = self.pos + 1
                 self.overflow = len(batch_kwargs) % self.batch
 
-                """ if last read spans multipe batches, link that read's future
+                """ if last read spans multiple batches, link that read's future
                 to the other batches - also divide kwargs according to batch boundaries
                 """
                 futures = [futures] + (batches - 1) * [[futures[-1]]]
