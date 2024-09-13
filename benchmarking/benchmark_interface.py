@@ -1,3 +1,4 @@
+import pandas as pd
 import argparse
 import functools
 import subprocess
@@ -182,6 +183,7 @@ class Benchmark:
         # Calculate average
         self.args_dict["throughput"] = throughput / (self.args_dict["iterations"])
         self.args_dict["elapsed_time"] = elapsed_time / (self.args_dict["iterations"])
+        self.args_dict["throughput_all"] = throughput_results
         analyze(self.times)
 
     def client_nogpu(self):
@@ -355,26 +357,40 @@ def main():
         "elapsed_time(sec):",
         args_dict["elapsed_time"],
     )
-    f = open(args_dict["fileoutput"], "a")
-    f.write(
-        "model_name: {},  maxbatchsize: {}, gpu_num: {}, gpu_intance_count: {}, use_amp: {}, precision: {}, workers: {}, limit: {}, iterations: {}, throughput(tiles/sec): {}, elapsed_time(sec): {} \n".format(
-            args_dict["model_name"],
-            args_dict["maxbatchsize"],
-            args_dict["gpu_num"],
-            args_dict["gpu_instance_count"],
-            args_dict["use_amp"],
-            args_dict["precision"],
-            args_dict["workers"],
-            args_dict["limit"],
-            args_dict["iterations"],
-            args_dict["throughput"],
-            args_dict["elapsed_time"],
-        )
-    )
-    f.close()
-    with open(args_dict["fileoutput"], "r") as f:
-        print(f.readlines()[-1])
-        f.close()
 
-if __name__ == "__main__":
-    main()
+    # Create a directory if it doesn't exist for path in args_dict["output"]
+    if not os.path.exists(args_dict["output"]):
+        os.makedirs(args_dict["output"])
+
+    # Create a dictionary with the information
+    data = {
+        "model_name": [args_dict["model_name"]],
+        "maxbatchsize": [args_dict["maxbatchsize"]],
+        "gpu_num": [args_dict["gpu_num"]],
+        "gpu_instance_count": [args_dict["gpu_instance_count"]],
+        "use_amp": [args_dict["use_amp"]],
+        "use_trt": [args_dict["use_trt"]],
+        "precision": [args_dict["precision"]],
+        "workers": [args_dict["workers"]],
+        "limit": [args_dict["limit"]],
+        "iterations": [args_dict["iterations"]],
+        "throughput(tiles/sec)": [args_dict["throughput"]],
+        "elapsed_time(sec)": [args_dict["elapsed_time"]],
+    }
+
+    df = pd.DataFrame(data)
+    out_csv = os.path.join(args_dict["output"], "benchmark_out.csv")
+    df.to_csv(out_csv, mode='a', header=not os.path.exists(out_csv), index=False)
+
+    throughput_data = {
+        "throughput_all": args_dict["throughput_all"]
+    }
+    df_throughput = pd.DataFrame(throughput_data)
+    # limit to two decimals
+    df_throughput = df_throughput.round(2)
+    throughput_fileoutput = os.path.join(args_dict["output"], "benchmark_throughput_out.csv")
+    df_throughput.to_csv(throughput_fileoutput, mode='a', header=not os.path.exists(throughput_fileoutput), index=False)
+
+
+
+
