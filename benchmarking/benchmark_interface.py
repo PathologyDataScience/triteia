@@ -223,8 +223,6 @@ def install():
     subprocess.check_call([sys.executable, "-m", "pip", "install", f"../simple_triton"])
     subprocess.check_call([sys.executable, "-m", "pip", "install", "ray"])
     subprocess.check_call([sys.executable, "-m", "pip", "install", "pyarrow"])
-    # install mil
-    subprocess.check_call([sys.executable, "-m", "pip", "install", f"../../mil"])
 
 
 def check_readiness(args_dict):
