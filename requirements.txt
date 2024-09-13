@@ -58,6 +58,7 @@ pandas
 pluggy
 pooch
 protobuf
+psutil
 py
 pyasn1
 pyasn1-modules

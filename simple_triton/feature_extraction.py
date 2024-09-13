@@ -1,7 +1,7 @@
 import argparse
 import os
+import tempfile
 from concurrent.futures import ProcessPoolExecutor, wait
-from time import sleep, time
 
 import histomics_stream as hs
 import large_image_source_tiff
@@ -9,11 +9,11 @@ import numpy as np
 import tensorflow as tf
 from tqdm import tqdm
 
+from simple_triton.utils import *
 from simple_triton.inference import Requests
 from simple_triton.io.tfr_writer import write_record
 from simple_triton.model import TritonModel
 from simple_triton.tile_iterators import TiffPrefetch
-
 
 def study(
     paths,
@@ -414,6 +414,26 @@ def main():
         type=int,
         help="The number of data loader processes (default 32).",
     )
+    parser.add_argument(
+        "--tensorboard-name",
+        required=False,
+        type=str,
+        help="Name of the run, used for tracking stats. e.g. 'testing_no_cache', etc, or leave blank",
+    )
+    parser.add_argument(
+        "--tensorboard-dir",
+        required=False,
+        type=str,
+        default=None,
+        help="Tensorboard outputdir. Defaults to /tmp/tb_$USER"
+    )
+    parser.add_argument(
+        "--metrics-endpoint",
+        required=False,
+        type=str,
+        default=None,
+        help="Tritonserver metrics endpoint. Used to scrape additional metrics for tensorboard"
+    )
     args = parser.parse_args()
 
     if not os.path.exists(args.output):
@@ -494,6 +514,8 @@ def main():
     else:
         target = None
 
+    writer = init_tb_writer(args.tensorboard_dir, args.tensorboard_name, files, {"icc": args.icc, "workers": args.workers, "batch": args.batch, "chunk": args.chunk, "prefetch": args.prefetch, "tile_size": args.tile})
+
     # create studies in background while waiting for inference to finish
     with ProcessPoolExecutor(max_workers=1) as pool:
         # create first study in background
@@ -546,7 +568,7 @@ def main():
                 source = None
 
             # inference
-            features, metadata, times, failures = inference(
+            features, metadata, times, failures = track_method(inference, writer, i)(
                 iterator,
                 args.model,
                 source=source,
@@ -555,27 +577,26 @@ def main():
                 limit=1,
                 rest=0.0,
             )
+            if args.metrics_endpoint:
+                write_tritonserver_metrics(args.metrics_endpoint, writer, i)
+            writer.add_scalar("number_of_tiles", len(metadata['tile_left']), i)
+            write_analysis_tb(analyze(times), writer, i)
 
-            # concatenate features
+            start = time()
             features = np.concatenate(features[0], axis=0)
 
             # write to tfrecord
             precision = tf.float32 if args.float else tf.float16
             write_record(
-                tfr_name(
-                    args.output,
-                    file,
-                    args.model,
-                    args.tile,
-                    args.overlap,
-                    args.magnification,
-                ),
+                tfr_name( args.output, file, args.model, args.tile, args.overlap, args.magnification,),
                 features,
                 metadata,
                 labels={},
                 structured=False,
                 precision=precision,
             )
+            feature_writing_time = time()-start
+            writer.add_scalar("feature_writing_elapsed_sec", feature_writing_time, i)
 
 
 if __name__ == "__main__":
