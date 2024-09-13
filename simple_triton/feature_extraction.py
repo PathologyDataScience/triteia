@@ -198,59 +198,64 @@ def inference(
     # create requests object
     req = Requests(url, limit)
 
-    # loop until iterator is exhausted
-    while True:
-        if not stop:
-            # draw samples, preprocess, and submit for inference up to limit
-            for i in range(limit - len(req.pending)):
-                try:
-                    t_start = time()
-                    sample, metadata = next(iterator)
-                    if not ((source is None) and (target is None)):
-                        sample = {
-                            "input_0": sample,
-                            "input_1": np.stack(
-                                sample.shape[0] * [np.cast(source, np.float32)],
-                                axis=0,
-                            ),
-                            "input_2": np.stack(
-                                sample.shape[0] * [np.cast(target, np.float32)],
-                                axis=0,
-                            ),
+    number_of_tiles = sum(len(iterator.read_kwargs[i]) for i in range(len(iterator.read_kwargs)))
+    number_of_batches = math.ceil(number_of_tiles / iterator.batch)
+
+    with tqdm(total=number_of_batches-1, desc="Batches") as pbar:
+        # loop until iterator is exhausted
+        while True:
+            if not stop:
+                # draw samples, preprocess, and submit for inference up to limit
+                for i in range(limit - len(req.pending)):
+                    try:
+                        t_start = time()
+                        sample, metadata = next(iterator)
+                        if not ((source is None) and (target is None)):
+                            sample = {
+                                "input_0": sample,
+                                "input_1": np.stack(
+                                    sample.shape[0] * [np.cast(source, np.float32)],
+                                    axis=0,
+                                ),
+                                "input_2": np.stack(
+                                    sample.shape[0] * [np.cast(target, np.float32)],
+                                    axis=0,
+                                ),
+                            }
+                        t_stop = time()
+                    except StopIteration as e:
+                        stop = True
+                    if not stop:
+                        if pre is not None:
+                            sample = pre(sample)
+                        request = {
+                            "model_name": model_name,
+                            "inputs": sample,
+                            "metadata": metadata,
+                            "times": {"read_start": t_start, "read_stop": t_stop},
                         }
-                    t_stop = time()
-                except StopIteration as e:
-                    stop = True
-                if not stop:
-                    if pre is not None:
-                        sample = pre(sample)
-                    request = {
-                        "model_name": model_name,
-                        "inputs": sample,
-                        "metadata": metadata,
-                        "times": {"read_start": t_start, "read_stop": t_stop},
-                    }
-                    req.insert(request, timeout)
-                else:
-                    break
+                        req.insert(request, timeout)
+                    else:
+                        break
 
-        # check pending requests
-        completed = req.check(block=False)
+            # check pending requests
+            completed = req.check(block=False)
 
-        # put completed post-processed requests into queue
-        for inference in completed:
-            # remove inputs
-            del inference["inputs"]
+            # put completed post-processed requests into queue
+            for inference in completed:
+                # remove inputs
+                del inference["inputs"]
 
-            # place in queue
-            batches.append(inference)
+                # place in queue
+                batches.append(inference)
+                pbar.update()
 
-        # if done send stop signal
-        if len(req.pending) == 0 and stop:
-            break
+            # if done send stop signal
+            if len(req.pending) == 0 and stop:
+                break
 
-        # sleep
-        sleep(rest)
+            # sleep
+            sleep(rest)
 
     # failures
     failed = [b for b in batches if not b["success"]]
