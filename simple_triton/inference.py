@@ -1,12 +1,20 @@
+import argparse
 from functools import partial
-from model import model_config, model_metadata
-import multiprocessing
-import multiprocessing.queues
-from multiprocessing import Process
 import numpy as np
 import os
+from simple_triton.model import TritonModel
+from simple_triton.tile_iterators import SharedNumpyArray
+from simple_triton.utils import create_client
+
 import time
-from tritonclient.utils import InferenceServerException
+from tritonclient.utils import (
+    InferenceServerException,
+    triton_to_np_dtype,
+    np_to_triton_dtype,
+)
+
+
+ARRAY_TYPES = (np.ndarray, SharedNumpyArray)
 
 
 class Requests(object):
@@ -17,35 +25,31 @@ class Requests(object):
     new requests.
     """
 
-    def __init__(self, url, limit, retries=5, verbose=False):
+    def __init__(self, url="localhost:8001", limit=10, retries=5, verbose=False):
         """Construct
 
         Parameters
         ----------
         url : string
-            A url for the triton GRPC port used to submit requests.
+            The url for the remote-procedure call port of the Triton server.
+            Default value is "localhost:8001".
         limit : int
-            The maximum number of concurrent pending requests to allow.
+            The maximum number of concurrent pending requests to allow. Default
+            value is 10.
         retries : int
-            The maximum number of attempts for each request.
+            The maximum number of attempts for each request. Default value is 5.
         verbose : bool
             True updates console with inference progress and exceptions.
             Default value is False.
         """
 
-        import tritonclient.grpc as grpcclient
-
-        # create GRPC client
-        try:
-            self.client = grpcclient.InferenceServerClient(url=url, verbose=verbose)
-        except Exception as e:
-            print("context creation failed: " + str(e), flush=True)
-
         self.limit = limit
-        self.retries = retries
-        self.verbose = verbose
         self.model_dicts = {}
         self.pending = []
+        self.retries = retries
+        self.client = create_client(url, verbose)
+        self.url = url
+        self.verbose = verbose
 
     def _api_to_np_types(self, api_type):
         """Converts triton API type string to numpy dtype.
@@ -59,34 +63,16 @@ class Requests(object):
         -------
         dtype : numpy.dtype
             The corresponding numpy dtype.
+
+        Notes
+        -----
+        All types listed in model configurations are prepended with "TYPE_".
         """
 
-        if api_type == "FP32":
-            return np.float32
-        elif api_type == "FP16":
-            return np.float16
-        elif api_type == "FLOAT64":
-            return np.float64
-        elif api_type == "UINT8":
-            return np.uint8
-        elif api_type == "UINT16":
-            return np.uint16
-        elif api_type == "UINT32":
-            return np.uint32
-        elif api_type == "UINT64":
-            return np.uint64
-        elif api_type == "INT8":
-            return np.int8
-        elif api_type == "INT16":
-            return np.int16
-        elif api_type == "INT32":
-            return np.int32
-        elif api_type == "INT64":
-            return np.int64
-        elif api_type == "BOOL":
-            return np.bool
-        else:
+        output = triton_to_np_dtype(api_type.split("TYPE_")[1])
+        if output is None:
             raise ValueError(f"Unrecognized type '{str(api_type)}'")
+        return output
 
     def _np_to_api_types(self, dtype):
         """Converts numpy dtype to triton API type string.
@@ -100,34 +86,16 @@ class Requests(object):
         -------
         api_type : str
             The corresponding type string for the triton client API.
+
+        Notes
+        -----
+        All types listed in model configurations are prepended with "TYPE_".
         """
 
-        if dtype == np.float32:
-            return "FP32"
-        elif dtype == np.float16:
-            return "FP16"
-        elif dtype == np.float64:
-            return "FLOAT64"
-        elif dtype == np.uint8:
-            return "UINT8"
-        elif dtype == np.uint16:
-            return "UINT16"
-        elif dtype == np.uint32:
-            return "UINT32"
-        elif dtype == np.uint64:
-            return "UINT64"
-        elif dtype == np.int8:
-            return "INT8"
-        elif dtype == np.int16:
-            return "INT16"
-        elif dtype == np.int32:
-            return "INT32"
-        elif dtype == np.int64:
-            return "INT64"
-        elif dtype == np.bool:
-            return "BOOL"
-        else:
+        output = np_to_triton_dtype(dtype)
+        if output is None:
             raise ValueError(f"Unrecognized type '{str(dtype)}'")
+        return output
 
     def print_pending(self):
         """Prints current state of self.pending for debugging."""
@@ -139,43 +107,163 @@ class Requests(object):
         for i, request in enumerate(self.pending):
             print(f"\t{i}\t{time.time()-request['elapsed_retrieval']}", flush=True)
 
-    def _validate_inputs(self, inputs, model_dict):
+    def _validate_inputs(self, inputs, model_dict, strict_types=False):
         """Validate inputs against model config and metadata.
 
         Parameters
         ----------
-        inputs : list of numpy.ndarray
-            A list of numpy arrays to input for model inference.
-
+        inputs : numpy.ndarray or dict of numpy.ndarray
+            For single-input models provide a single numpy array. Multi-input
+            models require a dict that keys input names to numpy arrays. This
+            dict is required because the ordering of model inputs appearing in
+            `model_dict` is not reliable.
         model_dict : dict
             A dictionary describing the name, shape, and type of inputs and
-            outputs, as well as maximum batch size.
+            outputs, and the maximum batch size if defined.
+        strict_types : bool
+            Enforce strict types on model inputs. _client_inputs will
+            cast inputs to the correct type, so this is not necessary.
+            Default value is False.
 
         See also
         --------
         model_metadata
+
+        Notes
+        -----
+        For multi-input models, secondary inputs such as parameters require a
+        batch dimension. This must be equal to the data batch size and so these
+        parameters must be repeated.
         """
 
-        # check number of inputs
-        if len(inputs) != len(model_dict["inputs"]):
-            raise Exception(
-                f"Model {model_dict['name']} expects {len(model_dict['inputs'])} inputs, received {len(inputs)}."
+        def _compare_types(model_dict, provided, expected):
+            if self._np_to_api_types(provided.dtype) != expected["dataType"]:
+                raise Exception(
+                    (
+                        f"Model {model_dict['name']} input "
+                        f"{expected['name']} "
+                        f"expects type {expected['dataType']}, received input with "
+                        f"type {provided.dtype}."
+                    )
+                )
+
+        def _compare_dims(provided, expected):
+            return all(
+                [True if e == -1 else p == e for (p, e) in zip(provided, expected)]
             )
 
-        # check input shapes
-        for i, (provided, expected) in enumerate(zip(inputs, model_dict["inputs"])):
-            if expected["shape"][0] is None:
-                if not np.array_equal(
-                    np.array(np.shape(provided)[1:], dtype=np.int32),
-                    np.array(expected["shape"][1:], dtype=np.int32),
-                ):
-                    raise Exception(
-                        f"Model {model_dict['name']} {model_dict['inputs'][i]['name']} has shape {expected}."
+        def _int(shape):
+            return [int(s) for s in shape]
+
+        def _compare_shape(model_dict, provided, expected, batching):
+            if batching:
+                offset = 1
+            else:
+                offset = 0
+            if len(provided.shape) != len(
+                expected["dims"]
+            ) + offset or not _compare_dims(
+                provided.shape[offset:], _int(expected["dims"])
+            ):
+                if batching:
+                    input = [-1, *_int(expected["dims"])]
+                else:
+                    input = _int(expected["dims"])
+                raise Exception(
+                    (
+                        f"Model {model_dict['name']} input "
+                        f"{model_dict['input'][0]['name']} "
+                        f"expects shape {input}, received input with "
+                        f"shape {list(provided.shape)}."
                     )
-                # if provided.shape[0] > model_dict["max_batch_size"]:
-                #     raise Exception(
-                #         f"Model {model_dict['name']} has max batch size {model_dict['max_batch_size']}."
-                #     )
+                )
+
+        # validate type and number of inputs
+        if isinstance(inputs, ARRAY_TYPES):
+            if len(model_dict["input"]) != 1:
+                raise Exception(
+                    (
+                        f"Model {model_dict['name']} with {len(model_dict['input'])}"
+                        " inputs requires dictionary of numpy arrays, keyed to"
+                        " input names."
+                    )
+                )
+        elif isinstance(inputs, dict):
+            if len(inputs) != len(model_dict["input"]):
+                raise Exception(
+                    (
+                        f"Model {model_dict['name']} expects {len(model_dict['input'])}"
+                        f" inputs, received {len(inputs)}."
+                    )
+                )
+        else:
+            raise Exception(
+                (
+                    "inputs must be an np.ndarray or a dictionary of np.ndarrays"
+                    " keyed to the model inputs."
+                )
+            )
+
+        # verify that all inputs are found for dict input
+        if isinstance(inputs, dict):
+            for i in model_dict["input"]:
+                if i["name"] not in inputs.keys():
+                    raise Exception(f"Model input {i['name']} not found in inputs.")
+
+        # if model is batching -> batch dimension implied
+        if "maxBatchSize" in model_dict:
+            if model_dict["maxBatchSize"] > 0:
+                batching = True
+                if isinstance(inputs, ARRAY_TYPES):
+                    batch_size = inputs.shape[0]
+                else:
+                    batch_size = inputs[list(inputs.keys())[0]].shape[0]
+            else:
+                batching = False
+        else:
+            batching = False
+
+        # validate input types
+        if strict_types:
+            if isinstance(inputs, ARRAY_TYPES):
+                _compare_types(model_dict, inputs, model_dict["input"][0])
+            else:
+                for i in model_dict["input"]:
+                    _compare_types(model_dict, inputs[i["name"]], i)
+
+        # validate input shapes
+        if isinstance(inputs, ARRAY_TYPES):
+            _compare_shape(model_dict, inputs, model_dict["input"][0], batching)
+        else:
+            for i in model_dict["input"]:
+                _compare_shape(model_dict, inputs[i["name"]], i, batching)
+
+        # validate batching
+        if batching:
+            if isinstance(inputs, ARRAY_TYPES):
+                if inputs.shape[0] > model_dict["maxBatchSize"]:
+                    raise Exception(
+                        (
+                            f"Model {model_dict['name']} max batch size "
+                            f"{model_dict['maxBatchSize']} exceeded."
+                        )
+                    )
+            else:
+                for i in inputs.values():
+                    if i.shape[0] > model_dict["maxBatchSize"]:
+                        raise Exception(
+                            (
+                                f"Model {model_dict['name']} max batch size "
+                                f"{model_dict['maxBatchSize']} exceeded."
+                            )
+                        )
+                    if i.shape[0] != batch_size:
+                        raise Exception(
+                            (
+                                "Non-uniform batch size of inputs. Expected"
+                                f" {batch_size}, found {i.shape[0]}."
+                            )
+                        )
 
     def _client_inputs(self, inputs, model_dict):
         """Generates tritonclient.grpc.InferInput objects for client.
@@ -186,8 +274,11 @@ class Requests(object):
 
         Parameters
         ----------
-        inputs : list of numpy.ndarray
-            A list of numpy arrays to input for model inference.
+        inputs : numpy.ndarray or dict of numpy.ndarray
+            For single-input models provide a single numpy array. Multi-input
+            models require a dict that keys input names to numpy arrays. This
+            dict is required because the ordering of model inputs appearing in
+            `model_dict` is not reliable.
         model_dict : dict
             A dictionary describing the name, shape, and type of inputs and
             outputs, as well as maximum batch size.
@@ -198,27 +289,35 @@ class Requests(object):
             A list of InferInput objects populated with data.
         """
 
-        import tritonclient.grpc as grpcclient
-
         # validate inputs against model expectations
         self._validate_inputs(inputs, model_dict)
 
         # create InferInput objects for each model input
-        infer_inputs = []
-        for provided, expected in zip(inputs, model_dict["inputs"]):
-            # create InferInput object
+        import tritonclient.grpc as grpcclient
+
+        def add_input(provided, expected):
             iio = grpcclient.InferInput(
-                expected["name"], provided.shape, expected["datatype"]
+                expected["name"], provided.shape, expected["dataType"].split("TYPE_")[1]
             )
-
-            # add numpy data to input
-            if self._np_to_api_types(provided.dtype) != expected["datatype"]:
-                provided = provided.astype(self._api_to_np_types(expected["datatype"]))
             iio.set_data_from_numpy(provided)
+            return iio
 
-            # add to infer_input list
-            infer_inputs.append(iio)
-
+        if isinstance(inputs, np.ndarray):
+            infer_inputs = [add_input(inputs, model_dict["input"][0])]
+        elif isinstance(inputs, SharedNumpyArray):
+            infer_inputs = [add_input(inputs.view(), model_dict["input"][0])]
+        else:
+            infer_inputs = [
+                add_input(
+                    (
+                        inputs[i["name"]]
+                        if isinstance(inputs[i["name"]], np.ndarray)
+                        else inputs[i["name"]].view()
+                    ),
+                    i,
+                )
+                for i in model_dict["input"]
+            ]
         return infer_inputs
 
     def _client_outputs(self, model_dict):
@@ -237,11 +336,11 @@ class Requests(object):
             results.
         """
 
+        # create InferRequestedOutput objects for each model output
         import tritonclient.grpc as grpcclient
 
-        # create InferInput objects for each model input
         infer_outputs = [
-            grpcclient.InferRequestedOutput(o["name"]) for o in model_dict["outputs"]
+            grpcclient.InferRequestedOutput(o["name"]) for o in model_dict["output"]
         ]
 
         return infer_outputs
@@ -305,11 +404,11 @@ class Requests(object):
                     request["times"]["completed"] = completion_time
                     request["times"]["retrieved"] = time.time()
 
+                    # clear result
+                    request["result"] = []
+
                     # inference generated an exception
                     if type(results) == InferenceServerException:
-                        # clear result
-                        request["result"] = []
-
                         # capture error in request
                         if request["attempts"] == 1:
                             request["errors"] = []
@@ -317,22 +416,21 @@ class Requests(object):
 
                         # make another attempt if retry limit has not been reached
                         if request["attempts"] < self.retries:
-                            # add request to list of retries to be processed
                             retry.append(request)
-
-                        else:
-                            # add request to output list
+                        else:  # indicate failure and add request to output list
+                            request["success"] = False
                             completed.append(request)
 
                     # inference generated a result
                     else:
                         # convert responses to numpy arrays
                         for j, output in enumerate(
-                            self.model_dicts[request["model_name"]]["outputs"]
+                            self.model_dicts[request["model_name"]]["output"]
                         ):
-                            request["result"][j] = results.as_numpy(output["name"])
+                            request["result"].append(results.as_numpy(output["name"]))
 
                         # add request to output list
+                        request["success"] = True
                         completed.append(request)
 
             return completed, delete, retry
@@ -383,10 +481,8 @@ class Requests(object):
 
         # check if model_dict has been previously generated for model_name
         if model_name not in self.model_dicts.keys():
-            model_dict = {
-                **model_metadata(self.client, model_name),
-                "max_batch_size": model_config(self.client, model_name)["maxBatchSize"],
-            }
+            model = TritonModel(model_name, self.url)
+            model_dict = model.get_config()
             self.model_dicts[model_name] = model_dict
         else:
             model_dict = self.model_dicts[model_name]
@@ -419,126 +515,3 @@ class Requests(object):
 
         # append request to list
         self.pending.append(sample)
-
-
-class InferenceRunner(Process):
-    """InferenceRunner"""
-
-    def __init__(
-        self,
-        url,
-        qin,
-        qout,
-        limit=10,
-        rest=1e-2,
-        timeout=None,
-        pre=None,
-        post=None,
-        verbose=False,
-    ):
-        """InferenceRunner constructor.
-
-        Parameters
-        ----------
-        url : string
-            The inference server url.
-        qin : multiprocessing.Queue
-            Input queue containing samples for inference. Each sample is a
-            2-tuple or 3-tuple containing the model name (str), a list of numpy
-            arrays for the model inputs (list of np.ndarray), and an optional
-            dictionary of sample metadata that will stay linked to the
-            inference request and result.
-        qout : multiprocessing.Queue
-            Output queue receiving completed inference requests and process
-            summary information on process completion.
-        limit : int
-            The maximum allowable pending requests. Default value is 10.
-        rest : float
-            The resting period for the InferenceRunner process. The process
-            will rest for this period (seconds) after submitting and checking
-            inference requests. Default value is 10 milliseconds.
-        timeout : float
-            The request timeout limit (seconds). This is an input argument
-            to the triton GRPC client async_infer inferface.
-        pre : function
-            A preprocessing function to apply to samples prior to inference.
-            Default value is None.
-        post : function
-            A postprocessing function to apply to inference results. Default
-            value is None.
-        verbose : bool
-            True updates console with inference progress and exceptions.
-            Default value is False.
-        """
-
-        multiprocessing.Process.__init__(self)
-
-        # capture input arguments
-        self.url = url
-        self.qin = qin
-        self.qout = qout
-        self.limit = limit
-        self.timeout = timeout
-        self.rest = rest
-        self.pre = pre
-        self.post = post
-
-        # initialize list to hold performance data
-        self.time_inference = []
-
-    def run(self):
-        # set flag indicating qin stop signal received
-        stop = False
-
-        # create requests object
-        req = Requests(self.url, self.limit)
-
-        # loop until exit signal received from calling process
-        while True:
-            # fill input queue with requests up to limit
-            if not stop:
-                for i in range(self.limit - len(req.pending)):
-                    # pull sample
-                    sample, t_put, t_get = self.qin.get()
-
-                    # check if stop signal, otherwise pack dictionary
-                    if sample is None:
-                        stop = True
-                        break
-                    else:
-                        request = {
-                            "model_name": sample[0],
-                            "inputs": sample[1],
-                            "times": {"qin_put": t_put, "qin_get": t_get},
-                        }
-
-                    # add metadata if present
-                    if len(request) == 3:
-                        request["metadata"] = sample[2]
-
-                    # apply preprocessing function
-                    # TBD
-
-                    # fill requests if stop signal not received
-                    req.insert(request, self.timeout)
-
-            # check pending requests
-            completed = req.check(block=False)
-
-            # put completed post-processed requests into queue
-            for inference in completed:
-                # # apply postprocessing function
-                # if len(inference["result"]):
-                # TBD
-
-                # place in queue
-                self.qout.put(inference)
-
-            # check if done
-            if len(req.pending) == 0 and stop:
-                break
-
-            # sleep
-            time.sleep(self.rest)
-
-        return
