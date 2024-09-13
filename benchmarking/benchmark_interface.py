@@ -294,7 +294,7 @@ def main():
     parser.add_argument("--limit", type=int, default=10)
     parser.add_argument("--workers", type=int, default=32)
     parser.add_argument("-v", "--verbose", default=True)
-    parser.add_argument("-f", "--fileoutput", default="benchmark_output.txt")
+    parser.add_argument("-o", "--output", default="benchmark_out")
     # pass whole slide image
     parser.add_argument(
         "-w",
