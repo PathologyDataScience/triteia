@@ -1,7 +1,11 @@
+from huggingface_hub import login
 import json
 import numpy as np
+import os
+from PIL import Image
+import timm
 import torch
-from transformers import AutoImageProcessor, ViTModel
+from torchvision import transforms
 import triton_python_backend_utils as pb_utils
 import tritonclient.utils as triton_utils
 
@@ -10,7 +14,7 @@ class TritonPythonModel:
 
     @staticmethod
     def auto_complete_config(model_config):
-        """Returns a minimal model configuration for the phikon model.
+        """Returns a minimal model configuration for the gigapath model.
 
         Parameters
         ----------
@@ -22,7 +26,6 @@ class TritonPythonModel:
         pb_utils.ModelConfig
           An object containing the auto-completed model configuration
         """
-        
         inputs = [
             {
                 "name": "input_0",
@@ -30,7 +33,7 @@ class TritonPythonModel:
                 "dims": [224, 224, 3],
             }
         ]
-        outputs = [{"name": "output_0", "data_type": "TYPE_FP32", "dims": [768]}]
+        outputs = [{"name": "output_0", "data_type": "TYPE_FP32", "dims": [1536]}]
         config = model_config.as_dict()
         input_names = [i["name"] for i in config["input"]]
         output_names = [i["name"] for i in config["output"]]
@@ -46,16 +49,30 @@ class TritonPythonModel:
         return model_config
 
     def initialize(self, args):
-        """Initialize the phikon model from https://huggingface.co/owkin/phikon"""
+        """This function initializes the uni model from hugging face.
+        Requires setting environment variable `HF_TOKEN` with read-access to the
+        huggingface gigpath repository https://huggingface.co/prov-gigapath/prov-gigapath
+        """
+
         self.model_config = model_config = json.loads(args["model_config"])
         output0_config = pb_utils.get_output_config_by_name(model_config, "output_0")
         self.gpu_id = args.get("model_instance_device_id", 0)
         self.output0_dtype = pb_utils.triton_string_to_numpy(
             output0_config["data_type"]
         )
-        self.model = ViTModel.from_pretrained("owkin/phikon", add_pooling_layer=False)
+        login(
+            os.getenv("HF_TOKEN")
+        )  # User Access Token, found at https://huggingface.co/settings/tokens
+        self.model = timm.create_model(
+            "hf_hub:prov-gigapath/prov-gigapath", 
+            pretrained=True,
+        )
         self.model = self.model.to(torch.device(f"cuda:{self.gpu_id}"))
-        self.image_processor = AutoImageProcessor.from_pretrained("owkin/phikon", use_fast=True)
+        self.transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+        ])
+        self.model.eval()
 
     def execute(self, requests):
         """This function receives the requests (tiles) 'pb_utils.InfrerenceRequest'
@@ -63,21 +80,23 @@ class TritonPythonModel:
         """
 
         responses = []
-
         for request in requests:
 
             try:
                 in_0 = pb_utils.get_input_tensor_by_name(request, "input_0")
                 input_np = in_0.as_numpy()
-                inputs = self.image_processor(input_np, return_tensors="pt").to(
+
+                batch_size = input_np.shape[0]
+                pil_images = [Image.fromarray(input_np[i]) for i in range(batch_size)]
+                transformed_images = torch.stack(
+                    [self.transform(img) for img in pil_images]
+                )
+                input_norm = transformed_images.float().to(
                     torch.device(f"cuda:{self.gpu_id}")
                 )
-
                 with torch.no_grad():
-                    outputs = self.model(**inputs)
-                    features = outputs.last_hidden_state[:, 0, :]  # shape (1, 768)
-                    features = features.detach().cpu().numpy()
-
+                    feature_emb = self.model(input_norm)
+                    features = feature_emb.detach().cpu().numpy()
                 out_tensor_features = pb_utils.Tensor(
                     "output_0", features.astype(np.float32)
                 )
@@ -90,3 +109,4 @@ class TritonPythonModel:
                 print(e)
 
         return responses
+
