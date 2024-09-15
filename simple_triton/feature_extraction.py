@@ -71,6 +71,8 @@ def study(
             file = os.path.split(path)[1]
         elif isinstance(path, tuple):
             file = os.path.split(path[0])[1]
+        else:
+            raise ValueError("Invalid path type.")
         names.append(file)
 
     # fill basic study parameters

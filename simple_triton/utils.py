@@ -26,10 +26,10 @@ def create_client(url="localhost:8001", verbose=False):
 
     try:
         client = grpcclient.InferenceServerClient(url=url, verbose=verbose)
+        return client
     except Exception as e:
         print("context creation failed: " + str(e), flush=True)
-    return client
-
+        raise
 
 def analyze(times, floatfmt=".2f"):
     """Print a summary table of time spent during inference.
