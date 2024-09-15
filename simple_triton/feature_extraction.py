@@ -76,9 +76,10 @@ def study(
         names.append(file)
 
     # fill basic study parameters
-    study = {"version": "version-1"}
-    study["tile_height"] = t[0]
-    study["tile_width"] = t[1]
+    study = {"version": "version-1",
+            "tile_height": t[0],
+            "tile_width": t[1]
+        }
     slides = study["slides"] = {}
 
     # add slides to study
