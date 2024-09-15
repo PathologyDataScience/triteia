@@ -335,7 +335,7 @@ def main():
         required=False,
         default=None,
         type=str,
-        help=("Optional target stain profile for Macenko normalization."),
+        help="Optional target stain profile for Macenko normalization.",
     )
     parser.add_argument(
         "-s",
@@ -358,7 +358,7 @@ def main():
         required=False,
         default=224,
         type=int,
-        help=("Tile size in pixels (default to internal tile size)."),
+        help="Tile size in pixels (default to internal tile size).",
     )
     parser.add_argument(
         "-o",
@@ -388,7 +388,7 @@ def main():
         required=False,
         default=64,
         type=int,
-        help=("Batch size (default 64 tiles)."),
+        help="Batch size (default 64 tiles).",
     )
     parser.add_argument(
         "-c",
@@ -396,7 +396,7 @@ def main():
         required=False,
         default=4,
         type=int,
-        help=("Reach chunk size (default 4 tiles)."),
+        help="Reach chunk size (default 4 tiles).",
     )
     parser.add_argument(
         "-p",
@@ -404,7 +404,7 @@ def main():
         required=False,
         default=4,
         type=int,
-        help=("The number of batches to prefetch from disk (default 4)."),
+        help="The number of batches to prefetch from disk (default 4).",
     )
     parser.add_argument(
         "-w",
@@ -412,7 +412,7 @@ def main():
         required=False,
         default=32,
         type=int,
-        help=("The number of data loader processes (default 32)."),
+        help="The number of data loader processes (default 32).",
     )
     args = parser.parse_args()
 

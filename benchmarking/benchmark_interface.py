@@ -168,7 +168,7 @@ class Benchmark:
             )
             elapsed_time_single = time.time() - start
             # throughput and elapsed time for single inference
-            throughput_single = (self.tile_info["version"].size) / elapsed_time_single
+            throughput_single = self.tile_info["version"].size / elapsed_time_single
             # Append to a list
             throughput_results.append(throughput_single)
             elapsed_time_results.append(elapsed_time_single)

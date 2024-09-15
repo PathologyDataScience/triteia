@@ -221,7 +221,7 @@ class PythonConfig(object):
                     "`input` must be a ModelInput object or a list of ModelInput objects."
                 )
             if isinstance(input, list):
-                if not all([isinstance(i, (ModelInput)) for i in input]):
+                if not all([isinstance(i, ModelInput) for i in input]):
                     raise ValueError("elements of `input` must be a ModelInput object.")
         if output is not None:
             if not isinstance(output, (ModelOutput, list)):
@@ -229,7 +229,7 @@ class PythonConfig(object):
                     "`output` must be a ModelOutput object or a list of ModelOutput objects."
                 )
             if isinstance(output, list):
-                if not all([isinstance(i, (ModelOutput)) for i in output]):
+                if not all([isinstance(i, ModelOutput) for i in output]):
                     raise ValueError(
                         "elements of `output` must be a ModelOutput object."
                     )
