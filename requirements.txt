@@ -37,6 +37,7 @@ jsonschema
 keras
 Keras-Preprocessing
 kiwisolver
+huggingface-hub
 large-image
 large-image-source-tiff
 Markdown
@@ -78,11 +79,14 @@ tensorflow-estimator
 termcolor
 tifffile
 tifftools
+timm
 toml
 tomli
 torch
 torchaudio
 torchvision
+transformers
+tritonclient
 tqdm
 typing-extensions
 urllib3
