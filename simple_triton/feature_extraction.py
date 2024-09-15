@@ -6,17 +6,12 @@ from time import sleep, time
 import histomics_stream as hs
 import large_image_source_tiff
 import numpy as np
-import os
-from simple_triton.io.tfr_writer import write_record
-from simple_triton.inference import Requests
-from simple_triton.model import TritonModel
-from simple_triton.tile_iterators import TiffPrefetch
-from time import sleep, time
-from tqdm import tqdm
 import tensorflow as tf
+from tqdm import tqdm
 
 from simple_triton.inference import Requests
 from simple_triton.io.tfr_writer import write_record
+from simple_triton.model import TritonModel
 from simple_triton.tile_iterators import TiffPrefetch
 
 

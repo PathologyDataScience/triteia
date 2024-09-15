@@ -1,17 +1,17 @@
 import argparse
-from simple_triton.feature_extraction import study, inference
-from simple_triton.tile_iterators import TiffPrefetch
-from simple_triton.model import TritonModel
-from simple_triton.utils import analyze
-from simple_triton.config import *
-from large_image.cache_util import cachesClear
-import tensorflow as tf
-import time
+import functools
 import subprocess
 import sys
-import os
-import functools
-import numpy as np
+import time
+
+import tensorflow as tf
+from large_image.cache_util import cachesClear
+
+from simple_triton.config import *
+from simple_triton.feature_extraction import study, inference
+from simple_triton.model import TritonModel
+from simple_triton.tile_iterators import TiffPrefetch
+from simple_triton.utils import analyze
 
 
 class Benchmark:

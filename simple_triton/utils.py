@@ -1,9 +1,6 @@
 import numpy as np
-from tabulate import tabulate, SEPARATING_LINE
-import tensorflow as tf
-import time
 import tritonclient.grpc as grpcclient
-from tritonclient.utils import InferenceServerException
+from tabulate import tabulate, SEPARATING_LINE
 
 
 def create_client(url="localhost:8001", verbose=False):

@@ -1,13 +1,12 @@
-from collections import deque
-from concurrent.futures import ProcessPoolExecutor, ALL_COMPLETED, wait
 import functools
-import large_image_source_tiff
 import math
 import multiprocessing.shared_memory
-import numpy as np
 import operator
-import os
-import PIL
+from collections import deque
+from concurrent.futures import ProcessPoolExecutor, ALL_COMPLETED, wait
+
+import large_image_source_tiff
+import numpy as np
 
 
 class SharedNumpyArray:

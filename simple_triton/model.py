@@ -1,8 +1,10 @@
-from google.protobuf.json_format import MessageToDict
 import json
-from simple_triton.utils import create_client
 import time
+
+from google.protobuf.json_format import MessageToDict
 from tritonclient.utils import InferenceServerException
+
+from simple_triton.utils import create_client
 
 
 class TritonModel(object):

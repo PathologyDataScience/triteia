@@ -1,10 +1,11 @@
 from datetime import datetime
-from simple_triton.io import slide_keys, tile_keys
-from simple_triton.io.tfr_reader import peek, read_record
-from simple_triton.io.tfr_transforms import flatten, structure
+
 import numpy as np
 import tensorflow as tf
 
+from simple_triton.io import slide_keys, tile_keys
+from simple_triton.io.tfr_reader import peek, read_record
+from simple_triton.io.tfr_transforms import structure
 
 # acceptable types for user-provided metadata
 variable_type_list = [bytes, int, float, str, bool]

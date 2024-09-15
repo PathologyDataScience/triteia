@@ -1,9 +1,9 @@
-from google.protobuf import json_format, text_format
-import numpy as np
 import os
-from tritonclient.utils import np_to_triton_dtype
-from tritonclient.grpc import model_config_pb2
 
+import numpy as np
+from google.protobuf import json_format, text_format
+from tritonclient.grpc import model_config_pb2
+from tritonclient.utils import np_to_triton_dtype
 
 ONNX_TRT_WHITELIST = {"precision_mode", "max_workspace_size_bytes"}
 
