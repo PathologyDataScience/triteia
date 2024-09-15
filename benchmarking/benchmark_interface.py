@@ -30,8 +30,6 @@ class Benchmark:
         from the whole-slide image (magnification, tile size, tile overlap, mask file).
 
         Args:
-            args_dict (dict): The inputs to the model from argparse.
-            tile (int): tile default value is 224.
             wsi_path (string): path for .svs file
             mask_path (string): path for png file
         """
@@ -53,12 +51,8 @@ class Benchmark:
         Parameters in this stage include the inference server (address), the model (model name,
         maximum batch size).
 
-        Args:
-            client (tritonclient.grpc.InferenceServerClient):
-            args_dict (dict): The inputs to the model from argparse.
-            maxBatchSize (int): max batch size to for config
         """
-        # slide paramters
+        # slide parameters
         url = self.args_dict["url"]  # url for grpc access to triton server
         model_name = self.args_dict["model_name"]
         maxBatchSize = self.args_dict["maxbatchsize"]  # set max batch size
@@ -97,10 +91,6 @@ class Benchmark:
 
         Parameters here include the number of tiles per batch, the number of workers,
         and the maximum number of pending inferences per worker.
-
-        Args:
-            client (tritonclient.grpc.InferenceServerClient):
-            args_dict (dict): The inputs to the model from argparse.
 
         Returns:
             Inference time

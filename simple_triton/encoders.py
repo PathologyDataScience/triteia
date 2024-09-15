@@ -205,7 +205,6 @@ def tf_encoder(
     dtype=tf.uint8,
     pooling="avg",
     normalize=False,
-    version=1,
 ):
     """Creates a tensorflow encoder model in savedmodel format.
 
@@ -225,6 +224,8 @@ def tf_encoder(
     input_shape : tuple(int, int, int)
         The height, width, and channels of tiles used for feature extraction at the
         target magnification. Default value is (224, 224, 3).
+    dtype : tensorflow.python.framework.dtypes.DType
+        The input data type for the model. Default value is tf.uint8.
     pooling : str {"avg", "max"}
         The pooling mode for the terminal layer of the feature extractor network.
     normalize : bool
