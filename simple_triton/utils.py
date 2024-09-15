@@ -16,6 +16,7 @@ import psutil
 import logging
 import tempfile
 
+
 def create_client(url="localhost:8001", verbose=False):
     """Create a grpcclient.
 
@@ -55,7 +56,7 @@ def analyze(times, floatfmt=".2f"):
         read_stop, submitted, retrieved, completed times for each inference.
     floatfmt : str
         A format string for float printing.
-    
+
     Returns
     -------
     pd.DataFrame
@@ -78,77 +79,115 @@ def analyze(times, floatfmt=".2f"):
     def stats(x):
         return [np.median(x), np.std(x), np.mean(x), min(x), max(x)]
 
-    data = pd.DataFrame(data=[stats(total), stats(read), stats(submission), stats(completion), stats(retrieval), stats(read_frac), stats(submission_frac), stats(completion_frac), stats(retrieval_frac)],
-        index=["total (sec)", "read (sec)", "submission (sec)", "completion (sec)", "retrieval (sec)", "read (% total)", "submission (% total)", "completion (% total)", "retrieval (% total)"],
-        columns=['median', 'stdv', 'avg', 'min', 'max'],
-        )
+    data = pd.DataFrame(
+        data=[
+            stats(total),
+            stats(read),
+            stats(submission),
+            stats(completion),
+            stats(retrieval),
+            stats(read_frac),
+            stats(submission_frac),
+            stats(completion_frac),
+            stats(retrieval_frac),
+        ],
+        index=[
+            "total (sec)",
+            "read (sec)",
+            "submission (sec)",
+            "completion (sec)",
+            "retrieval (sec)",
+            "read (% total)",
+            "submission (% total)",
+            "completion (% total)",
+            "retrieval (% total)",
+        ],
+        columns=["median", "stdv", "avg", "min", "max"],
+    )
 
     df = pd.DataFrame(data)
 
     return df
 
+
 # poll from the tritonserver using HTTP endpoint
 def write_tritonserver_metrics(endpoint, writer, step):
     keys = [
-            'nv_inference_count',
-            'nv_inference_request_failure',
-            'nv_inference_request_success'
-            'nv_inference_request_success',
-            'nv_pinned_memory_pool_total_bytes',
-            'nv_pinned_memory_pool_used_bytes',
-            # Only accessible if you add `--metrics-config summary_latencies=true` to tritonserver
-            'nv_inference_request_summary_us_sum',
-            ]
-    command = 'curl -s "%s" | grep -E "^(%s)" | sed \'s/{.*}//g\'' % (endpoint, '|'.join(keys))
-    result = subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    output = result.stdout.strip().split('\n')
+        "nv_inference_count",
+        "nv_inference_request_failure",
+        "nv_inference_request_success" "nv_inference_request_success",
+        "nv_pinned_memory_pool_total_bytes",
+        "nv_pinned_memory_pool_used_bytes",
+        # Only accessible if you add `--metrics-config summary_latencies=true` to tritonserver
+        "nv_inference_request_summary_us_sum",
+    ]
+    command = 'curl -s "%s" | grep -E "^(%s)" | sed \'s/{.*}//g\'' % (
+        endpoint,
+        "|".join(keys),
+    )
+    result = subprocess.run(
+        command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+    )
+    output = result.stdout.strip().split("\n")
     for line in output:
-        if ' ' in line:
-            key, value = line.split(' ', 1)
+        if " " in line:
+            key, value = line.split(" ", 1)
             writer.add_scalar(key, int(value), step)
 
 
 def init_tb_writer(tb_dir, tb_name, files, extra):
-    # 1. get name for tensorboard dst dir. trying to include username since that will ensure 
+    # 1. get name for tensorboard dst dir. trying to include username since that will ensure
     # that multiple people on one server won't cause write errors
     login = None
     # this will typically fail in docker
-    try: 
+    try:
         login = os.getlogin()
     except OSError:
         logging.info("unable to get login name with `os.getlogin()` - using $HOME")
-        login = os.path.basename(os.environ.get('HOME', 'default'))
-    user = os.environ.get('USER', login)
+        login = os.path.basename(os.environ.get("HOME", "default"))
+    user = os.environ.get("USER", login)
     tb_dir = tb_dir or os.path.join(tempfile.gettempdir(), f"tb_{user}")
     tb_name = tb_name or str(time())
     tb_dst = os.path.join(tb_dir, tb_name)
 
     writer = SummaryWriter(log_dir=tb_dst)
     try:
-        writer.add_text("git_sha", os.popen('git rev-parse HEAD').read().strip())
+        writer.add_text("git_sha", os.popen("git rev-parse HEAD").read().strip())
     except Exception as e:
-        logging.info("could not get git SHA for tensorboard using `git rev-parse HEAD` - this message is safe to ignore")
+        logging.info(
+            "could not get git SHA for tensorboard using `git rev-parse HEAD` - this message is safe to ignore"
+        )
 
     writer.add_text("script_name", sys.argv[0])
     writer.add_text("first_filename", files[0][0])
     writer.add_text("last_filename", files[-1][0])
 
     import tensorflow as tf
-    available_gpus_tensorflow = ','.join([x.name for x in tf.config.list_physical_devices('GPU')])
-    writer.add_text("gpu_devices_tensorflow", available_gpus_tensorflow or "CPU only") 
 
-    for key,val in extra.items():
+    available_gpus_tensorflow = ",".join(
+        [x.name for x in tf.config.list_physical_devices("GPU")]
+    )
+    writer.add_text("gpu_devices_tensorflow", available_gpus_tensorflow or "CPU only")
+
+    for key, val in extra.items():
         writer.add_text(key, str(val))
 
     return writer
 
+
 def write_analysis_tb(analysis, writer, i):
-    writer.add_scalar("read_total_median", analysis['median']['read (% total)'], i)
-    writer.add_scalar("submission_total_median", analysis['median']['submission (% total)'], i)
-    writer.add_scalar("retrieval_total_median", analysis['median']['retrieval (% total)'], i)
-    writer.add_scalar("read_total_avg", analysis['avg']['read (% total)'], i)
-    writer.add_scalar("submission_total_avg", analysis['avg']['submission (% total)'], i)
-    writer.add_scalar("retrieval_total_avg", analysis['avg']['retrieval (% total)'], i)
+    writer.add_scalar("read_total_median", analysis["median"]["read (% total)"], i)
+    writer.add_scalar(
+        "submission_total_median", analysis["median"]["submission (% total)"], i
+    )
+    writer.add_scalar(
+        "retrieval_total_median", analysis["median"]["retrieval (% total)"], i
+    )
+    writer.add_scalar("read_total_avg", analysis["avg"]["read (% total)"], i)
+    writer.add_scalar(
+        "submission_total_avg", analysis["avg"]["submission (% total)"], i
+    )
+    writer.add_scalar("retrieval_total_avg", analysis["avg"]["retrieval (% total)"], i)
 
 
 def track_method(func, writer, i):
@@ -176,4 +215,5 @@ def track_method(func, writer, i):
         writer.add_scalar("time_elapsed", elapsed_time, i)
 
         return result
+
     return wrapper

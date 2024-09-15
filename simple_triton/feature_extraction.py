@@ -15,6 +15,7 @@ from simple_triton.io.tfr_writer import write_record
 from simple_triton.model import TritonModel
 from simple_triton.tile_iterators import TiffPrefetch
 
+
 def study(
     paths,
     t=(224, 224),
@@ -198,10 +199,12 @@ def inference(
     # create requests object
     req = Requests(url, limit)
 
-    number_of_tiles = sum(len(iterator.read_kwargs[i]) for i in range(len(iterator.read_kwargs)))
+    number_of_tiles = sum(
+        len(iterator.read_kwargs[i]) for i in range(len(iterator.read_kwargs))
+    )
     number_of_batches = math.ceil(number_of_tiles / iterator.batch)
 
-    with tqdm(total=number_of_batches-1, desc="Batches") as pbar:
+    with tqdm(total=number_of_batches - 1, desc="Batches") as pbar:
         # loop until iterator is exhausted
         while True:
             if not stop:
@@ -425,14 +428,14 @@ def main():
         required=False,
         type=str,
         default=None,
-        help="Tensorboard outputdir. Defaults to /tmp/tb_$USER"
+        help="Tensorboard outputdir. Defaults to /tmp/tb_$USER",
     )
     parser.add_argument(
         "--metrics-endpoint",
         required=False,
         type=str,
         default=None,
-        help="Tritonserver metrics endpoint. Used to scrape additional metrics for tensorboard"
+        help="Tritonserver metrics endpoint. Used to scrape additional metrics for tensorboard",
     )
     args = parser.parse_args()
 
@@ -514,7 +517,19 @@ def main():
     else:
         target = None
 
-    writer = init_tb_writer(args.tensorboard_dir, args.tensorboard_name, files, {"icc": args.icc, "workers": args.workers, "batch": args.batch, "chunk": args.chunk, "prefetch": args.prefetch, "tile_size": args.tile})
+    writer = init_tb_writer(
+        args.tensorboard_dir,
+        args.tensorboard_name,
+        files,
+        {
+            "icc": args.icc,
+            "workers": args.workers,
+            "batch": args.batch,
+            "chunk": args.chunk,
+            "prefetch": args.prefetch,
+            "tile_size": args.tile,
+        },
+    )
 
     # create studies in background while waiting for inference to finish
     with ProcessPoolExecutor(max_workers=1) as pool:
@@ -579,7 +594,7 @@ def main():
             )
             if args.metrics_endpoint:
                 write_tritonserver_metrics(args.metrics_endpoint, writer, i)
-            writer.add_scalar("number_of_tiles", len(metadata['tile_left']), i)
+            writer.add_scalar("number_of_tiles", len(metadata["tile_left"]), i)
             write_analysis_tb(analyze(times), writer, i)
 
             start = time()
@@ -588,14 +603,21 @@ def main():
             # write to tfrecord
             precision = tf.float32 if args.float else tf.float16
             write_record(
-                tfr_name( args.output, file, args.model, args.tile, args.overlap, args.magnification,),
+                tfr_name(
+                    args.output,
+                    file,
+                    args.model,
+                    args.tile,
+                    args.overlap,
+                    args.magnification,
+                ),
                 features,
                 metadata,
                 labels={},
                 structured=False,
                 precision=precision,
             )
-            feature_writing_time = time()-start
+            feature_writing_time = time() - start
             writer.add_scalar("feature_writing_elapsed_sec", feature_writing_time, i)
 
 

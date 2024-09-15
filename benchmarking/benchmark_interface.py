@@ -380,17 +380,18 @@ def main():
 
     df = pd.DataFrame(data)
     out_csv = os.path.join(args_dict["output"], "benchmark_out.csv")
-    df.to_csv(out_csv, mode='a', header=not os.path.exists(out_csv), index=False)
+    df.to_csv(out_csv, mode="a", header=not os.path.exists(out_csv), index=False)
 
-    throughput_data = {
-        "throughput_all": args_dict["throughput_all"]
-    }
+    throughput_data = {"throughput_all": args_dict["throughput_all"]}
     df_throughput = pd.DataFrame(throughput_data)
     # limit to two decimals
     df_throughput = df_throughput.round(2)
-    throughput_fileoutput = os.path.join(args_dict["output"], "benchmark_throughput_out.csv")
-    df_throughput.to_csv(throughput_fileoutput, mode='a', header=not os.path.exists(throughput_fileoutput), index=False)
-
-
-
-
+    throughput_fileoutput = os.path.join(
+        args_dict["output"], "benchmark_throughput_out.csv"
+    )
+    df_throughput.to_csv(
+        throughput_fileoutput,
+        mode="a",
+        header=not os.path.exists(throughput_fileoutput),
+        index=False,
+    )
