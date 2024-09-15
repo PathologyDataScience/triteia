@@ -31,10 +31,12 @@ class DynamicBatching(object):
 
     def __init__(
         self,
-        preferred_batch_size=[64],
+        preferred_batch_size=None,
         max_queue_delay_microseconds=0,
         preserve_ordering=True,
     ):
+        if preferred_batch_size is None:
+            preferred_batch_size = [64]
         self.config = {
             "PreferredBatchSize": preferred_batch_size,
             "max_queue_delay_microseconds": max_queue_delay_microseconds,
@@ -73,7 +75,7 @@ class ModelInput(object):
             "dims": shape,
         }
         if optional:
-            input["optional":True]
+            input["optional"] = True
         self.config = input
 
 

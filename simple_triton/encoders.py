@@ -8,7 +8,7 @@ def reshape_savedmodel(
     shape,
     dtype=tf.float32,
     signature="serving_default",
-    outputs=["output_1"],
+    outputs=None,
 ):
     """Modify a savedmodel to change input signature.
 
@@ -39,6 +39,8 @@ def reshape_savedmodel(
     triton with the platform explicitly mentioned in the
     configuration: {"platform": "tensorflow_savedmodel"}.
     """
+    if outputs is None:
+        outputs = ["output_1"]
 
     # define a class that discards batch dimension
     class Reshaped(tf.Module):

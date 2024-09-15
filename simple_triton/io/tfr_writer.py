@@ -368,7 +368,7 @@ def merge_records(path, inputs, label_mode="first", stack_axis=0):
 
 
 def write_record(
-    path, features, tile_info, labels={}, structured=False, precision=tf.float16
+    path, features, tile_info, labels=None, structured=False, precision=tf.float16
 ):
     """Writes a tfrecord (.tfr) file from the inference results of a histomics stream study.
 
@@ -396,6 +396,8 @@ def write_record(
         to be inferred from the "precision" field of the file at runtime.
         Default value is tf.float16.
     """
+    if labels is None:
+        labels = {}
 
     # extract tile coordinates and slide metadata from study
     slide_metadata, tile_metadata, slide_index = inference_metadata(tile_info)
