@@ -1,7 +1,9 @@
 import argparse
+import math
 import os
 import tempfile
 from concurrent.futures import ProcessPoolExecutor, wait
+from time import sleep
 
 import histomics_stream as hs
 import large_image_source_tiff
