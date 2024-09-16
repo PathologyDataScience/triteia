@@ -76,7 +76,7 @@ class Benchmark:
             amp=TensorflowMixedPrecision() if self.args_dict["use_amp"] else None
         )
         config = TensorflowConfig(
-            name=args_dict["model_name"],
+            name=self.args_dict["model_name"],
             max_batch_size=maxBatchSize,
             instance_group=instances,
             response_cache=False,
@@ -133,7 +133,7 @@ class Benchmark:
         ) = inference(
             iterator,
             model_name,
-            url=args_dict["url"],
+            url=self.args_dict["url"],
             limit=limit,
         )
         # inference for number of iterations
@@ -164,7 +164,7 @@ class Benchmark:
             ) = inference(
                 iterator,
                 model_name,
-                url=args_dict["url"],
+                url=self.args_dict["url"],
                 limit=limit,
             )
             elapsed_time_single = time.time() - start
@@ -395,3 +395,6 @@ def main():
         header=not os.path.exists(throughput_fileoutput),
         index=False,
     )
+
+if __name__ == "__main__":
+    main()
