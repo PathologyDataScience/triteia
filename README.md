@@ -2,6 +2,8 @@
 
 simple-triton is a Python client for inference with the NVIDIA Triton server. It provides model deployment, configuration, and optimization capabilities for the TensorFlow, ONNX, and Python triton backends directly from Python. This was developed to address limitations of the [PyTriton](https://github.com/triton-inference-server/pytriton) package that only suppports deployments with the Python backend where TensorRT, XLA, and mixed precision are not available.
 
+![triton_overview.png](triton_overview.png)
+
 # User guide <a name="user-guide"></a>
 
 ## Contents
