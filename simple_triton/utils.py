@@ -1,9 +1,6 @@
 import numpy as np
-from tabulate import tabulate, SEPARATING_LINE
-import tensorflow as tf
-import time
 import tritonclient.grpc as grpcclient
-from tritonclient.utils import InferenceServerException
+from tabulate import tabulate, SEPARATING_LINE
 
 
 def create_client(url="localhost:8001", verbose=False):
@@ -26,10 +23,10 @@ def create_client(url="localhost:8001", verbose=False):
 
     try:
         client = grpcclient.InferenceServerClient(url=url, verbose=verbose)
+        return client
     except Exception as e:
         print("context creation failed: " + str(e), flush=True)
-    return client
-
+        raise
 
 def analyze(times, floatfmt=".2f"):
     """Print a summary table of time spent during inference.

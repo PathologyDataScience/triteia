@@ -6,17 +6,12 @@ from time import sleep, time
 import histomics_stream as hs
 import large_image_source_tiff
 import numpy as np
-import os
-from simple_triton.io.tfr_writer import write_record
-from simple_triton.inference import Requests
-from simple_triton.model import TritonModel
-from simple_triton.tile_iterators import TiffPrefetch
-from time import sleep, time
-from tqdm import tqdm
 import tensorflow as tf
+from tqdm import tqdm
 
 from simple_triton.inference import Requests
 from simple_triton.io.tfr_writer import write_record
+from simple_triton.model import TritonModel
 from simple_triton.tile_iterators import TiffPrefetch
 
 
@@ -71,12 +66,15 @@ def study(
             file = os.path.split(path)[1]
         elif isinstance(path, tuple):
             file = os.path.split(path[0])[1]
+        else:
+            raise ValueError("Invalid path type.")
         names.append(file)
 
     # fill basic study parameters
-    study = {"version": "version-1"}
-    study["tile_height"] = t[0]
-    study["tile_width"] = t[1]
+    study = {"version": "version-1",
+            "tile_height": t[0],
+            "tile_width": t[1]
+        }
     slides = study["slides"] = {}
 
     # add slides to study
@@ -332,7 +330,7 @@ def main():
         required=False,
         default=None,
         type=str,
-        help=("Optional target stain profile for Macenko normalization."),
+        help="Optional target stain profile for Macenko normalization.",
     )
     parser.add_argument(
         "-s",
@@ -355,7 +353,7 @@ def main():
         required=False,
         default=224,
         type=int,
-        help=("Tile size in pixels (default to internal tile size)."),
+        help="Tile size in pixels (default to internal tile size).",
     )
     parser.add_argument(
         "-o",
@@ -385,7 +383,7 @@ def main():
         required=False,
         default=64,
         type=int,
-        help=("Batch size (default 64 tiles)."),
+        help="Batch size (default 64 tiles).",
     )
     parser.add_argument(
         "-c",
@@ -393,7 +391,7 @@ def main():
         required=False,
         default=4,
         type=int,
-        help=("Reach chunk size (default 4 tiles)."),
+        help="Reach chunk size (default 4 tiles).",
     )
     parser.add_argument(
         "-p",
@@ -401,7 +399,7 @@ def main():
         required=False,
         default=4,
         type=int,
-        help=("The number of batches to prefetch from disk (default 4)."),
+        help="The number of batches to prefetch from disk (default 4).",
     )
     parser.add_argument(
         "-w",
@@ -409,7 +407,7 @@ def main():
         required=False,
         default=32,
         type=int,
-        help=("The number of data loader processes (default 32)."),
+        help="The number of data loader processes (default 32).",
     )
     args = parser.parse_args()
 

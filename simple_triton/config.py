@@ -1,9 +1,9 @@
-from google.protobuf import json_format, text_format
-import numpy as np
 import os
-from tritonclient.utils import np_to_triton_dtype
-from tritonclient.grpc import model_config_pb2
 
+import numpy as np
+from google.protobuf import json_format, text_format
+from tritonclient.grpc import model_config_pb2
+from tritonclient.utils import np_to_triton_dtype
 
 ONNX_TRT_WHITELIST = {"precision_mode", "max_workspace_size_bytes"}
 
@@ -31,10 +31,12 @@ class DynamicBatching(object):
 
     def __init__(
         self,
-        preferred_batch_size=[64],
+        preferred_batch_size=None,
         max_queue_delay_microseconds=0,
         preserve_ordering=True,
     ):
+        if preferred_batch_size is None:
+            preferred_batch_size = [64]
         self.config = {
             "PreferredBatchSize": preferred_batch_size,
             "max_queue_delay_microseconds": max_queue_delay_microseconds,
@@ -73,7 +75,7 @@ class ModelInput(object):
             "dims": shape,
         }
         if optional:
-            input["optional":True]
+            input["optional"] = True
         self.config = input
 
 
@@ -219,7 +221,7 @@ class PythonConfig(object):
                     "`input` must be a ModelInput object or a list of ModelInput objects."
                 )
             if isinstance(input, list):
-                if not all([isinstance(i, (ModelInput)) for i in input]):
+                if not all([isinstance(i, ModelInput) for i in input]):
                     raise ValueError("elements of `input` must be a ModelInput object.")
         if output is not None:
             if not isinstance(output, (ModelOutput, list)):
@@ -227,7 +229,7 @@ class PythonConfig(object):
                     "`output` must be a ModelOutput object or a list of ModelOutput objects."
                 )
             if isinstance(output, list):
-                if not all([isinstance(i, (ModelOutput)) for i in output]):
+                if not all([isinstance(i, ModelOutput) for i in output]):
                     raise ValueError(
                         "elements of `output` must be a ModelOutput object."
                     )

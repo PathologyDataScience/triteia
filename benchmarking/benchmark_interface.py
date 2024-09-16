@@ -1,17 +1,17 @@
 import argparse
-from simple_triton.feature_extraction import study, inference
-from simple_triton.tile_iterators import TiffPrefetch
-from simple_triton.model import TritonModel
-from simple_triton.utils import analyze
-from simple_triton.config import *
-from large_image.cache_util import cachesClear
-import tensorflow as tf
-import time
+import functools
 import subprocess
 import sys
-import os
-import functools
-import numpy as np
+import time
+
+import tensorflow as tf
+from large_image.cache_util import cachesClear
+
+from simple_triton.config import *
+from simple_triton.feature_extraction import study, inference
+from simple_triton.model import TritonModel
+from simple_triton.tile_iterators import TiffPrefetch
+from simple_triton.utils import analyze
 
 
 class Benchmark:
@@ -30,8 +30,6 @@ class Benchmark:
         from the whole-slide image (magnification, tile size, tile overlap, mask file).
 
         Args:
-            args_dict (dict): The inputs to the model from argparse.
-            tile (int): tile default value is 224.
             wsi_path (string): path for .svs file
             mask_path (string): path for png file
         """
@@ -53,12 +51,8 @@ class Benchmark:
         Parameters in this stage include the inference server (address), the model (model name,
         maximum batch size).
 
-        Args:
-            client (tritonclient.grpc.InferenceServerClient):
-            args_dict (dict): The inputs to the model from argparse.
-            maxBatchSize (int): max batch size to for config
         """
-        # slide paramters
+        # slide parameters
         url = self.args_dict["url"]  # url for grpc access to triton server
         model_name = self.args_dict["model_name"]
         maxBatchSize = self.args_dict["maxbatchsize"]  # set max batch size
@@ -97,10 +91,6 @@ class Benchmark:
 
         Parameters here include the number of tiles per batch, the number of workers,
         and the maximum number of pending inferences per worker.
-
-        Args:
-            client (tritonclient.grpc.InferenceServerClient):
-            args_dict (dict): The inputs to the model from argparse.
 
         Returns:
             Inference time
@@ -178,7 +168,7 @@ class Benchmark:
             )
             elapsed_time_single = time.time() - start
             # throughput and elapsed time for single inference
-            throughput_single = (self.tile_info["version"].size) / elapsed_time_single
+            throughput_single = self.tile_info["version"].size / elapsed_time_single
             # Append to a list
             throughput_results.append(throughput_single)
             elapsed_time_results.append(elapsed_time_single)
@@ -242,8 +232,7 @@ def check_readiness(args_dict):
     model = TritonModel(args_dict["model_name"], args_dict["url"])
     assert model.is_loaded()
 
-
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--model-name",
@@ -388,3 +377,6 @@ if __name__ == "__main__":
     with open(args_dict["fileoutput"], "r") as f:
         print(f.readlines()[-1])
         f.close()
+
+if __name__ == "__main__":
+    main()

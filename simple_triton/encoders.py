@@ -1,4 +1,5 @@
 import os
+
 import tensorflow as tf
 
 
@@ -8,7 +9,7 @@ def reshape_savedmodel(
     shape,
     dtype=tf.float32,
     signature="serving_default",
-    outputs=["output_1"],
+    outputs=None,
 ):
     """Modify a savedmodel to change input signature.
 
@@ -39,6 +40,8 @@ def reshape_savedmodel(
     triton with the platform explicitly mentioned in the
     configuration: {"platform": "tensorflow_savedmodel"}.
     """
+    if outputs is None:
+        outputs = ["output_1"]
 
     # define a class that discards batch dimension
     class Reshaped(tf.Module):
@@ -203,7 +206,6 @@ def tf_encoder(
     dtype=tf.uint8,
     pooling="avg",
     normalize=False,
-    version=1,
 ):
     """Creates a tensorflow encoder model in savedmodel format.
 
@@ -223,6 +225,8 @@ def tf_encoder(
     input_shape : tuple(int, int, int)
         The height, width, and channels of tiles used for feature extraction at the
         target magnification. Default value is (224, 224, 3).
+    dtype : tensorflow.python.framework.dtypes.DType
+        The input data type for the model. Default value is tf.uint8.
     pooling : str {"avg", "max"}
         The pooling mode for the terminal layer of the feature extractor network.
     normalize : bool

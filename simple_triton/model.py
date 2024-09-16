@@ -1,8 +1,10 @@
-from google.protobuf.json_format import MessageToDict
 import json
-from simple_triton.utils import create_client
 import time
+
+from google.protobuf.json_format import MessageToDict
 from tritonclient.utils import InferenceServerException
+
+from simple_triton.utils import create_client
 
 
 class TritonModel(object):
@@ -256,6 +258,17 @@ class TritonModel(object):
 
         Parameters
         ----------
+        retries : int
+            The maximum number of attempts for each request. Default is 5.
+        wait : float
+            The time to wait between failed attempts. Default is 0.1 seconds.
+        block : bool
+            If True, block until the model is idle. See check_stats() for model
+            idle definition. Loading can either retry or block, but not both.
+            Default is False for no blocking (will use retry instead).
+        timeout : float
+            The timeout limit for waiting for model idle status. Default is
+            1 second.
         verbose : bool
             If True the client will emit status messages to stdout. Default
             is False.
