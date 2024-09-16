@@ -232,6 +232,7 @@ def check_readiness(args_dict):
     model = TritonModel(args_dict["model_name"], args_dict["url"])
     assert model.is_loaded()
 
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -395,6 +396,7 @@ def main():
         header=not os.path.exists(throughput_fileoutput),
         index=False,
     )
+
 
 if __name__ == "__main__":
     main()

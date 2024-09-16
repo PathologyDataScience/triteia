@@ -42,6 +42,7 @@ def create_client(url="localhost:8001", verbose=False):
         print("context creation failed: " + str(e), flush=True)
         raise
 
+
 def analyze(times, floatfmt=".2f"):
     """Print and return a summary table of time spent during inference as a pandas DataFrame.
 
