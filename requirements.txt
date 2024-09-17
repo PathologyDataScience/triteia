@@ -1,3 +1,8 @@
+Keras-Preprocessing
+Markdown
+Pillow
+PyWavelets
+Werkzeug
 absl-py
 asciitree
 astunparse
@@ -35,12 +40,10 @@ itk-registration
 itk-segmentation
 jsonschema
 keras
-Keras-Preprocessing
 kiwisolver
 huggingface-hub
 large-image
 large-image-source-tiff
-Markdown
 matplotlib
 monai
 multidict
@@ -51,10 +54,11 @@ oauthlib
 opt-einsum
 packaging
 palettable
-pooch
-Pillow
+pandas
 pluggy
+pooch
 protobuf
+psutil
 py
 pyasn1
 pyasn1-modules
@@ -64,7 +68,6 @@ pyproject-toml
 pyrsistent
 pytest
 python-dateutil
-PyWavelets
 requests
 requests-oauthlib
 rsa
@@ -92,7 +95,6 @@ typing-extensions
 urllib3
 wcwidth
 websockets
-Werkzeug
 wrapt
 yarl
 zarr

@@ -22,7 +22,7 @@ class TritonPythonModel:
         pb_utils.ModelConfig
           An object containing the auto-completed model configuration
         """
-        
+
         inputs = [
             {
                 "name": "input_0",
@@ -55,7 +55,9 @@ class TritonPythonModel:
         )
         self.model = ViTModel.from_pretrained("owkin/phikon", add_pooling_layer=False)
         self.model = self.model.to(torch.device(f"cuda:{self.gpu_id}"))
-        self.image_processor = AutoImageProcessor.from_pretrained("owkin/phikon", use_fast=True)
+        self.image_processor = AutoImageProcessor.from_pretrained(
+            "owkin/phikon", use_fast=True
+        )
 
     def execute(self, requests):
         """This function receives the requests (tiles) 'pb_utils.InfrerenceRequest'

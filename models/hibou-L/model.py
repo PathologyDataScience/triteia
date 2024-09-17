@@ -64,10 +64,14 @@ class TritonPythonModel:
         login(
             os.getenv("HF_TOKEN")
         )  # User Access Token, found at https://huggingface.co/settings/tokens
-        self.transform = transforms = torchvision.transforms.Compose([
-            torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize(mean=[0.7068, 0.5755, 0.7220], std=[0.1950, 0.2316, 0.1816]),
-        ])
+        self.transform = transforms = torchvision.transforms.Compose(
+            [
+                torchvision.transforms.ToTensor(),
+                torchvision.transforms.Normalize(
+                    mean=[0.7068, 0.5755, 0.7220], std=[0.1950, 0.2316, 0.1816]
+                ),
+            ]
+        )
         self.model = AutoModel.from_pretrained("histai/hibou-L", trust_remote_code=True)
         self.model = self.model.to(torch.device(f"cuda:{self.gpu_id}"))
         self.model.eval()
@@ -88,9 +92,7 @@ class TritonPythonModel:
                 transformed_images = torch.stack(
                     [self.transform(img) for img in pil_images]
                 )
-                input_norm = transformed_images.to(
-                    torch.device(f"cuda:{self.gpu_id}")
-                )
+                input_norm = transformed_images.to(torch.device(f"cuda:{self.gpu_id}"))
                 with torch.no_grad():
                     feature_emb = self.model(input_norm)
                     features = feature_emb.pooler_output.detach().cpu().numpy()
@@ -107,4 +109,3 @@ class TritonPythonModel:
                 print(e)
 
         return responses
-

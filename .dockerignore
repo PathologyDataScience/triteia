@@ -1,3 +1,4 @@
+.tox
 *.tfr
 *.md
 test_data/

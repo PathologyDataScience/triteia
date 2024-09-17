@@ -1,7 +1,9 @@
 import argparse
+import math
 import os
+import tempfile
 from concurrent.futures import ProcessPoolExecutor, wait
-from time import sleep, time
+from time import sleep
 
 import histomics_stream as hs
 import large_image_source_tiff
@@ -9,6 +11,7 @@ import numpy as np
 import tensorflow as tf
 from tqdm import tqdm
 
+from simple_triton.utils import *
 from simple_triton.inference import Requests
 from simple_triton.io.tfr_writer import write_record
 from simple_triton.model import TritonModel
@@ -71,10 +74,7 @@ def study(
         names.append(file)
 
     # fill basic study parameters
-    study = {"version": "version-1",
-            "tile_height": t[0],
-            "tile_width": t[1]
-        }
+    study = {"version": "version-1", "tile_height": t[0], "tile_width": t[1]}
     slides = study["slides"] = {}
 
     # add slides to study
@@ -198,59 +198,66 @@ def inference(
     # create requests object
     req = Requests(url, limit)
 
-    # loop until iterator is exhausted
-    while True:
-        if not stop:
-            # draw samples, preprocess, and submit for inference up to limit
-            for i in range(limit - len(req.pending)):
-                try:
-                    t_start = time()
-                    sample, metadata = next(iterator)
-                    if not ((source is None) and (target is None)):
-                        sample = {
-                            "input_0": sample,
-                            "input_1": np.stack(
-                                sample.shape[0] * [np.cast(source, np.float32)],
-                                axis=0,
-                            ),
-                            "input_2": np.stack(
-                                sample.shape[0] * [np.cast(target, np.float32)],
-                                axis=0,
-                            ),
+    number_of_tiles = sum(
+        len(iterator.read_kwargs[i]) for i in range(len(iterator.read_kwargs))
+    )
+    number_of_batches = math.ceil(number_of_tiles / iterator.batch)
+
+    with tqdm(total=number_of_batches - 1, desc="Batches") as pbar:
+        # loop until iterator is exhausted
+        while True:
+            if not stop:
+                # draw samples, preprocess, and submit for inference up to limit
+                for i in range(limit - len(req.pending)):
+                    try:
+                        t_start = time()
+                        sample, metadata = next(iterator)
+                        if not ((source is None) and (target is None)):
+                            sample = {
+                                "input_0": sample,
+                                "input_1": np.stack(
+                                    sample.shape[0] * [np.cast(source, np.float32)],
+                                    axis=0,
+                                ),
+                                "input_2": np.stack(
+                                    sample.shape[0] * [np.cast(target, np.float32)],
+                                    axis=0,
+                                ),
+                            }
+                        t_stop = time()
+                    except StopIteration as e:
+                        stop = True
+                    if not stop:
+                        if pre is not None:
+                            sample = pre(sample)
+                        request = {
+                            "model_name": model_name,
+                            "inputs": sample,
+                            "metadata": metadata,
+                            "times": {"read_start": t_start, "read_stop": t_stop},
                         }
-                    t_stop = time()
-                except StopIteration as e:
-                    stop = True
-                if not stop:
-                    if pre is not None:
-                        sample = pre(sample)
-                    request = {
-                        "model_name": model_name,
-                        "inputs": sample,
-                        "metadata": metadata,
-                        "times": {"read_start": t_start, "read_stop": t_stop},
-                    }
-                    req.insert(request, timeout)
-                else:
-                    break
+                        req.insert(request, timeout)
+                    else:
+                        break
 
-        # check pending requests
-        completed = req.check(block=False)
+            # check pending requests
+            completed = req.check(block=False)
 
-        # put completed post-processed requests into queue
-        for inference in completed:
-            # remove inputs
-            del inference["inputs"]
+            # put completed post-processed requests into queue
+            for inference in completed:
+                # remove inputs
+                del inference["inputs"]
 
-            # place in queue
-            batches.append(inference)
+                # place in queue
+                batches.append(inference)
+                pbar.update()
 
-        # if done send stop signal
-        if len(req.pending) == 0 and stop:
-            break
+            # if done send stop signal
+            if len(req.pending) == 0 and stop:
+                break
 
-        # sleep
-        sleep(rest)
+            # sleep
+            sleep(rest)
 
     # failures
     failed = [b for b in batches if not b["success"]]
@@ -409,6 +416,26 @@ def main():
         type=int,
         help="The number of data loader processes (default 32).",
     )
+    parser.add_argument(
+        "--tensorboard-name",
+        required=False,
+        type=str,
+        help="Name of the run, used for tracking stats. e.g. 'testing_no_cache', etc, or leave blank",
+    )
+    parser.add_argument(
+        "--tensorboard-dir",
+        required=False,
+        type=str,
+        default=None,
+        help="Tensorboard outputdir. Defaults to /tmp/tb_$USER",
+    )
+    parser.add_argument(
+        "--metrics-endpoint",
+        required=False,
+        type=str,
+        default=None,
+        help="Tritonserver metrics endpoint. Used to scrape additional metrics for tensorboard",
+    )
     args = parser.parse_args()
 
     if not os.path.exists(args.output):
@@ -489,6 +516,20 @@ def main():
     else:
         target = None
 
+    writer = init_tb_writer(
+        args.tensorboard_dir,
+        args.tensorboard_name,
+        files,
+        {
+            "icc": args.icc,
+            "workers": args.workers,
+            "batch": args.batch,
+            "chunk": args.chunk,
+            "prefetch": args.prefetch,
+            "tile_size": args.tile,
+        },
+    )
+
     # create studies in background while waiting for inference to finish
     with ProcessPoolExecutor(max_workers=1) as pool:
         # create first study in background
@@ -504,7 +545,7 @@ def main():
         futures = {0: pool.submit(study, **kwargs)}
 
         # iterate through files and masks
-        for i, (file, mask, stain) in enumerate(tqdm(files)):
+        for i, (file, mask, stain) in enumerate(tqdm(files, desc="Slides ")):
             # prefetch study for next slide
             if i < len(files) - 1:
                 kwargs.update({"paths": file if mask is None else (file, mask)})
@@ -541,7 +582,7 @@ def main():
                 source = None
 
             # inference
-            features, metadata, times, failures = inference(
+            features, metadata, times, failures = track_method(inference, writer, i)(
                 iterator,
                 args.model,
                 source=source,
@@ -550,8 +591,12 @@ def main():
                 limit=1,
                 rest=0.0,
             )
+            if args.metrics_endpoint:
+                write_tritonserver_metrics(args.metrics_endpoint, writer, i)
+            writer.add_scalar("number_of_tiles", len(metadata["tile_left"]), i)
+            write_analysis_tb(analyze(times), writer, i)
 
-            # concatenate features
+            start = time()
             features = np.concatenate(features[0], axis=0)
 
             # write to tfrecord
@@ -571,6 +616,8 @@ def main():
                 structured=False,
                 precision=precision,
             )
+            feature_writing_time = time() - start
+            writer.add_scalar("feature_writing_elapsed_sec", feature_writing_time, i)
 
 
 if __name__ == "__main__":

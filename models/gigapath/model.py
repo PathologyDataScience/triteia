@@ -64,14 +64,18 @@ class TritonPythonModel:
             os.getenv("HF_TOKEN")
         )  # User Access Token, found at https://huggingface.co/settings/tokens
         self.model = timm.create_model(
-            "hf_hub:prov-gigapath/prov-gigapath", 
+            "hf_hub:prov-gigapath/prov-gigapath",
             pretrained=True,
         )
         self.model = self.model.to(torch.device(f"cuda:{self.gpu_id}"))
-        self.transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-        ])
+        self.transform = transforms.Compose(
+            [
+                transforms.ToTensor(),
+                transforms.Normalize(
+                    mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)
+                ),
+            ]
+        )
         self.model.eval()
 
     def execute(self, requests):
@@ -109,4 +113,3 @@ class TritonPythonModel:
                 print(e)
 
         return responses
-
