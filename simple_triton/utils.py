@@ -136,22 +136,35 @@ def write_tritonserver_metrics(endpoint, writer, step):
             writer.add_scalar(key, int(value), step)
 
 
-def init_tb_writer(tb_dir, tb_name, files, extra):
-    # 1. get name for tensorboard dst dir. trying to include username since that will ensure
-    # that multiple people on one server won't cause write errors
+def get_username():
+    if os.environ.get("USER"):
+        return os.environ.get("USER")
+
     login = None
     # this will typically fail in docker
     try:
         login = os.getlogin()
     except OSError:
-        logging.info("unable to get login name with `os.getlogin()` - using $HOME")
-        login = os.path.basename(os.environ.get("HOME", "default"))
-    user = os.environ.get("USER", login)
+        pass
+
+    if not login or not login.isalnum():
+        login = "unnamed"
+
+    return login
+
+
+def init_tb_writer(tb_dir, tb_name, files, extra):
+    # 1. get name for tensorboard dst dir. trying to include username since that will ensure
+    # that multiple people on one server won't cause write errors
+    user = get_username()
     tb_dir = tb_dir or os.path.join(tempfile.gettempdir(), f"tb_{user}")
     tb_name = tb_name or str(time())
     tb_dst = os.path.join(tb_dir, tb_name)
 
     writer = SummaryWriter(log_dir=tb_dst)
+    logging.info(
+        f"Writing tensorboard stats to '{tb_dst}' (inspect with `tensoboard --logdir={tb_dst}`)"
+    )
     try:
         writer.add_text("git_sha", os.popen("git rev-parse HEAD").read().strip())
     except Exception as e:
