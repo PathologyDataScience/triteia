@@ -176,13 +176,6 @@ def init_tb_writer(tb_dir, tb_name, files, extra):
     writer.add_text("first_filename", files[0][0])
     writer.add_text("last_filename", files[-1][0])
 
-    import tensorflow as tf
-
-    available_gpus_tensorflow = ",".join(
-        [x.name for x in tf.config.list_physical_devices("GPU")]
-    )
-    writer.add_text("gpu_devices_tensorflow", available_gpus_tensorflow or "CPU only")
-
     for key, val in extra.items():
         writer.add_text(key, str(val))
 
