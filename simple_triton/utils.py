@@ -1,15 +1,13 @@
 import numpy as np
-from tabulate import tabulate, SEPARATING_LINE
 import tensorflow as tf
 from time import time
 import tritonclient.grpc as grpcclient
 from tritonclient.utils import InferenceServerException
 import numpy as np
 import pandas as pd
-from tabulate import SEPARATING_LINE
 import subprocess
 import sys
-from monai.handlers.tensorboard_handlers import SummaryWriter
+from tensorboardX import SummaryWriter
 import os
 from functools import wraps
 import psutil

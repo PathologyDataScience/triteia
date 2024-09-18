@@ -13,19 +13,18 @@ requires-python = ">=3.9"
 keywords = ["mlops", "digital pathology"]
 license = {text = "Apache-2.0"}
 dependencies = [
-    "grpcio>=1.64.0",
-    "histomics-stream",
-    "numpy>=1.21",
+    "grpcio",
+    #"histomics-stream", # install manually until 2.5.0 is on pip
+    "numpy",
     "large-image[tiff]",
-    "monai",
     "pandas",
     "psutil",
     "pooch",
     "protobuf",
-    "tabulate",
-    "tensorflow<2.16",
+    "tensorflow-cpu<2.16",
+    "tensorboardX",
     "tqdm",
-    "tritonclient[all]",
+    "tritonclient[all]"
 ]
 dynamic = ["version"]
 
