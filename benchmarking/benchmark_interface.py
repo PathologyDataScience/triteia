@@ -1,6 +1,7 @@
 import pandas as pd
 import argparse
 import functools
+import logging
 import subprocess
 import sys
 import time
@@ -399,4 +400,5 @@ def main():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(stream=sys.stdout, level=logging.INFO)
     main()
