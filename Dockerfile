@@ -7,7 +7,7 @@ ENV PATH="/home/myuser/venv/bin:$PATH"
 ARG DEBIAN_FRONTEND=noninteractive
 RUN echo 'APT::Install-Suggests "0";' >> /etc/apt/apt.conf.d/00-docker && \
     echo 'APT::Install-Recommends "0";' >> /etc/apt/apt.conf.d/00-docker && \
-    apt update && apt install -y gcc git libc6-dev && \
+    apt update && apt install -y rdfind gcc git libc6-dev && \
     apt clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -19,6 +19,8 @@ COPY pyproject.toml .
 RUN sed -i 's/.*\[tool.setuptools_scm\]/#&/g' pyproject.toml
 
 RUN pip3 install --no-cache-dir 'git+https://github.com/DigitalSlideArchive/HistomicsStream.git@v2.5.0#egg=histomics_stream' .
+# de-duplicate files and replace them with symlinks
+RUN rdfind -minsize 32768 -makehardlinks true -makeresultsfile false /home/myuser
 
 FROM python:3.10-slim AS runner-image
 
