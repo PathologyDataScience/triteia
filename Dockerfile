@@ -40,6 +40,14 @@ RUN echo 'APT::Install-Suggests "0";' >> /etc/apt/apt.conf.d/00-docker && \
     apt clean && \
     rm -rf /var/lib/apt/lists/*
 
+# optional install of docker engine for test mode so that triton server container can be launched from within
+ARG TEST
+RUN if [ "$TEST" = "True" ]; then \
+    apt update && \
+    apt install -y curl && \
+    curl -fsSL https://get.docker.com | sh && \
+fi
+
 USER myuser
 
 # make sure all messages always reach console
