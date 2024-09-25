@@ -91,12 +91,19 @@ def triton_image_available():
 @pytest.fixture(scope="session")
 def triton(model_repository):
     if triton_running(TRITON_IMAGE_NAME):
-        stopped = triton_stop(TRITON_IMAGE_NAME)
+        if not triton_stop(TRITON_IMAGE_NAME):
+            pytest.fail(
+                f"Setup: Could not stop triton containers w/ ancestor {TRITON_IMAGE_NAME}"
+            )
     if triton_running("nvcr.io/nvidia/tritonserver"):
-        stopped = triton_stop("nvcr.io/nvidia/tritonserver")
+        if not triton_stop("nvcr.io/nvidia/tritonserver"):
+            pytest.fail(
+                f"Setup: Could not stop triton containers w/ ancestor nvcr.io/nvidia/tritonserver"
+            )
     if not triton_image_available():
         path = os.path.normpath(os.path.join(os.path.dirname(__file__), "../"))
         cmd(build_cmd.format(param=path)
     triton_launch(model_repository)
     yield
-    closed = triton_stop(TRITON_IMAGE_NAME)
+    if not triton_stop(TRITON_IMAGE_NAME)
+        pytest.fail(f"Teardown: Could not stop triton test container.")
