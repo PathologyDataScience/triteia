@@ -1,14 +1,15 @@
 from functools import partial
+import os
 import pytest
 import subprocess
 from time import sleep, time
 
 
 """This fixture performs setup and teardown of the triton server container for testing.
-The server container is launched using the host docker socket once per test session and
-is stopped+removed following tests. Testing will terminate if the container image is
-not present on the system. The `triton` fixture receives the model repository from the
-data fixture which creates a temporary directory.
+Running server containers are first stopped and and then the server container is launched
+in a `triton` session scope fixture that tears the container down on completion. The `triton` 
+fixture receives the model repository path from the data fixture which creates a temporary 
+directory.
 """
 
 TIMEOUT = 10.0  # short timeout for container run, stop operations (not build)
@@ -35,10 +36,8 @@ run_cmd = (
 cmd = partial(subprocess.run, shell=True, capture_output=True, text=True)
 
 
-"""Launch the triton container - block until responsive"""
-
-
 def triton_launch(model_repository):
+    """Launch the triton container - block until responsive"""
     if not triton_image_available():
         pytest.exit(
             (
@@ -51,38 +50,53 @@ def triton_launch(model_repository):
     start = time()
     while not triton_ready() and time() - start < TIMEOUT:
         sleep(1.0)
-
-
-"""Stop the triton containers - block until stopped"""
+    if time() - start >= TIMEOUT:
+        return False
+    else:
+        return True
 
 
 def triton_stop(name):
+    """Stop container by ancestor name"""
     response = cmd(stop_cmd.format(param=name))
     start = time()
     response = cmd(exited_cmd.format(param=name))
     while len(response.stdout.split("\n")) > 1 and time() - start < TIMEOUT:
-        response = cmd(exited_cmd.format(param=name))
         sleep(1.0)
+        response = cmd(exited_cmd.format(param=name))
+    if time() - start >= TIMEOUT:
+        return False
+    else:
+        return True
+
+
+def triton_running(name):
+    """Check if container running by ancestor name"""
+    response = cmd(exited_cmd.format(param=name))
+    return len(response.stdout.split("\n")) == 1
 
 
 def triton_ready():
+    """Verify that server responds ready"""
     response = cmd('curl -v --silent localhost:8000/v2/health/ready 2>&1 | grep -m 1 "<"')
     return response.stdout.strip() == "< HTTP/1.1 200 OK"
 
 
 def triton_image_available():
+    """Check that image is available"""
     response = cmd(f"docker images {TRITON_IMAGE_NAME}")
     return TRITON_IMAGE_ID in response.stdout.split("\n")[1]
 
 
 @pytest.fixture(scope="session")
 def triton(model_repository):
+    if triton_running(TRITON_IMAGE_NAME):
+        stopped = triton_stop(TRITON_IMAGE_NAME)
+    if triton_running("nvcr.io/nvidia/tritonserver"):
+        stopped = triton_stop("nvcr.io/nvidia/tritonserver")
+    if not triton_image_available():
+        path = os.path.normpath(os.path.join(os.path.dirname(__file__), "../"))
+        cmd(build_cmd.format(param=path)
     triton_launch(model_repository)
     yield
-    closed = container_id = subprocess.run(
-        f"docker container stop {container_id.stdout.strip()}",
-        shell=True,
-        capture_output=True,
-        text=True,
-    )
-    # closed.stdout.strip() == container_id.stdout.strip():
+    closed = triton_stop(TRITON_IMAGE_NAME)
