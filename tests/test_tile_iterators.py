@@ -4,7 +4,6 @@ import json
 import numpy as np
 import os
 import pickle
-import pooch
 import pytest
 from simple_triton.feature_extraction import study
 from simple_triton.tile_iterators import TiffPrefetch
