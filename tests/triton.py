@@ -1,3 +1,4 @@
+from .data import data
 from functools import partial
 import os
 import pytest
@@ -84,7 +85,7 @@ def triton_image_available():
 
 
 @pytest.fixture(scope="session")
-def triton(model_repository):
+def triton(data):
     if running_by_ancestor(TRITON_IMAGE_NAME):
         if not stop_by_ancestor(TRITON_IMAGE_NAME):
             pytest.fail(
@@ -97,7 +98,7 @@ def triton(model_repository):
             )
     if not triton_image_available():
         cmd(build_cmd)
-    ready = triton_launch(model_repository)
+    ready = triton_launch(data.path)
     if ready:
         yield
         if not stop_by_ancestor(TRITON_IMAGE_NAME):
