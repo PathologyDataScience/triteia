@@ -9,10 +9,8 @@ this data by parsing registry.csv and prefetching these data once per testing se
 Downloads are deleted when tests are completed."""
 
 
-"""Parse the filename, sha256, and hyperlinks for hosted files"""
-
-
 def registry():
+    """Parse the filename, sha256, and hyperlinks for hosted files"""
     table = os.path.join(os.path.dirname(os.path.realpath(__file__)), "registry.csv")
     hashes = {}
     urls = {}
@@ -24,10 +22,8 @@ def registry():
     return hashes, urls
 
 
-"""Modify Pooch to for prefetch of hosted files"""
-
-
 class PrefetchPooch(pooch.Pooch):
+    """Modify Pooch to for prefetch of hosted files"""
     def prefetch(self, files=None):
         files = self.registry.keys() if not files else files
         for file in files:
@@ -42,12 +38,10 @@ class PrefetchPooch(pooch.Pooch):
             )
 
 
-"""This fixture prefetches hosted data to a temporary folder that is deleted on 
-completion"""
-
-
 @pytest.fixture(scope="session")
 def data(files=None):
+    """This fixture prefetches hosted data to a temporary folder that is deleted on
+    completion"""
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         hashes, urls = registry()
         data = PrefetchPooch(

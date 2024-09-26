@@ -1,3 +1,4 @@
+from .data import data
 from functools import partial
 import pytest
 import subprocess
@@ -76,8 +77,8 @@ def triton_image_available():
 
 
 @pytest.fixture(scope="session")
-def triton(model_repository):
-    triton_launch(model_repository)
+def triton(data):
+    triton_launch(data.path)
     yield
     closed = container_id = subprocess.run(
         f"docker container stop {container_id.stdout.strip()}",
