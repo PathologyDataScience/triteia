@@ -16,7 +16,7 @@ directory.
 TIMEOUT = 10.0  # short timeout for container run, stop operations (not build)
 TRITON_IMAGE_NAME = "model-tritonserver"
 TRITON_DOCKERFILE = os.path.normpath(
-    os.path.join(os.path.dirname(__file__),"../models/models.Dockerfile")
+    os.path.join(os.path.dirname(__file__),"../server.Dockerfile")
 )
 
 """commands to stop, build, and run dockers parameterized by `param`"""

@@ -34,7 +34,7 @@ Or, you can try the docker image:
 python download_test_data.py
 
 # simple_triton_client will be the name of the docker image
-docker build . -t simple_triton_client:latest
+docker build -f client.Dockerfile . -t simple_triton_client:latest
 docker run --init --security-opt seccomp:unconfined --network=container:<name of tritonserver docker container> --shm-size=1g -v ${PWD}/test_data:/data:ro --rm --name tritonclient -it simple_triton_client:latest
 ```
 > **_NOTE:_**  `--init` ensures that the docker container has a "master process" to do clean multi-processing. `--network=` lets the docker image see ports from other containers, in this case the triton server. The default shared memory size is now 64MB, so `--shm-size=` is necessary if you are reading large WSIs. `--security-opt seccomp:unconfined` might only be necessary on bigger machines, but it gives your process access to [openblas](https://www.openblas.net/) threads. `--rm` removes the container on exit, beware.
@@ -127,9 +127,9 @@ simple-triton contains wrappers for serving popular pathology models including U
 | [hibou-L](https://huggingface.co/histai/hibou-L) | (224, 224, 3) | 1024 | 1.21 GB |
 | [gigapath](https://huggingface.co/prov-gigapath/prov-gigapath) | (224, 224, 3) | 1536 | 4.54 GB |
 
-A [dockerfile](models/models.Dockerfile) built on Triton Server container v23.03 encapsulates all requirements for serving these models
+A [dockerfile](server.Dockerfile) built on Triton Server container v23.03 encapsulates all requirements for serving these models
 ```bash
->docker build -t model-tritonserver -f models.Dockerfile .
+>docker build -t model-tritonserver -f server.Dockerfile .
 ```
 
 Each folder in the `/models` directory contains a `model.py` file containing the logic for model loading, inference, and cleanup. The `model.py` files need to be copied into the model repository for serving (a `config.pbtxt` file is not required)
