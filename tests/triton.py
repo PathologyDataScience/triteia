@@ -16,19 +16,13 @@ directory.
 TIMEOUT = 10.0  # short timeout for container run, stop operations (not build)
 TRITON_IMAGE_NAME = "model-tritonserver"
 TRITON_DOCKERFILE = os.path.normpath(
-    os.path.join(os.path.dirname(__file__),"../server.Dockerfile")
+    os.path.join(os.path.dirname(__file__), "../server.Dockerfile")
 )
 
 """commands to stop, build, and run dockers parameterized by `param`"""
-stop_cmd = (
-    "docker stop $(docker ps -a -q --filter ancestor={param} --format=\"{{.ID}}\")"
-)
-running_cmd = (
-    "docker ps -f status=running -f ancestor={param}"
-)
-build_cmd = (
-    f"docker build -t model-tritonserver -f {TRITON_DOCKERFILE} ."
-)
+stop_cmd = 'docker stop $(docker ps -a -q --filter ancestor={param} --format="{{.ID}}")'
+running_cmd = "docker ps -f status=running -f ancestor={param}"
+build_cmd = f"docker build -t model-tritonserver -f {TRITON_DOCKERFILE} ."
 run_cmd = (
     "docker run --gpus=all -d --rm -p8000:8000 -p8001:8001 -p8002:8002 -p8003:8003 "
     "--shm-size=1g --ulimit memlock=-1 --ipc=host "
@@ -74,7 +68,9 @@ def running_by_ancestor(name):
 
 def triton_ready():
     """Verify that server responds ready"""
-    response = cmd('curl -v --silent localhost:8000/v2/health/ready 2>&1 | grep -m 1 "<"')
+    response = cmd(
+        'curl -v --silent localhost:8000/v2/health/ready 2>&1 | grep -m 1 "<"'
+    )
     return response.stdout.strip() == "< HTTP/1.1 200 OK"
 
 
@@ -106,4 +102,3 @@ def triton(data):
     else:
         if running_by_ancestor(TRITON_IMAGE_NAME):
             stop_by_ancestor(TRITON_IMAGE_NAME)
-

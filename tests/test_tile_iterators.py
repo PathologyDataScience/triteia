@@ -1,4 +1,11 @@
-from .data import data, hash_iterator
+from .data import (
+    data,
+    hash_iterator,
+    it_kwargs,
+    it_kwargs_icc,
+    tiles,
+    tiles_icc,
+)
 import numpy as np
 from simple_triton.tile_iterators import TiffPrefetch
 
@@ -36,4 +43,3 @@ def test_nchw(data, it_kwargs):
     nchw = [t for (t, m) in TiffPrefetch(**it_kwargs)]
     for f, t in zip(nhwc, nchw):
         assert np.array_equal(f.view(), np.transpose(t.view(), [0, 2, 3, 1]))
-

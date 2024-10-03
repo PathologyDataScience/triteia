@@ -37,6 +37,7 @@ def registry():
 
 class PrefetchPooch(pooch.Pooch):
     """Modify Pooch to for prefetch of hosted files"""
+
     def prefetch(self, files=None):
         files = self.registry.keys() if not files else files
         for file in files:
@@ -78,7 +79,8 @@ def tile_pkl(pkl_path, wsi_path):
     """load a tile pkl containing the study kwargs, metadata, and hashed pixels"""
     with open(pkl_path, "rb") as f:
         contents = pickle.load(f)
-    contents["kwargs"]["study"] = replace_study_path(wsi_path)
+    kwargs = contents["kwargs"]
+    kwargs["study"] = replace_study_path(kwargs["study"], wsi_path)
     return contents["kwargs"], contents["hashed"]
 
 
@@ -151,17 +153,20 @@ def hash_dict(d):
 def hash_inference(metadata, features):
     meta_hash = [
         hash_dict({k: metadata[k][i] for k in HASH_KEYS})
-        for i in range(len(metadata[list(keys)[0]]))
+        for i in range(len(metadata[list(HASH_KEYS)[0]]))
     ]
-    return {
-        m:f for m,f in zip(meta_hash, features)
-    }
+    return {m: f for m, f in zip(meta_hash, features)}
 
 
 @pytest.fixture
 def inferred(data):
     """returns a dict linking hashed tile metadata and inference values"""
-    with open(data.fetch("TCGA-AN-A0G0-01Z-00-DX1.svs.EfficientNetV2S.tensorflow_224_0_20X.pkl"), "rb") as f:
+    with open(
+        data.fetch(
+            "TCGA-AN-A0G0-01Z-00-DX1.svs.EfficientNetV2S.tensorflow_224_0_20X.pkl"
+        ),
+        "rb",
+    ) as f:
         contents = pickle.load(f)
     return hash_inference(contents["metadata"], contents["features"])
 
@@ -181,4 +186,3 @@ def pkl_iterator(path, kwargs):
     hashed = hash_iterator(TiffPrefetch(**kwargs))
     with open(path, "wb") as f:
         pickle.dump({"kwargs": kwargs, "hashed": hashed}, f, pickle.HIGHEST_PROTOCOL)
-
