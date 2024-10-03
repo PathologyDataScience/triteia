@@ -159,7 +159,7 @@ def hash_inference(metadata, features):
 
 
 @pytest.fixture
-def inference(data):
+def inferred(data):
     """returns a dict linking hashed tile metadata and inference values"""
     with open(data.fetch("TCGA-AN-A0G0-01Z-00-DX1.svs.EfficientNetV2S.tensorflow_224_0_20X.pkl"), "rb") as f:
         contents = pickle.load(f)
