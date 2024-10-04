@@ -245,7 +245,7 @@ Inference is performed using `inference.inference`. This function consumes data 
 # Developer guide <a name="developer-guide"></a>
 
 ## Testing <a name="testing"></a>
-
+### Locally
 Testing and code formatting is automated using tox and pytest and can be run using `python -m tox run`. Running this will evaluate the tests in the environments defined in `tox.ini` and will format the source using Black. Following testing, a coverage.html file will be located in .tox/coverage.
 
 Testing requires running a Triton server on the local machine. Tests are run using a `EfficientNetV2S.tensorflow` model that can be downloaded using pooch:

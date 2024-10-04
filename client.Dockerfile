@@ -25,8 +25,6 @@ RUN rdfind -minsize 32768 -makehardlinks true -makeresultsfile false /home/myuse
 FROM python:3.10-slim AS run-image
 
 RUN useradd --create-home myuser
-ARG DOCKER_GROUP_ID
-RUN groupadd -g ${DOCKER_GROUP_ID} docker && usermod -aG ${DOCKER_GROUP_ID} myuser
 COPY --from=build-image --chown=myuser:myuser /home/myuser/venv /home/myuser/venv
 
 WORKDIR /home/myuser/simple_triton
@@ -39,7 +37,6 @@ RUN echo 'APT::Install-Suggests "0";' >> /etc/apt/apt.conf.d/00-docker && \
     echo 'APT::Install-Recommends "0";' >> /etc/apt/apt.conf.d/00-docker && \
     apt update && \
     apt install -y libtiff-dev && \
-    apt install -y curl && \
     apt clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -57,5 +54,17 @@ CMD ["/usr/bin/env", "bash"]
 # optional install of docker engine for test mode so that triton server container can be launched from within
 FROM run-image AS test
 USER root
+ARG DOCKER_GROUP_ID
+RUN groupadd -g ${DOCKER_GROUP_ID} docker && usermod -aG ${DOCKER_GROUP_ID} myuser
+ARG DEBIAN_FRONTEND=noninteractive
+RUN echo 'APT::Install-Suggests "0";' >> /etc/apt/apt.conf.d/00-docker && \
+    echo 'APT::Install-Recommends "0";' >> /etc/apt/apt.conf.d/00-docker && \
+    apt update && \
+    apt install -y curl git && \
+    apt clean && \
+    rm -rf /var/lib/apt/lists/*
+RUN pip install tox pytest ipdb
 RUN curl -fsSL https://get.docker.com | sh
+COPY tox.ini server.Dockerfile ./
+COPY tests tests
 USER myuser
