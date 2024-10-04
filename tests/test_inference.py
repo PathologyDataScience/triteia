@@ -8,8 +8,8 @@ from simple_triton.tile_iterators import TiffPrefetch
 from .triton import triton
 
 
-def infer_batch(name, batch):
-    req = Requests("localhost:8001", limit=10)
+def infer_batch(name, batch, grpc_port):
+    req = Requests(f"localhost:{grpc_port}", limit=10)
     request = {
         "model_name": name,
         "inputs": batch,
@@ -21,14 +21,14 @@ def infer_batch(name, batch):
     return completed[0]["result"]
 
 
-def python_batch_compare(data, name, max_batch_size=64, rtol=1e-05, atol=1e-08):
+def python_batch_compare(data, name, grpc_port, max_batch_size=64, rtol=1e-05, atol=1e-08):
     basic = PythonConfig(name, max_batch_size)
-    model = TritonModel(name, "localhost:8001")
+    model = TritonModel(name, f"localhost:{grpc_port}")
     model.load(config=basic.json())
     assert model.is_loaded()
     batch = np.load(data.fetch("batch.npy"))
     truth = np.load(data.fetch(f"{name}_batch.npy"))
-    output = infer_batch(name, batch)
+    output = infer_batch(name, batch, grpc_port)
     assert np.allclose(truth, output, rtol, atol)
     model.unload(block=True)
 
@@ -38,9 +38,10 @@ def cosine_similarity(x, y):
 
 
 def test_inference(data, it_kwargs_icc, inferred, triton):
+    _, grpc_port, _ = triton
     iterator = TiffPrefetch(**it_kwargs_icc)
     features, metadata, times, failures = inference(
-        iterator, "EfficientNetV2S.tensorflow", url="localhost:8001"
+        iterator, "EfficientNetV2S.tensorflow", url=f"localhost:{grpc_port}"
     )
     result = hash_inference(metadata, np.concatenate(features[0], axis=0))
     assert result.keys() == inferred.keys()
@@ -50,12 +51,15 @@ def test_inference(data, it_kwargs_icc, inferred, triton):
 
 
 def test_hibou_L(data, triton):
-    python_batch_compare(data, "hibou-L")
+    _, grpc_port, _ = triton
+    python_batch_compare(data, "hibou-L", grpc_port)
 
 
 def test_phikon(data, triton):
-    python_batch_compare(data, "phikon")
+    _, grpc_port, _ = triton
+    python_batch_compare(data, "phikon", grpc_port)
 
 
 def test_uni(data, triton):
-    python_batch_compare(data, "uni")
+    _, grpc_port, _ = triton
+    python_batch_compare(data, "uni", grpc_port)
