@@ -47,6 +47,7 @@ def triton_launch(model_repository):
     """Launch the triton container - block until responsive"""
     http_port, grpc_port, metrics_port = find_free_port(), find_free_port(), find_free_port()
     run_result = cmd(run_cmd.format(http_port=http_port, grpc_port=grpc_port, metrics_port=metrics_port, param=model_repository))
+    run_result.check_returncode()
     start = time()
     while not triton_ready(http_port) and time() - start < TIMEOUT:
         sleep(1.0)
@@ -103,8 +104,8 @@ def triton(data):
                 f"Setup: Could not stop triton containers w/ ancestor nvcr.io/nvidia/tritonserver"
             )
     if not triton_image_available():
-        cmd(build_cmd)
-    ready = triton_launch(data.path)
+        build_result = cmd(build_cmd)
+        build_result.check_returncode()
     ready, http_port, grpc_port, metrics_port = triton_launch(data.path)
     if ready:
         yield (http_port, grpc_port, metrics_port)
@@ -113,3 +114,5 @@ def triton(data):
     else:
         if running_by_ancestor(TRITON_IMAGE_NAME):
             stop_by_ancestor(TRITON_IMAGE_NAME)
+        else:
+            raise RuntimeError("Error occured: triton server not ready")
