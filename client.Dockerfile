@@ -1,4 +1,4 @@
-FROM python:3.10-slim as build-image
+FROM python:3.10-slim AS build-image
 
 # create and activate virtual environment
 RUN python3 -m venv /home/myuser/venv
