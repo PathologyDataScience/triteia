@@ -12,3 +12,8 @@ RUN pip install --no-cache-dir pillow
 # uni
 RUN pip install --no-cache-dir timm
 RUN pip install --no-cache-dir huggingface-hub
+
+COPY setup_repository.py /
+COPY models_entrypoint.sh .
+RUN chmod +x models_entrypoint.sh
+ENTRYPOINT ["./models_entrypoint.sh"]
