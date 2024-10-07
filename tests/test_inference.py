@@ -1,5 +1,6 @@
 from .data import data, hash_inference, inferred, it_kwargs_icc
 import numpy as np
+import os
 from simple_triton.config import PythonConfig
 from simple_triton.feature_extraction import inference
 from simple_triton.inference import Requests
@@ -49,17 +50,21 @@ def test_inference(data, it_kwargs_icc, inferred, triton):
         [cosine_similarity(result[k], inferred[k]) > 0.999 for k in result.keys()]
     )
 
+def verify_huggingface():
+    hf_token = os.getenv("HF_TOKEN", "")
+    assert hf_token, "No HF_TOKEN environment variable set."
 
 def test_hibou_L(data, triton):
     _, grpc_port, _ = triton
+    verify_huggingface()
     python_batch_compare(data, "hibou-L", grpc_port)
-
 
 def test_phikon(data, triton):
     _, grpc_port, _ = triton
+    verify_huggingface()
     python_batch_compare(data, "phikon", grpc_port)
-
 
 def test_uni(data, triton):
     _, grpc_port, _ = triton
+    verify_huggingface()
     python_batch_compare(data, "uni", grpc_port)
