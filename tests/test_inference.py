@@ -1,7 +1,7 @@
 from .data import data, hash_inference, inferred, it_kwargs_icc
 import numpy as np
 import os
-from simple_triton.config import PythonConfig
+from simple_triton.config import PythonConfig, TensorflowConfig
 from simple_triton.feature_extraction import inference
 from simple_triton.inference import Requests
 from simple_triton.model import TritonModel
@@ -41,8 +41,13 @@ def cosine_similarity(x, y):
 def test_inference(data, it_kwargs_icc, inferred, triton):
     _, grpc_port, _ = triton
     iterator = TiffPrefetch(**it_kwargs_icc)
+    model_name = "EfficientNetV2S.tensorflow"
+    model = TritonModel(model_name, f"localhost:{grpc_port}")
+    basic = TensorflowConfig(model_name, max_batch_size=64)
+    model.load(config=basic.json())
+    assert model.is_loaded()
     features, metadata, times, failures = inference(
-        iterator, "EfficientNetV2S.tensorflow", url=f"localhost:{grpc_port}"
+        iterator, model_name, url=f"localhost:{grpc_port}"
     )
     result = hash_inference(metadata, np.concatenate(features[0], axis=0))
     assert result.keys() == inferred.keys()
