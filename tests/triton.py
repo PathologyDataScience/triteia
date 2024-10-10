@@ -32,17 +32,16 @@ TRITON_DOCKERFILE = os.path.normpath(
 stop_cmd = 'docker stop $(docker ps -a -q --filter ancestor={param} --format="{{.ID}}")'
 running_cmd = "docker ps -f status=running -f ancestor={param}"
 build_cmd = f"docker build -t model-tritonserver -f {TRITON_DOCKERFILE} ."
-full_path = os.path.join(os.path.dirname(__file__), "..", "models")
+full_path = os.path.join(os.path.dirname(__file__), "..", "models") if not os.getenv("TRITON_TMP_DIR") else os.getenv("TRITON_TMP_DIR")
 hf_token = os.getenv("HF_TOKEN", "")
 hf_token = f"-e HF_TOKEN={hf_token} " if hf_token else ""    
-
 run_cmd = (
     "docker run --gpus=all -d --rm -p {http_port}:8000 -p {grpc_port}:8001 -p {metrics_port}:8002 "
     "--shm-size=1g --ulimit memlock=-1 --ipc=host "
     f"{hf_token}"
     "-v {param}:/models " f"-v {full_path}:/models_git "
     f"{TRITON_IMAGE_NAME} -- "
-    "/bin/bash -c \"cp -r /models_git/* /models && tritonserver --model-repository=/models "
+    "/bin/bash -c \"rsync -a --ignore-existing /models_git/* /models && tritonserver --model-repository=/models "
     "--model-control-mode=explicit --exit-on-error=false\""
 )
 cmd = partial(subprocess.run, shell=True, capture_output=True, text=True)

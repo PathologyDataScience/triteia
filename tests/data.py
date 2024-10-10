@@ -54,18 +54,31 @@ class PrefetchPooch(pooch.Pooch):
 
 @pytest.fixture(scope="session")
 def data(files=None):
-    """This fixture prefetches hosted data to a temporary folder that is deleted on
-    completion"""
-    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+    """This fixture prefetches hosted data. 
+    If running with "./launch_test_container.sh", there will be a `TRITON_TMP_DIR` for temporary data storage.
+    If not, put it in user cache
+    """
+    if os.environ.get("TRITON_TMP_DIR"):
         hashes, urls = registry()
         data = PrefetchPooch(
-            path=tmp,
+            path=os.environ.get("TRITON_TMP_DIR"),
             base_url="{version}/",
             registry=hashes,
             urls=urls,
         )
         data.prefetch(files)
         yield data
+    else:
+        hashes, urls = registry()
+        data = PrefetchPooch(
+            path=str(pooch.os_cache(os.path.join("pooch", "test_data"))),
+            base_url="{version}/",
+            registry=hashes,
+            urls=urls,
+        )
+        data.prefetch(files)
+        yield data
+        
 
 
 def replace_study_path(study, path):
