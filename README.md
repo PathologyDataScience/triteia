@@ -264,6 +264,6 @@ pooch.retrieve(
 To test using the docker container, launch and build the client as follows:  
 ```
 docker build -f client.Dockerfile . -t simple_triton_client:latest --build-arg DOCKER_GROUP_ID=$(getent group docker | cut -d: -f3)
-docker run --security-opt seccomp:unconfined --network=host --shm-size=1g -v /var/run/docker.sock:/var/run/docker.sock --rm --name tritonclient_test -it simple_triton_client:latest
+./launch_test_container.sh
 ```
 You can now run `pytest tests` to run tests inside the container
