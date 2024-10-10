@@ -50,7 +50,10 @@ cmd = partial(subprocess.run, shell=True, capture_output=True, text=True)
 def triton_launch(model_repository):
     """Launch the triton container - block until responsive"""
     http_port, grpc_port, metrics_port = find_free_port(), find_free_port(), find_free_port()
-    run_result = cmd(run_cmd.format(http_port=http_port, grpc_port=grpc_port, metrics_port=metrics_port, param=model_repository))
+    print(f"Launching triton server on ports: {http_port}, {grpc_port}, {metrics_port}")
+    run_str = run_cmd.format(http_port=http_port, grpc_port=grpc_port, metrics_port=metrics_port, param=model_repository)
+    run_result = cmd(run_str)
+    print(f"triton server launch: {run_str} {run_result.stdout}")
     run_result.check_returncode()
     start = time()
     while not triton_ready(http_port) and time() - start < TIMEOUT:
