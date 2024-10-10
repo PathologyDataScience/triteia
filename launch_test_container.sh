@@ -17,4 +17,4 @@ chmod -R 777 "${model_tmp_directory}"
 docker run --security-opt seccomp:unconfined --network=host -v "${model_tmp_directory}:${model_tmp_directory}:rw" -e TRITON_TMP_DIR="${model_tmp_directory}/" -e HF_TOKEN=${HF_TOKEN} --shm-size=2g -v /var/run/docker.sock:/var/run/docker.sock --rm --name tritonclient_test -it simple_triton_client:latest
 # Clean up the temporary directory
 printf "Cleaning up temporary directory: %s\n" "${model_tmp_directory}"
-rm -rf "${model_tmp_directory}"
+rm -rf "${model_tmp_directory}" 2>/dev/null || (docker run -v "${model_tmp_directory}:/tmp/" bash:latest bash -c "rm -r /tmp/*" && rmdir "$model_tmp_directory")
