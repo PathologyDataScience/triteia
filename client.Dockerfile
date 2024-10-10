@@ -65,6 +65,7 @@ RUN echo 'APT::Install-Suggests "0";' >> /etc/apt/apt.conf.d/00-docker && \
     rm -rf /var/lib/apt/lists/*
 RUN pip install tox pytest ipdb
 RUN curl -fsSL https://get.docker.com | sh
-COPY tox.ini server.Dockerfile ./
+COPY tox.ini server.Dockerfile models_entrypoint.sh setup_repository.py ./
 COPY tests tests
+COPY models models
 USER myuser
