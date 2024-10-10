@@ -8,7 +8,7 @@
 # Usage: ./launch_test_container.sh
 if [ -z "${HF_TOKEN}" ]; then
     printf "Warning: no HF_TOKEN defined, foundational model testing will not work\n"
-    printf "You can add it by quitting this script/container, and then `export HF_TOKEN=...` and re-start the script\n"
+    printf "You can add it by quitting this script/container, and then \`export HF_TOKEN=...\` and re-start the script\n"
 fi
 HF_TOKEN=${HF_TOKEN:-undefined}
 model_tmp_directory="$(mktemp -d -t simple_triton_test_XXXXX)"
