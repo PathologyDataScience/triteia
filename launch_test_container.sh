@@ -13,6 +13,7 @@ fi
 HF_TOKEN=${HF_TOKEN:-undefined}
 model_tmp_directory="$(mktemp -d -t simple_triton_test_XXXXX)"
 cp -r models/* "${model_tmp_directory}"/ || exit 1
+chmod -R 777 "${model_tmp_directory}"
 docker run --security-opt seccomp:unconfined --network=host -v "${model_tmp_directory}:${model_tmp_directory}:rw" -e TRITON_TMP_DIR="${model_tmp_directory}/" -e HF_TOKEN=${HF_TOKEN} --shm-size=2g -v /var/run/docker.sock:/var/run/docker.sock --rm --name tritonclient_test -it simple_triton_client:latest
 # Clean up the temporary directory
 printf "Cleaning up temporary directory: %s\n" "${model_tmp_directory}"
