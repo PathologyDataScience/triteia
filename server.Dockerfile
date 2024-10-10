@@ -1,4 +1,4 @@
-FROM nvcr.io/nvidia/tritonserver:23.03-py3
+FROM nvcr.io/nvidia/tritonserver:24.07-py3
 RUN pip install --no-cache-dir --upgrade pip
 
 # common dependencies
