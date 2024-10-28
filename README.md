@@ -118,14 +118,17 @@ Skip images where output already exists
 ```
 
 ## Model wrappers <a name="wrappers"></a>
-simple-triton contains wrappers for serving popular pathology models including UNI, gigapath, hibou-L, and Phikon on the [Python backend](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/python_backend/README.html).
+simple-triton contains wrappers for serving popular pathology models including CONCH, UNI, gigapath, hibou-L, Phikon, Virchow, and Virchow2 on the [Python backend](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/python_backend/README.html).
 
 | Model | Input | Output | Size |
 |---|---|---|---|
-| [UNI](https://huggingface.co/MahmoodLab/UNI) | (224, 224, 3) | 1024 | 1.21 GB |
-| [Phikon](https://huggingface.co/owkin/phikon) | (224, 224, 3) | 768 | 0.346 GB |
-| [hibou-L](https://huggingface.co/histai/hibou-L) | (224, 224, 3) | 1024 | 1.21 GB |
+| [CONCH](https://huggingface.co/MahmoodLab/CONCH) | (224, 224, 3) | 512 | 0.802 GB |
 | [gigapath](https://huggingface.co/prov-gigapath/prov-gigapath) | (224, 224, 3) | 1536 | 4.54 GB |
+| [hibou-L](https://huggingface.co/histai/hibou-L) | (224, 224, 3) | 1024 | 1.21 GB |
+| [Phikon](https://huggingface.co/owkin/phikon) | (224, 224, 3) | 768 | 0.346 GB |
+| [UNI](https://huggingface.co/MahmoodLab/UNI) | (224, 224, 3) | 1024 | 1.21 GB |
+| [Virchow](https://huggingface.co/paige-ai/Virchow) | (224, 224, 3) | 2560 | 2.53 GB |
+| [Virchow2](https://huggingface.co/paige-ai/Virchow2) | (224, 224, 3) | 2560 | 2.53 GB |
 
 A [dockerfile](server.Dockerfile) built on Triton Server container v23.03 encapsulates all requirements for serving these models
 ```bash
