@@ -4,6 +4,9 @@ import numpy as np
 import os
 from PIL import Image
 import timm
+from timm.data import resolve_data_config
+from timm.data.transforms_factory import create_transform
+from timm.layers import SwiGLUPacked
 import torch
 from torchvision import transforms
 import triton_python_backend_utils as pb_utils
@@ -14,7 +17,7 @@ class TritonPythonModel:
 
     @staticmethod
     def auto_complete_config(model_config):
-        """Returns a minimal model configuration for the gigapath model.
+        """Returns a minimal model configuration for the virchow model.
 
         Parameters
         ----------
@@ -33,7 +36,7 @@ class TritonPythonModel:
                 "dims": [224, 224, 3],
             }
         ]
-        outputs = [{"name": "output_0", "data_type": "TYPE_FP32", "dims": [1536]}]
+        outputs = [{"name": "output_0", "data_type": "TYPE_FP32", "dims": [2560]}]
         config = model_config.as_dict()
         input_names = [i["name"] for i in config["input"]]
         output_names = [i["name"] for i in config["output"]]
@@ -51,7 +54,7 @@ class TritonPythonModel:
     def initialize(self, args):
         """This function initializes the uni model from hugging face.
         Requires setting environment variable `HF_TOKEN` with read-access to the
-        huggingface gigpath repository https://huggingface.co/prov-gigapath/prov-gigapath
+        huggingface gigpath repository https://huggingface.co/paige-ai/Virchow
         """
 
         self.model_config = model_config = json.loads(args["model_config"])
@@ -64,19 +67,16 @@ class TritonPythonModel:
             os.getenv("HF_TOKEN")
         )  # User Access Token, found at https://huggingface.co/settings/tokens
         self.model = timm.create_model(
-            "hf_hub:prov-gigapath/prov-gigapath",
-            pretrained=True,
+            "hf-hub:paige-ai/Virchow", 
+            pretrained=True, 
+            mlp_layer=SwiGLUPacked, 
+            act_layer=torch.nn.SiLU
         )
+        self.model = self.model.eval()
         self.model = self.model.to(torch.device(f"cuda:{self.gpu_id}"))
-        self.transform = transforms.Compose(
-            [
-                transforms.ToTensor(),
-                transforms.Normalize(
-                    mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)
-                ),
-            ]
+        self.transform = create_transform(
+            **resolve_data_config(self.model.pretrained_cfg, model=self.model)
         )
-        self.model.eval()
 
     def execute(self, requests):
         """This function receives the requests (tiles) 'pb_utils.InfrerenceRequest'
@@ -95,15 +95,16 @@ class TritonPythonModel:
                 transformed_images = torch.stack(
                     [self.transform(img) for img in pil_images]
                 )
-                input_norm = transformed_images.float().to(
+                input_norm = transformed_images.to(
                     torch.device(f"cuda:{self.gpu_id}")
                 )
                 with torch.inference_mode(), torch.autocast(device_type="cuda", dtype=torch.float16):
                     feature_emb = self.model(input_norm)
-                    features = feature_emb.detach().cpu().numpy()
-                out_tensor_features = pb_utils.Tensor(
-                    "output_0", features.astype(np.float32)
-                )
+                class_tokens = feature_emb[:, 0]
+                patch_tokens = feature_emb[:, 1:]
+                embedding = torch.cat([class_tokens, patch_tokens.mean(1)], dim=-1)
+                features = embedding.detach().cpu().numpy()
+                out_tensor_features = pb_utils.Tensor("output_0", features)
                 inference_response = pb_utils.InferenceResponse(
                     output_tensors=[out_tensor_features]
                 )

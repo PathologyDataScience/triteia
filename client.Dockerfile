@@ -1,4 +1,4 @@
-FROM python:3.10-slim as builder-image
+FROM python:3.10-slim AS build-image
 
 # create and activate virtual environment
 RUN python3 -m venv /home/myuser/venv
@@ -22,10 +22,10 @@ RUN pip3 install --no-cache-dir 'git+https://github.com/DigitalSlideArchive/Hist
 # de-duplicate files and replace them with symlinks
 RUN rdfind -minsize 32768 -makehardlinks true -makeresultsfile false /home/myuser
 
-FROM python:3.10-slim AS runner-image
+FROM python:3.10-slim AS run-image
 
 RUN useradd --create-home myuser
-COPY --from=builder-image --chown=myuser:myuser /home/myuser/venv /home/myuser/venv
+COPY --from=build-image --chown=myuser:myuser /home/myuser/venv /home/myuser/venv
 
 WORKDIR /home/myuser/simple_triton
 RUN chown -R myuser:myuser /home/myuser/simple_triton
@@ -50,3 +50,22 @@ ENV VIRTUAL_ENV=/home/myuser/venv
 ENV PATH="/home/myuser/venv/bin:$PATH"
 
 CMD ["/usr/bin/env", "bash"]
+
+# optional install of docker engine for test mode so that triton server container can be launched from within
+FROM run-image AS test
+USER root
+ARG DOCKER_GROUP_ID
+RUN groupadd -g ${DOCKER_GROUP_ID} docker && usermod -aG ${DOCKER_GROUP_ID} myuser
+ARG DEBIAN_FRONTEND=noninteractive
+RUN echo 'APT::Install-Suggests "0";' >> /etc/apt/apt.conf.d/00-docker && \
+    echo 'APT::Install-Recommends "0";' >> /etc/apt/apt.conf.d/00-docker && \
+    apt update && \
+    apt install -y curl git && \
+    apt clean && \
+    rm -rf /var/lib/apt/lists/*
+RUN pip install tox pytest ipdb
+RUN curl -fsSL https://get.docker.com | sh
+COPY tox.ini server.Dockerfile models_entrypoint.sh setup_repository.py ./
+COPY tests tests
+COPY models models
+USER myuser

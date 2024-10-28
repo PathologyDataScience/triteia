@@ -34,10 +34,10 @@ Or, you can try the docker image:
 python download_test_data.py
 
 # simple_triton_client will be the name of the docker image
-docker build . -t simple_triton_client:latest
-docker run --init --security-opt seccomp:unconfined --network=container:<name of tritonserver docker container> --shm-size=1g -v ${PWD}/test_data:/data:ro --rm --name tritonclient -it simple_triton_client:latest
+docker build -f client.Dockerfile . -t simple_triton_client:latest
+docker run --security-opt seccomp:unconfined --network=host --shm-size=1g -v ${PWD}/test_data:/data:ro --rm --name tritonclient -it simple_triton_client:latest
 ```
-> **_NOTE:_**  `--init` ensures that the docker container has a "master process" to do clean multi-processing. `--network=` lets the docker image see ports from other containers, in this case the triton server. The default shared memory size is now 64MB, so `--shm-size=` is necessary if you are reading large WSIs. `--security-opt seccomp:unconfined` might only be necessary on bigger machines, but it gives your process access to [openblas](https://www.openblas.net/) threads. `--rm` removes the container on exit, beware.
+> **_NOTE:_**  `--network=` lets the docker image see ports from other containers, in this case the host. The default shared memory size is now 64MB, so `--shm-size=` is necessary if you are reading large WSIs. `--security-opt seccomp:unconfined` might only be necessary on bigger machines, but it gives your process access to [openblas](https://www.openblas.net/) threads. `--rm` removes the container on exit, beware.
 
 > The client docker utilizes the server docker network so any ports required by the client must be exposed when launching the _server_ container. For example, running a jupyter notebook on the client requires exposing the jupyter port (8888) on the server using -p <your port>:8888.
 
@@ -118,18 +118,21 @@ Skip images where output already exists
 ```
 
 ## Model wrappers <a name="wrappers"></a>
-simple-triton contains wrappers for serving popular pathology models including UNI, gigapath, hibou-L, and Phikon on the [Python backend](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/python_backend/README.html).
+simple-triton contains wrappers for serving popular pathology models including CONCH, UNI, gigapath, hibou-L, Phikon, Virchow, and Virchow2 on the [Python backend](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/python_backend/README.html). All models are served using mixed precision.
 
 | Model | Input | Output | Size |
 |---|---|---|---|
-| [UNI](https://huggingface.co/MahmoodLab/UNI) | (224, 224, 3) | 1024 | 1.21 GB |
-| [Phikon](https://huggingface.co/owkin/phikon) | (224, 224, 3) | 768 | 0.346 GB |
-| [hibou-L](https://huggingface.co/histai/hibou-L) | (224, 224, 3) | 1024 | 1.21 GB |
+| [CONCH](https://huggingface.co/MahmoodLab/CONCH) | (224, 224, 3) | 512 | 0.802 GB |
 | [gigapath](https://huggingface.co/prov-gigapath/prov-gigapath) | (224, 224, 3) | 1536 | 4.54 GB |
+| [hibou-L](https://huggingface.co/histai/hibou-L) | (224, 224, 3) | 1024 | 1.21 GB |
+| [Phikon](https://huggingface.co/owkin/phikon) | (224, 224, 3) | 768 | 0.346 GB |
+| [UNI](https://huggingface.co/MahmoodLab/UNI) | (224, 224, 3) | 1024 | 1.21 GB |
+| [Virchow](https://huggingface.co/paige-ai/Virchow) | (224, 224, 3) | 2560 | 2.53 GB |
+| [Virchow2](https://huggingface.co/paige-ai/Virchow2) | (224, 224, 3) | 2560 | 2.53 GB |
 
-A [dockerfile](models/models.Dockerfile) built on Triton Server container v23.03 encapsulates all requirements for serving these models
+A [dockerfile](server.Dockerfile) built on Triton Server container v23.03 encapsulates all requirements for serving these models
 ```bash
->docker build -t model-tritonserver -f models.Dockerfile .
+>docker build -t model-tritonserver -f server.Dockerfile .
 ```
 
 Each folder in the `/models` directory contains a `model.py` file containing the logic for model loading, inference, and cleanup. The `model.py` files need to be copied into the model repository for serving (a `config.pbtxt` file is not required)
@@ -245,7 +248,7 @@ Inference is performed using `inference.inference`. This function consumes data 
 # Developer guide <a name="developer-guide"></a>
 
 ## Testing <a name="testing"></a>
-
+### Locally
 Testing and code formatting is automated using tox and pytest and can be run using `python -m tox run`. Running this will evaluate the tests in the environments defined in `tox.ini` and will format the source using Black. Following testing, a coverage.html file will be located in .tox/coverage.
 
 Testing requires running a Triton server on the local machine. Tests are run using a `EfficientNetV2S.tensorflow` model that can be downloaded using pooch:
@@ -259,3 +262,11 @@ pooch.retrieve(
     path=host_model_repository
 )
 ```
+
+### Using standalone docker container
+To test using the docker container, launch and build the client as follows:  
+```
+docker build -f client.Dockerfile . -t simple_triton_client:latest --build-arg DOCKER_GROUP_ID=$(getent group docker | cut -d: -f3)
+./launch_test_container.sh
+```
+You can now run `pytest tests` to run tests inside the container
