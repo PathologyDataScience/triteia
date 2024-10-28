@@ -13,6 +13,9 @@ RUN pip install --no-cache-dir pillow
 RUN pip install --no-cache-dir timm
 RUN pip install --no-cache-dir huggingface-hub
 
+# conch
+RUN pip install --no-cache-dir git+https://github.com/Mahmoodlab/CONCH.git
+
 COPY setup_repository.py /
 COPY models_entrypoint.sh .
 RUN chmod +x models_entrypoint.sh
