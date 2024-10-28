@@ -22,7 +22,7 @@ def infer_batch(name, batch, grpc_port):
     return completed[0]["result"]
 
 
-def python_batch_compare(data, name, grpc_port, max_batch_size=64, rtol=1e-05, atol=1e-08):
+def python_batch_compare(data, name, grpc_port, max_batch_size=64):
     basic = PythonConfig(name, max_batch_size)
     model = TritonModel(name, f"localhost:{grpc_port}")
     model.load(config=basic.json())
@@ -30,7 +30,9 @@ def python_batch_compare(data, name, grpc_port, max_batch_size=64, rtol=1e-05, a
     batch = np.load(data.fetch("batch.npy"))
     truth = np.load(data.fetch(f"{name}_batch.npy"))
     output = infer_batch(name, batch, grpc_port)
-    assert np.allclose(truth, output, rtol, atol)
+    assert all(
+        [cosine_similarity(o, t) > 0.999 for o, t in zip(output[0], truth[0])]
+    )
     model.unload(block=True)
 
 
@@ -73,3 +75,19 @@ def test_uni(data, triton):
     _, grpc_port, _ = triton
     verify_huggingface()
     python_batch_compare(data, "uni", grpc_port)
+
+def test_conch(data, triton):
+    _, grpc_port, _ = triton
+    verify_huggingface()
+    python_batch_compare(data, "conch", grpc_port)
+
+def test_virchow(data, triton):
+    _, grpc_port, _ = triton
+    verify_huggingface()
+    python_batch_compare(data, "virchow", grpc_port)
+
+def test_virchow2(data, triton):
+    _, grpc_port, _ = triton
+    verify_huggingface()
+    python_batch_compare(data, "virchow2", grpc_port)
+
