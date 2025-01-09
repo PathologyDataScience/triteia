@@ -488,7 +488,10 @@ class Requests(object):
             model_dict = self.model_dicts[model_name]
 
         # create InputData objects based on data shape
-        inputs = self._client_inputs(sample["inputs"], model_dict)
+        if isinstance(sample["inputs"], SharedNumpyArray):
+            inputs = self._client_inputs(sample["inputs"].view().squeeze(), model_dict)
+        else:
+            inputs = self._client_inputs(sample["inputs"], model_dict)
 
         # create outputs
         outputs = self._client_outputs(model_dict)
