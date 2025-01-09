@@ -24,7 +24,7 @@ simple-triton is a Python client for inference with the NVIDIA Triton server. It
 simple-triton requires `histomcs_stream` and `large_image` packages with the tiff reader
 ```
 git clone https://github.com/PathologyDataScience/simple_triton.git
-pip install --editable ./simple_triton && pip install histomics_stream 'large_image[tiff]'
+pip install --editable ./simple_triton'
 ```
 > `--editable` ensures that updates to the `simple_triton` package (after `git pull`) immediately takes effect.
 
