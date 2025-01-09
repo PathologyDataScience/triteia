@@ -21,7 +21,7 @@ dependencies = [
     "psutil",
     "pooch",
     "protobuf",
-    "tensorflow-cpu<2.16",
+    "tensorflow-cpu",
     "tensorboardX",
     "tqdm",
     "tritonclient[all]"

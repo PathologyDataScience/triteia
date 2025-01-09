@@ -1,6 +1,7 @@
 import os
 
 import tensorflow as tf
+from keras.saving import register_keras_serializable
 
 
 def reshape_savedmodel(
@@ -333,7 +334,6 @@ def tf_encoder(
         dtype=dtype,
         name="input_0",
         sparse=input_kwargs["sparse"],
-        ragged=input_kwargs["ragged"],
     )
     input_float = TfCast(tf.float32)(input_0) if dtype != tf.float32 else input_0
     output_kwargs = model.layers[-1].get_config()
@@ -361,7 +361,7 @@ def tf_encoder(
     os.makedirs(path)
 
     # save model
-    encoder.save(path)
+    encoder.export(path)
 
     return D
 
@@ -452,7 +452,7 @@ def matmul_channel(w, batched):
     return tf.transpose(tf.tensordot(w, batched, axes=[[1], [3]]), perm=[1, 2, 3, 0])
 
 
-@tf.keras.saving.register_keras_serializable()
+@register_keras_serializable()
 class DeconvNorm(tf.keras.layers.Layer):
     """A deconvolution-based color normalization layer.
 
