@@ -97,7 +97,10 @@ class TritonPythonModel:
                     torch.device(f"cuda:{self.gpu_id}")
                 )
 
-                with torch.inference_mode(), torch.autocast(device_type="cuda", dtype=torch.float16):
+                with (
+                    torch.inference_mode(),
+                    torch.autocast(device_type="cuda", dtype=torch.float16),
+                ):
                     feature_emb = self.model(input_norm)
                     features = feature_emb.detach().cpu().numpy()
 

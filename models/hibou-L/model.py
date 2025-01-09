@@ -93,7 +93,10 @@ class TritonPythonModel:
                     [self.transform(img) for img in pil_images]
                 )
                 input_norm = transformed_images.to(torch.device(f"cuda:{self.gpu_id}"))
-                with torch.inference_mode(), torch.autocast(device_type="cuda", dtype=torch.float16):
+                with (
+                    torch.inference_mode(),
+                    torch.autocast(device_type="cuda", dtype=torch.float16),
+                ):
                     feature_emb = self.model(input_norm)
                     features = feature_emb.pooler_output.detach().cpu().numpy()
 

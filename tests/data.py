@@ -54,7 +54,7 @@ class PrefetchPooch(pooch.Pooch):
 
 @pytest.fixture(scope="session")
 def data(files=None):
-    """This fixture prefetches hosted data. 
+    """This fixture prefetches hosted data.
     If running with "./launch_test_container.sh", there will be a `TRITON_TMP_DIR` for temporary data storage.
     If not, put it in user cache
     """
@@ -78,7 +78,6 @@ def data(files=None):
         )
         data.prefetch(files)
         yield data
-        
 
 
 def replace_study_path(study, path):

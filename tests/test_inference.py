@@ -30,9 +30,7 @@ def python_batch_compare(data, name, grpc_port, max_batch_size=64):
     batch = np.load(data.fetch("batch.npy"))
     truth = np.load(data.fetch(f"{name}_batch.npy"))
     output = infer_batch(name, batch, grpc_port)
-    assert all(
-        [cosine_similarity(o, t) > 0.999 for o, t in zip(output[0], truth[0])]
-    )
+    assert all([cosine_similarity(o, t) > 0.999 for o, t in zip(output[0], truth[0])])
     model.unload(block=True)
 
 
@@ -57,37 +55,43 @@ def test_inference(data, it_kwargs_icc, inferred, triton):
         [cosine_similarity(result[k], inferred[k]) > 0.999 for k in result.keys()]
     )
 
+
 def verify_huggingface():
     hf_token = os.getenv("HF_TOKEN", "")
     assert hf_token, "No HF_TOKEN environment variable set."
+
 
 def test_hibou_L(data, triton):
     _, grpc_port, _ = triton
     verify_huggingface()
     python_batch_compare(data, "hibou-L", grpc_port)
 
+
 def test_phikon(data, triton):
     _, grpc_port, _ = triton
     verify_huggingface()
     python_batch_compare(data, "phikon", grpc_port)
+
 
 def test_uni(data, triton):
     _, grpc_port, _ = triton
     verify_huggingface()
     python_batch_compare(data, "uni", grpc_port)
 
+
 def test_conch(data, triton):
     _, grpc_port, _ = triton
     verify_huggingface()
     python_batch_compare(data, "conch", grpc_port)
+
 
 def test_virchow(data, triton):
     _, grpc_port, _ = triton
     verify_huggingface()
     python_batch_compare(data, "virchow", grpc_port)
 
+
 def test_virchow2(data, triton):
     _, grpc_port, _ = triton
     verify_huggingface()
     python_batch_compare(data, "virchow2", grpc_port)
-
