@@ -12,30 +12,6 @@ from simple_triton.model import TritonModel
 
 
 MODEL = "EfficientNetV2S.tensorflow"
-CONFIG = {
-    "name": "EfficientNetV2S.tensorflow",
-    "platform": "tensorflow_savedmodel",
-    "versionPolicy": {"latest": {"numVersions": 1}},
-    "maxBatchSize": 4,
-    "input": [
-        {"name": "input_2", "dataType": "TYPE_FP32", "dims": ["224", "224", "3"]}
-    ],
-    "output": [{"name": "avg_pool", "dataType": "TYPE_FP32", "dims": ["1280"]}],
-    "instanceGroup": [
-        {
-            "count": 1,
-            "gpus": [0, 1, 2, 3, 4, 5, 6, 7],
-            "kind": "KIND_GPU",
-        }
-    ],
-    "defaultModelFilename": "model.savedmodel",
-    "dynamicBatching": {"preferredBatchSize": [4]},
-    "optimization": {
-        "inputPinnedMemory": {"enable": True},
-        "outputPinnedMemory": {"enable": True},
-    },
-    "backend": "tensorflow",
-}
 BASIC = {"name": MODEL}
 
 
