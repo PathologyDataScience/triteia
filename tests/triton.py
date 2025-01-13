@@ -30,7 +30,8 @@ TRITON_DOCKERFILE = os.path.normpath(
 )
 
 """commands to stop, build, and run dockers parameterized by `param`"""
-stop_cmd = 'docker stop $(docker ps -a -q --filter ancestor={param} --format="{{.ID}}")'
+stop_cmd = 'docker stop $(docker ps -q --filter ancestor={param} --format="{{.ID}}")'
+stop_container_cmd = 'docker container stop '
 running_cmd = "docker ps -f status=running -f ancestor={param}"
 build_cmd = f"docker build -t model-tritonserver -f {TRITON_DOCKERFILE} ."
 full_path = (
@@ -73,9 +74,10 @@ def triton_launch(model_repository):
     while not triton_ready(http_port) and time() - start < TIMEOUT:
         sleep(1.0)
     if triton_ready(http_port):
-        return True, http_port, grpc_port, metrics_port
+        container_name = run_result.stdout.strip()
+        return True, container_name, http_port, grpc_port, metrics_port
     else:
-        return False, None, None, None
+        return False, "", None, None, None
 
 
 def stop_by_ancestor(name):
@@ -86,10 +88,14 @@ def stop_by_ancestor(name):
     while len(response.stdout.splitlines()) > 1 and time() - start < TIMEOUT:
         sleep(1.0)
         response = cmd(running_cmd.format(param=name))
-    if len(response.stdout.splitlines()) > 1:
-        return False
-    else:
-        return True
+    return not response.stderr
+
+def stop_by_container(name):
+    """Stop containers by instance name"""
+    response = cmd(stop_container_cmd + name)
+    start = time()
+    response = cmd(running_cmd.format(param=name))
+    return not response.stderr
 
 
 def running_by_ancestor(name):
@@ -127,11 +133,11 @@ def triton(data):
     if not triton_image_available():
         build_result = cmd(build_cmd)
         build_result.check_returncode()
-    ready, http_port, grpc_port, metrics_port = triton_launch(data.path)
+    ready, container_name, http_port, grpc_port, metrics_port = triton_launch(data.path)
     if ready:
         yield (http_port, grpc_port, metrics_port)
-        if not stop_by_ancestor(TRITON_IMAGE_NAME):
-            pytest.fail(f"Teardown: Could not stop triton test container.")
+        if not stop_by_container(container_name):
+            pytest.fail(f"Teardown: Could not stop triton test container {container_name}.")
     else:
         if running_by_ancestor(TRITON_IMAGE_NAME):
             stop_by_ancestor(TRITON_IMAGE_NAME)
