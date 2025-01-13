@@ -31,7 +31,7 @@ TRITON_DOCKERFILE = os.path.normpath(
 
 """commands to stop, build, and run dockers parameterized by `param`"""
 stop_cmd = 'docker stop $(docker ps -q --filter ancestor={param} --format="{{.ID}}")'
-stop_container_cmd = 'docker container stop '
+stop_container_cmd = "docker container stop "
 running_cmd = "docker ps -f status=running -f ancestor={param}"
 build_cmd = f"docker build -t model-tritonserver -f {TRITON_DOCKERFILE} ."
 full_path = (
@@ -90,6 +90,7 @@ def stop_by_ancestor(name):
         response = cmd(running_cmd.format(param=name))
     return not response.stderr
 
+
 def stop_by_container(name):
     """Stop containers by instance name"""
     response = cmd(stop_container_cmd + name)
@@ -137,7 +138,9 @@ def triton(data):
     if ready:
         yield (http_port, grpc_port, metrics_port)
         if not stop_by_container(container_name):
-            pytest.fail(f"Teardown: Could not stop triton test container {container_name}.")
+            pytest.fail(
+                f"Teardown: Could not stop triton test container {container_name}."
+            )
     else:
         if running_by_ancestor(TRITON_IMAGE_NAME):
             stop_by_ancestor(TRITON_IMAGE_NAME)
