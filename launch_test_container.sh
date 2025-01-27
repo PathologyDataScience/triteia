@@ -11,7 +11,7 @@ if [ -z "${HF_TOKEN}" ]; then
     printf "You can add it by quitting this script/container, and then \`export HF_TOKEN=...\` and re-start the script\n"
 fi
 HF_TOKEN=${HF_TOKEN:-undefined}
-model_tmp_directory=/tmp/simple_triton_test_data_aza4423
+model_tmp_directory=/tmp/simple_triton_test_data_$USER
 test -d "${model_tmp_directory}" || (mkdir "${model_tmp_directory}" && chmod -R 777 "${model_tmp_directory}")
 cp -r models/* "${model_tmp_directory}"/ || exit 1
 docker run --security-opt seccomp:unconfined --network=host -v "${model_tmp_directory}:${model_tmp_directory}:rw" -e TRITON_TMP_DIR="${model_tmp_directory}/" -e HF_TOKEN=${HF_TOKEN} --shm-size=2g -v /var/run/docker.sock:/var/run/docker.sock --rm --name tritonclient_test -it simple_triton_client:latest

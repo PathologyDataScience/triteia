@@ -59,8 +59,10 @@ class TritonPythonModel:
             output0_config["data_type"]
         )
         self.model, self.transform = create_model_from_pretrained(
-	    "conch_ViT-B-16", "hf_hub:MahmoodLab/conch", hf_auth_token=os.getenv("HF_TOKEN")
-	)
+            "conch_ViT-B-16",
+            "hf_hub:MahmoodLab/conch",
+            hf_auth_token=os.getenv("HF_TOKEN"),
+        )
         self.model = self.model.to(torch.device(f"cuda:{self.gpu_id}"))
 
     def execute(self, requests):
@@ -80,11 +82,14 @@ class TritonPythonModel:
                 transformed_images = torch.stack(
                     [self.transform(img) for img in pil_images]
                 )
-                input_norm = transformed_images.to(
-                    torch.device(f"cuda:{self.gpu_id}")
-                )
-                with torch.inference_mode(), torch.autocast(device_type="cuda", dtype=torch.float16):
-                    embedding = self.model.encode_image(input_norm, proj_contrast=False, normalize=False)                    
+                input_norm = transformed_images.to(torch.device(f"cuda:{self.gpu_id}"))
+                with (
+                    torch.inference_mode(),
+                    torch.autocast(device_type="cuda", dtype=torch.float16),
+                ):
+                    embedding = self.model.encode_image(
+                        input_norm, proj_contrast=False, normalize=False
+                    )
                 features = embedding.detach().cpu().numpy()
 
                 out_tensor_features = pb_utils.Tensor(
@@ -99,4 +104,3 @@ class TritonPythonModel:
                 print(e)
 
         return responses
-

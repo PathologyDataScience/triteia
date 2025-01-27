@@ -67,10 +67,10 @@ class TritonPythonModel:
             os.getenv("HF_TOKEN")
         )  # User Access Token, found at https://huggingface.co/settings/tokens
         self.model = timm.create_model(
-            "hf-hub:paige-ai/Virchow2", 
-            pretrained=True, 
-            mlp_layer=SwiGLUPacked, 
-            act_layer=torch.nn.SiLU
+            "hf-hub:paige-ai/Virchow2",
+            pretrained=True,
+            mlp_layer=SwiGLUPacked,
+            act_layer=torch.nn.SiLU,
         )
         self.model = self.model.eval()
         self.model = self.model.to(torch.device(f"cuda:{self.gpu_id}"))
@@ -95,10 +95,11 @@ class TritonPythonModel:
                 transformed_images = torch.stack(
                     [self.transform(img) for img in pil_images]
                 )
-                input_norm = transformed_images.to(
-                    torch.device(f"cuda:{self.gpu_id}")
-                )
-                with torch.inference_mode(), torch.autocast(device_type="cuda", dtype=torch.float16):
+                input_norm = transformed_images.to(torch.device(f"cuda:{self.gpu_id}"))
+                with (
+                    torch.inference_mode(),
+                    torch.autocast(device_type="cuda", dtype=torch.float16),
+                ):
                     feature_emb = self.model(input_norm)
                 class_tokens = feature_emb[:, 0]
                 patch_tokens = feature_emb[:, 5:]

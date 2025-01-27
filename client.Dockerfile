@@ -18,7 +18,7 @@ COPY pyproject.toml .
 # comment out scm (i.e. git) line in pyproject.toml
 RUN sed -i 's/.*\[tool.setuptools_scm\]/#&/g' pyproject.toml
 
-RUN pip3 install --no-cache-dir 'git+https://github.com/DigitalSlideArchive/HistomicsStream.git@v2.5.0#egg=histomics_stream' .
+RUN pip3 install --no-cache-dir .
 # de-duplicate files and replace them with symlinks
 RUN rdfind -minsize 32768 -makehardlinks true -makeresultsfile false /home/myuser
 

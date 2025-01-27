@@ -7,11 +7,7 @@ import sys
 
 def model_setup(source, destination):
     """Creates a valid model folder at destination"""
-    path = os.path.join(
-        destination, 
-        os.path.basename(os.path.normpath(source)),
-        "1"
-    )
+    path = os.path.join(destination, os.path.basename(os.path.normpath(source)), "1")
     os.makedirs(path, exist_ok=True)
     shutil.copy(os.path.join(source, "model.py"), path)
 
@@ -35,6 +31,7 @@ def main():
         print(f"Models setup in {sys.argv[1]}.")
     else:
         print(f"No model folders found in {model_root}")
+
 
 if __name__ == "__main__":
     main()
