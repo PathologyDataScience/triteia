@@ -45,6 +45,12 @@ docker run --security-opt seccomp:unconfined --network=host --shm-size=1g -v ${P
 
 The notebook `examples\feature_extraction.ipynb` demonstrates whole-slide image feature extraction. This example requires a running Triton container on the client machine.
 
+#### Running notebook examples with docker:
+Add the following to your client's `docker run` command to mount the examples:
+`${PWD}/examples:/examples:rw --user $UID`
+Once inside the container, you can now run: `jupyter-lab --notebook-dir examples/ --no-browser`
+Which should launch a jupyter-lab/notebook at port 8888. Copy the URL you see in the console into your web-browser.
+
 ### Running the Triton container <a name="container"></a>
 
 simple-triton is tested with [Triton version 23.03](https://github.com/triton-inference-server/server/releases/tag/v2.32.0).
