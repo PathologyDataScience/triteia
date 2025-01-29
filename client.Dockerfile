@@ -27,11 +27,6 @@ FROM python:3.10-slim AS run-image
 RUN useradd --create-home myuser
 COPY --from=build-image --chown=myuser:myuser /home/myuser/venv /home/myuser/venv
 
-WORKDIR /home/myuser/simple_triton
-RUN chown -R myuser:myuser /home/myuser/simple_triton
-COPY simple_triton/ simple_triton
-COPY pyproject.toml .
-
 ARG DEBIAN_FRONTEND=noninteractive
 RUN echo 'APT::Install-Suggests "0";' >> /etc/apt/apt.conf.d/00-docker && \
     echo 'APT::Install-Recommends "0";' >> /etc/apt/apt.conf.d/00-docker && \
@@ -41,6 +36,10 @@ RUN echo 'APT::Install-Suggests "0";' >> /etc/apt/apt.conf.d/00-docker && \
     rm -rf /var/lib/apt/lists/*
 
 USER myuser
+WORKDIR /home/myuser/simple_triton
+COPY simple_triton/ simple_triton
+COPY pyproject.toml .
+
 
 # make sure all messages always reach console
 ENV PYTHONUNBUFFERED=1
@@ -65,7 +64,7 @@ RUN echo 'APT::Install-Suggests "0";' >> /etc/apt/apt.conf.d/00-docker && \
     rm -rf /var/lib/apt/lists/*
 RUN pip install tox pytest ipdb
 RUN curl -fsSL https://get.docker.com | sh
+USER myuser
 COPY tox.ini server.Dockerfile models_entrypoint.sh setup_repository.py ./
 COPY tests tests
 COPY models models
-USER myuser
