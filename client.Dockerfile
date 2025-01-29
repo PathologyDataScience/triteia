@@ -51,6 +51,7 @@ ENV PATH="/home/myuser/venv/bin:$PATH"
 CMD ["/usr/bin/env", "bash"]
 
 # optional install of docker engine for test mode so that triton server container can be launched from within
+# also jupyter-lab and tests
 FROM run-image AS test
 USER root
 ARG DOCKER_GROUP_ID
@@ -62,9 +63,11 @@ RUN echo 'APT::Install-Suggests "0";' >> /etc/apt/apt.conf.d/00-docker && \
     apt install -y curl git && \
     apt clean && \
     rm -rf /var/lib/apt/lists/*
-RUN pip install tox pytest ipdb
 RUN curl -fsSL https://get.docker.com | sh
+# for jupyter notebooks as non-root
+RUN mkdir --mode a+rxw /.local /.jupyter /.cache /models/
 USER myuser
+RUN pip install tox pytest ipdb jupyterlab
 COPY tox.ini server.Dockerfile models_entrypoint.sh setup_repository.py ./
 COPY tests tests
 COPY models models
