@@ -1,3 +1,5 @@
+examples/examples_inference_images/
+examples/mnist_data/
 models/*/1
 benchmarking/benchmark_output.txt
 model_repository/

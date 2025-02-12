@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "simple_triton"
 authors = [
-    {name = "Lee Cooper", email = "lee.cooper@northwestern.edu"},
+{name = "Lee Cooper", email = "lee.cooper@northwestern.edu"},
 ]
 description = "A simple and efficient python client for the Triton Inference Server."
 readme = "README.md"
@@ -13,23 +13,34 @@ requires-python = ">=3.9"
 keywords = ["mlops", "digital pathology"]
 license = {text = "Apache-2.0"}
 dependencies = [
-    "grpcio",
-    "histomics-stream",
-    "numpy",
-    "large-image[tiff]",
-    "pandas",
-    "psutil",
-    "pooch",
-    "protobuf",
-    "tensorflow-cpu",
-    "tensorboardX",
-    "tqdm",
-    "tritonclient[all]"
+  "grpcio",
+  "histomics-stream",
+  "numpy",
+  "large-image[tiff]",
+  "pandas",
+  "psutil",
+  "pooch",
+  "protobuf",
+  "tensorflow",
+  "tensorboardX",
+  "tqdm",
+  "tritonclient[all]"
 ]
 dynamic = ["version"]
 
 [project.optional-dependencies]
-examples = ["pooch"]
+examples = [
+  "ipywidgets",
+  "jupyterlab",
+  "matplotlib",
+  "medmnist@git+https://github.com/andsild/MedMNIST-no-gpu",
+  "monai",
+  "pooch",
+  "scikit-learn",
+  "umap-learn",
+  "widgetsnbextension",
+  "zarr"
+]
 
 [project.scripts]
 inference = "simple_triton.feature_extraction:main"

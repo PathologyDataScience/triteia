@@ -67,7 +67,14 @@ RUN curl -fsSL https://get.docker.com | sh
 # for jupyter notebooks as non-root
 RUN mkdir --mode a+rxw /.local /.jupyter /.cache /models/
 USER myuser
-RUN pip install tox pytest ipdb jupyterlab
+
+COPY pyproject.toml .
+# comment out scm (i.e. git) line in pyproject.toml
+RUN sed -i 's/.*\[tool.setuptools_scm\]/#&/g' pyproject.toml
+# Install CPU-version of torch so that MONAI doesn't default to pull the GPU version
+RUN pip3 install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
+RUN pip3 install --no-cache-dir .[examples] tox pytest
+
 COPY tox.ini server.Dockerfile models_entrypoint.sh setup_repository.py ./
 COPY tests tests
 COPY models models

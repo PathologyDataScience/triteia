@@ -1,5 +1,5 @@
 .tox
-*.tfr
+**/*.tfr
 *.md
 test_data/
 venv
