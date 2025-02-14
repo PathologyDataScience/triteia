@@ -49,7 +49,7 @@ docker run --security-opt seccomp:unconfined --network=host --shm-size=1g -v ${P
 These examples requires a running tritonserver container on the client machine.
 
 #### Running notebook examples with docker:
-This command is similar to the docker run [given below](#container), but with the addition of the jupyter-lab command, and making it run as your host user.
+This command is similar to the command [given below](#container), but with the addition of the jupyter-lab command, and making it run as your host user.
 This launches a jupyter-lab/notebook at port 8888. Copy the URL you see in the console into your web-browser.
 ```bash
 docker run --security-opt seccomp:unconfined --network=host --shm-size=1g -v ${PWD}/test_data:/data:ro  -v ${PWD}/examples:/examples:rw --user $UID --rm --name tritonclient -it simple_triton_client:latest bash -c "jupyter-lab --notebook-dir examples/ --no-browser"`
@@ -59,7 +59,7 @@ docker run --security-opt seccomp:unconfined --network=host --shm-size=1g -v ${P
 
 simple-triton is tested with [Triton version 24.12](https://github.com/triton-inference-server/server/releases/tag/v2.53.0).
 
-Download and launch the Triton Docker container from the NVIDIA GPU Cloud (NGC)
+Download and launch the Triton Docker container from the NVIDIA GPU Cloud (NGC). You should be inside of this directory (simple_triton).
 ```
 docker run \
   --gpus=all \
@@ -69,12 +69,12 @@ docker run \
   --shm-size=1g \
   --ulimit memlock=-1 \
   --ipc=host \
-  -v $HOME/models:/models \
+  -v $PWD/models:/models \
   nvcr.io/nvidia/tritonserver:24.12-py3 \
   tritonserver --model-repository=/models --model-control-mode=explicit --exit-on-error=false
 ```
 
-This sets the host path `~/models` as the model repository. The `--model-control-mode=explicit` argument is required to load and modify models at runtime.
+This sets the path `./models` as the model repository. The `--model-control-mode=explicit` argument is required to load and modify models at runtime.
 
 > **Note:** The options `--ipc`, `--shm-size`, and `--ulimit memlock` are recommended when using shared memory for client/server communication. This allows Triton to access host shared memory, increasing the default 64MB limit, and prevents paging of RAM out to disk. If running the client in a container then `--ipc` and `--shm-size` should also be used to launch the client container. Running the client container with `--network=host` is the simplest option to allow the client and server to communicate using the host network.
 
