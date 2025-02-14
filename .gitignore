@@ -1,3 +1,4 @@
+examples/.Trash*
 examples/examples_inference_images/
 examples/mnist_data/
 models/*/1
