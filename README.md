@@ -45,13 +45,15 @@ docker run --security-opt seccomp:unconfined --network=host --shm-size=1g -v ${P
 
 * [feature_extraction](./examples/feature_extraction.ipynb) demonstrates whole-slide image feature extraction.
 * [patch_inference](./examples/patch_inference.ipynb) demonstrates tile feature extraction.
-  These example requires a running Triton container on the client machine.
+
+These examples requires a running tritonserver container on the client machine.
 
 #### Running notebook examples with docker:
-This command is similar to the docker run in (#container), but with the addition of the jupyter-lab command, and making it run as your host user.
-`docker run --security-opt seccomp:unconfined --network=host --shm-size=1g -v ${PWD}/test_data:/data:ro  -v ${PWD}/examples:/examples:rw --user $UID --rm --name tritonclient -it simple_triton_client:latest bash -c "jupyter-lab --notebook-dir examples/ --no-browser"`
-
-Which should launch a jupyter-lab/notebook at port 8888. Copy the URL you see in the console into your web-browser.
+This command is similar to the docker run [given below](#container), but with the addition of the jupyter-lab command, and making it run as your host user.
+This launches a jupyter-lab/notebook at port 8888. Copy the URL you see in the console into your web-browser.
+```bash
+docker run --security-opt seccomp:unconfined --network=host --shm-size=1g -v ${PWD}/test_data:/data:ro  -v ${PWD}/examples:/examples:rw --user $UID --rm --name tritonclient -it simple_triton_client:latest bash -c "jupyter-lab --notebook-dir examples/ --no-browser"`
+```
 
 ### Running the Triton container <a name="container"></a>
 
