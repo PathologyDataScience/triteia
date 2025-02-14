@@ -59,7 +59,17 @@ simple-triton is tested with [Triton version 24.12](https://github.com/triton-in
 
 Download and launch the Triton Docker container from the NVIDIA GPU Cloud (NGC)
 ```
-docker run --gpus=all -d --rm -p 8000:8000 -p 8001:8001 -p 8002:8002 -p 8003:8003 --shm-size=1g --ulimit memlock=-1 --ipc=host -v $HOME/models:/models nvcr.io/nvidia/tritonserver:24.12-py3 tritonserver --model-repository=/models --model-control-mode=explicit --exit-on-error=false
+docker run \
+  --gpus=all \
+  -d \
+  --rm \
+  -p 8000:8000 -p 8001:8001 -p 8002:8002 -p 8003:8003 \
+  --shm-size=1g \
+  --ulimit memlock=-1 \
+  --ipc=host \
+  -v $HOME/models:/models \
+  nvcr.io/nvidia/tritonserver:24.12-py3 \
+  tritonserver --model-repository=/models --model-control-mode=explicit --exit-on-error=false
 ```
 
 This sets the host path `~/models` as the model repository. The `--model-control-mode=explicit` argument is required to load and modify models at runtime.
