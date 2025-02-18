@@ -150,7 +150,7 @@ simple-triton contains wrappers for serving popular pathology models including C
 | [Virchow](https://huggingface.co/paige-ai/Virchow) | (224, 224, 3) | 2560 | 2.53 GB |
 | [Virchow2](https://huggingface.co/paige-ai/Virchow2) | (224, 224, 3) | 2560 | 2.53 GB |
 
-A [dockerfile](server.Dockerfile) built on Triton Server container v23.03 encapsulates all requirements for serving these models
+A [dockerfile](server.Dockerfile) built on Triton Server container encapsulates all requirements for serving these models
 ```bash
 > docker build -t model-tritonserver -f server.Dockerfile .
 ```
