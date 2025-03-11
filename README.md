@@ -45,6 +45,7 @@ docker run --security-opt seccomp:unconfined --network=host --shm-size=1g -v ${P
 
 * [feature_extraction](./examples/feature_extraction.ipynb) demonstrates whole-slide image feature extraction.
 * [patch_inference](./examples/patch_inference.ipynb) demonstrates tile feature extraction.
+* [export_pytorch_model](./examples/export_pytorch_model.ipynb) demonstrates tile feature extraction.
 
 These examples requires a running tritonserver container on the client machine.
 
