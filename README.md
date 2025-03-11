@@ -43,18 +43,39 @@ docker run --security-opt seccomp:unconfined --network=host --shm-size=1g -v ${P
 
 ### Example <a name="example"></a>
 
-The notebook `examples\feature_extraction.ipynb` demonstrates whole-slide image feature extraction. This example requires a running Triton container on the client machine.
+* [feature_extraction](./examples/feature_extraction.ipynb) demonstrates whole-slide image feature extraction.
+* [patch_inference](./examples/patch_inference.ipynb) demonstrates tile feature extraction.
+* [export_pytorch_model](./examples/export_pytorch_model.ipynb) demonstrates tile feature extraction.
+
+These examples requires a running tritonserver container on the client machine.
+
+#### Running notebook examples with docker:
+This command is similar to the command [given below](#container), but with the addition of the jupyter-lab command, and making it run as your host user.
+This launches a jupyter-lab/notebook at port 8888. Copy the URL you see in the console into your web-browser.
+```bash
+docker run --security-opt seccomp:unconfined --network=host --shm-size=1g -v ${PWD}/test_data:/data:ro  -v ${PWD}/examples:/examples:rw --user $UID --rm --name tritonclient -it simple_triton_client:latest bash -c "jupyter-lab --notebook-dir examples/ --no-browser"`
+```
 
 ### Running the Triton container <a name="container"></a>
 
-simple-triton is tested with [Triton version 23.03](https://github.com/triton-inference-server/server/releases/tag/v2.32.0).
+simple-triton is tested with [Triton version 24.12](https://github.com/triton-inference-server/server/releases/tag/v2.53.0).
 
-Download and launch the Triton Docker container from the NVIDIA GPU Cloud (NGC)
+Download and launch the Triton Docker container from the NVIDIA GPU Cloud (NGC). You should be inside of this directory (simple_triton).
 ```
-docker run --gpus=all -d --rm -p 8000:8000 -p 8001:8001 -p 8002:8002 -p 8003:8003 --shm-size=1g --ulimit memlock=-1 --ipc=host -v $HOME/models:/models nvcr.io/nvidia/tritonserver:23.03-py3 tritonserver --model-repository=/models --model-control-mode=explicit --exit-on-error=false
+docker run \
+  --gpus=all \
+  -d \
+  --rm \
+  -p 8000:8000 -p 8001:8001 -p 8002:8002 -p 8003:8003 \
+  --shm-size=1g \
+  --ulimit memlock=-1 \
+  --ipc=host \
+  -v $PWD/models:/models \
+  nvcr.io/nvidia/tritonserver:24.12-py3 \
+  tritonserver --model-repository=/models --model-control-mode=explicit --exit-on-error=false
 ```
 
-This sets the host path `~/models` as the model repository. The `--model-control-mode=explicit` argument is required to load and modify models at runtime.
+This sets the path `./models` as the model repository. The `--model-control-mode=explicit` argument is required to load and modify models at runtime.
 
 > **Note:** The options `--ipc`, `--shm-size`, and `--ulimit memlock` are recommended when using shared memory for client/server communication. This allows Triton to access host shared memory, increasing the default 64MB limit, and prevents paging of RAM out to disk. If running the client in a container then `--ipc` and `--shm-size` should also be used to launch the client container. Running the client container with `--network=host` is the simplest option to allow the client and server to communicate using the host network.
 
@@ -130,7 +151,7 @@ simple-triton contains wrappers for serving popular pathology models including C
 | [Virchow](https://huggingface.co/paige-ai/Virchow) | (224, 224, 3) | 2560 | 2.53 GB |
 | [Virchow2](https://huggingface.co/paige-ai/Virchow2) | (224, 224, 3) | 2560 | 2.53 GB |
 
-A [dockerfile](server.Dockerfile) built on Triton Server container v23.03 encapsulates all requirements for serving these models
+A [dockerfile](server.Dockerfile) built on Triton Server container encapsulates all requirements for serving these models
 ```bash
 > docker build -t model-tritonserver -f server.Dockerfile .
 ```

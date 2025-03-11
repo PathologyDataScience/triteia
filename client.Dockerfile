@@ -27,11 +27,6 @@ FROM python:3.10-slim AS run-image
 RUN useradd --create-home myuser
 COPY --from=build-image --chown=myuser:myuser /home/myuser/venv /home/myuser/venv
 
-WORKDIR /home/myuser/simple_triton
-RUN chown -R myuser:myuser /home/myuser/simple_triton
-COPY simple_triton/ simple_triton
-COPY pyproject.toml .
-
 ARG DEBIAN_FRONTEND=noninteractive
 RUN echo 'APT::Install-Suggests "0";' >> /etc/apt/apt.conf.d/00-docker && \
     echo 'APT::Install-Recommends "0";' >> /etc/apt/apt.conf.d/00-docker && \
@@ -41,6 +36,10 @@ RUN echo 'APT::Install-Suggests "0";' >> /etc/apt/apt.conf.d/00-docker && \
     rm -rf /var/lib/apt/lists/*
 
 USER myuser
+WORKDIR /home/myuser/simple_triton
+COPY simple_triton/ simple_triton
+COPY pyproject.toml .
+
 
 # make sure all messages always reach console
 ENV PYTHONUNBUFFERED=1
@@ -52,6 +51,7 @@ ENV PATH="/home/myuser/venv/bin:$PATH"
 CMD ["/usr/bin/env", "bash"]
 
 # optional install of docker engine for test mode so that triton server container can be launched from within
+# also jupyter-lab and tests
 FROM run-image AS test
 USER root
 ARG DOCKER_GROUP_ID
@@ -63,9 +63,18 @@ RUN echo 'APT::Install-Suggests "0";' >> /etc/apt/apt.conf.d/00-docker && \
     apt install -y curl git && \
     apt clean && \
     rm -rf /var/lib/apt/lists/*
-RUN pip install tox pytest ipdb
 RUN curl -fsSL https://get.docker.com | sh
+# for jupyter notebooks as non-root
+RUN mkdir --mode a+rxw /.local /.jupyter /.cache /models/ /.config
+USER myuser
+
+COPY pyproject.toml .
+# comment out scm (i.e. git) line in pyproject.toml
+RUN sed -i 's/.*\[tool.setuptools_scm\]/#&/g' pyproject.toml
+# Install CPU-version of torch so that MONAI doesn't default to pull the GPU version
+RUN pip3 install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
+RUN pip3 install --no-cache-dir .[examples] tox pytest
+
 COPY tox.ini server.Dockerfile models_entrypoint.sh setup_repository.py ./
 COPY tests tests
 COPY models models
-USER myuser

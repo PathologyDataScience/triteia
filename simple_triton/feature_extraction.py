@@ -198,12 +198,15 @@ def inference(
     # create requests object
     req = Requests(url, limit)
 
-    number_of_tiles = sum(
-        len(iterator.read_kwargs[i]) for i in range(len(iterator.read_kwargs))
-    )
-    number_of_batches = math.ceil(number_of_tiles / iterator.batch)
+    if isinstance(iterator, TiffPrefetch):
+        number_of_tiles = sum(
+            len(iterator.read_kwargs[i]) for i in range(len(iterator.read_kwargs))
+        )
+        number_of_batches = math.ceil(number_of_tiles / iterator.batch) - 1
+    else:
+        number_of_batches = None
 
-    with tqdm(total=number_of_batches - 1, desc="Batches") as pbar:
+    with tqdm(total=number_of_batches, desc="Batches") as pbar:
         # loop until iterator is exhausted
         while True:
             if not stop:
