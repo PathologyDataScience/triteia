@@ -44,8 +44,8 @@ docker run --security-opt seccomp:unconfined --network=host --shm-size=1g -v ${P
 ### Example <a name="example"></a>
 
 * [feature_extraction](./examples/feature_extraction.ipynb) demonstrates whole-slide image feature extraction.
-* [patch_inference](./examples/patch_inference.ipynb) demonstrates tile feature extraction.
-* [export_pytorch_model](./examples/export_pytorch_model.ipynb) demonstrates tile feature extraction.
+* [patch_inference](./examples/patch_inference.ipynb) demonstrates feature extraction using a list of images instead of WSIs.
+* [export_pytorch_model](./examples/export_pytorch_model.ipynb) demonstrates how to export a PyTorch model to be used with tritonserver.
 
 These examples requires a running tritonserver container on the client machine.
 
