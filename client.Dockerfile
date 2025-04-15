@@ -72,6 +72,7 @@ COPY pyproject.toml .
 # comment out scm (i.e. git) line in pyproject.toml
 RUN sed -i 's/.*\[tool.setuptools_scm\]/#&/g' pyproject.toml
 # Install CPU-version of torch so that MONAI doesn't default to pull the GPU version
+COPY --chown=myuser:myuser README.md pyproject.toml ./
 RUN pip3 install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
 RUN pip3 install --no-cache-dir .[examples] tox pytest
 
