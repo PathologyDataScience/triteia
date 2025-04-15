@@ -70,13 +70,11 @@ RUN mkdir --mode a+rxw /.local /.jupyter /.cache /models/ /.config
 RUN chown myuser:myuser /home/myuser/simple_triton/
 USER myuser
 
-# comment out scm (i.e. git) line in pyproject.toml
-RUN sed -i 's/.*\[tool.setuptools_scm\]/#&/g' pyproject.toml
 COPY --chown=myuser:myuser README.md pyproject.toml ./
 # Install CPU-version of torch explicitly so that other dependencies doesn't default to pull the GPU version
 # (for example, packages like `timm` or `lightly` depend on torch, and they might pull the GPU version when they are installed) 
 RUN pip3 install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
-RUN pip3 install --no-cache-dir .[examples] tox pytest
+RUN SETUPTOOLS_SCM_PRETEND_VERSION=0.0.0 pip3 install --no-cache-dir .[examples] tox pytest
 
 COPY --chown=myuser:myuser tox.ini server.Dockerfile models_entrypoint.sh setup_repository.py ./
 COPY --chown=myuser:myuser tests tests
