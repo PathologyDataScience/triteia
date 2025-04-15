@@ -53,7 +53,7 @@ These examples requires a running tritonserver container on the client machine.
 This command is similar to the command [given below](#container), but with the addition of the jupyter-lab command, and making it run as your host user.
 This launches a jupyter-lab/notebook at port 8888. Copy the URL you see in the console into your web-browser.
 ```bash
-docker run --security-opt seccomp:unconfined --network=host --shm-size=1g -v ${PWD}/test_data:/data:ro  -v ${PWD}/examples:/examples:rw --user $UID --rm --name tritonclient -it simple_triton_client:latest bash -c "jupyter-lab --notebook-dir examples/ --no-browser"`
+docker run --security-opt seccomp:unconfined --network=host --shm-size=1g -v ${PWD}/test_data:/data:ro  -v ${PWD}/examples:/examples:rw --user $UID --rm --name tritonclient -it simple_triton_client:latest bash -c "jupyter-lab --notebook-dir examples/ --no-browser"
 ```
 
 ### Running the Triton container <a name="container"></a>
@@ -85,57 +85,57 @@ A command-line interface is provided for inference with single or multiple slide
 
 Perform inference with the EfficientNetV2S model on a single slide, outputing serialized embeddings to your home directory
 ```bash
->python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow
+python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow
 ```
 
 Optional parameters allow restricting inference to a tissue mask (`-m`)
 ```bash
->python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -m TCGA-AN-A0G0-01Z-00-DX1.mask.png
+python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -m TCGA-AN-A0G0-01Z-00-DX1.mask.png
 ```
 
 Store features in float32 precision rather than default float16 (`-f`)
 ```bash
->python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -f
+python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -f
 ```
 
 modification tile size (`-t`), add tile overlap (`-o`), and change magnification (`-M`)
 ```bash
->python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -t 256 -o 128 -M 10
+python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -t 256 -o 128 -M 10
 ```
 
 adjustment of tile reading parameters including ICC correction (`-i`), read chunk size (`-c`), batch size (`-b`), prefetch (`-p`), and multiprocessing workers (`-w`).
 ```bash
->python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -i -c 8 -b 128 -p 2 -w 16
+python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -i -c 8 -b 128 -p 2 -w 16
 ```
 
 Provide image source (`-n`) and target (`-r`) parameters for Macenko color normalization
 ```bash
->python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -n ~/TCGA-AN-A0G0-01Z-00-DX1.stain.npy -r ~/standard_stain.npy
+python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -n ~/TCGA-AN-A0G0-01Z-00-DX1.stain.npy -r ~/standard_stain.npy
 ```
 
 Change the address of the Triton inference server
 ```bash
->python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -a "foo.edu:8001"
+python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -a "foo.edu:8001"
 ```
 
 Increase the precision of serialized features to float (default is half float)
 ```bash
->python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -f
+python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -f
 ```
 
 For large jobs use a tab-delimited file containing input images and optionally their masks and normalization stain profiles
 ```bash
->more ~/inputs.tsv
+more ~/inputs.tsv
 TCGA-AN-A0G0-01Z-00-DX1.svs    TCGA-AN-A0G0-01Z-00-DX1.mask.py    TCGA-AN-A0G0-01Z-00-DX1.stain.npy    
 TCGA-AN-A0G0-01Z-00-DX2.svs    TCGA-AN-A0G0-01Z-00-DX2.mask.py    TCGA-AN-A0G0-01Z-00-DX2.stain.npy
 TCGA-AN-A0G0-01Z-00-DX3.svs    TCGA-AN-A0G0-01Z-00-DX3.mask.py    TCGA-AN-A0G0-01Z-00-DX3.stain.npy
 TCGA-AN-A0G0-01Z-00-DX4.svs    TCGA-AN-A0G0-01Z-00-DX4.mask.py    TCGA-AN-A0G0-01Z-00-DX4.stain.npy
->python feature_extraction.py ~/inputs.tsv ~/ EfficientNetV2S.tensorflow
+python feature_extraction.py ~/inputs.tsv ~/ EfficientNetV2S.tensorflow
 ```
 
 Skip images where output already exists
 ```bash
->python feature_extraction.py ~/inputs.tsv ~/ EfficientNetV2S.tensorflow -s
+python feature_extraction.py ~/inputs.tsv ~/ EfficientNetV2S.tensorflow -s
 ```
 
 ## Model wrappers <a name="wrappers"></a>
@@ -153,7 +153,7 @@ simple-triton contains wrappers for serving popular pathology models including C
 
 A [dockerfile](server.Dockerfile) built on Triton Server container encapsulates all requirements for serving these models
 ```bash
-> docker build -t model-tritonserver -f server.Dockerfile .
+docker build -t model-tritonserver -f server.Dockerfile .
 ```
 
 Each folder in the `/models` directory contains a `model.py` file containing the logic for model loading, inference, and cleanup. The `model.py` files need to be copied into the model repository for serving (a `config.pbtxt` file is not required)
@@ -169,8 +169,8 @@ Each folder in the `/models` directory contains a `model.py` file containing the
 ### Huggingface tokens
 A [huggingface token](https://huggingface.co/settings/tokens) is required to access the UNI, gigapath, and hibou-L models. This is passed to the server by setting the environment variable `HF_TOKEN` on the server, and passing the environment variable when running the 
 ```bash
->export HF_TOKEN=hf_**********************************
->docker run -e HF_TOKEN=$HF_TOKEN model-tritonserver -p 8000:8000 -p 8001:8001 -p 8002:8002 -p 8003:8003 --shm-size=1g --ulimit memlock=-1 --ipc=host -v ${PWD}/models/:/models model-tritonserver tritonserver --model-repository=/models --model-control-mode=explicit --exit-on-error=false
+export HF_TOKEN=hf_**********************************
+docker run -e HF_TOKEN=$HF_TOKEN model-tritonserver -p 8000:8000 -p 8001:8001 -p 8002:8002 -p 8003:8003 --shm-size=1g --ulimit memlock=-1 --ipc=host -v ${PWD}/models/:/models model-tritonserver tritonserver --model-repository=/models --model-control-mode=explicit --exit-on-error=false
 ```
 
 ## Model configuration <a name="config"></a>

@@ -1,6 +1,5 @@
 .tox
 **/*.tfr
-*.md
 test_data/
 venv
 UNKNOWN*
