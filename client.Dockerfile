@@ -50,8 +50,9 @@ ENV PATH="/home/myuser/venv/bin:$PATH"
 
 CMD ["/usr/bin/env", "bash"]
 
-# optional install of docker engine for test mode so that triton server container can be launched from within
-# also jupyter-lab and tests
+# optional install of docker engine for test mode so that triton server container can be launched from the client container
+# this is useful for testing, which will start and restart servers several times for different use cases
+# we also install jupyter-lab for notebooks
 FROM run-image AS test
 USER root
 ARG DOCKER_GROUP_ID
@@ -71,8 +72,9 @@ USER myuser
 
 # comment out scm (i.e. git) line in pyproject.toml
 RUN sed -i 's/.*\[tool.setuptools_scm\]/#&/g' pyproject.toml
-# Install CPU-version of torch so that MONAI doesn't default to pull the GPU version
 COPY --chown=myuser:myuser README.md pyproject.toml ./
+# Install CPU-version of torch explicitly so that other dependencies doesn't default to pull the GPU version
+# (for example, packages like `timm` or `lightly` depend on torch, and they might pull the GPU version when they are installed) 
 RUN pip3 install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
 RUN pip3 install --no-cache-dir .[examples] tox pytest
 
