@@ -11,7 +11,7 @@ description = "A simple and efficient python client for the Triton Inference Ser
 readme = "README.md"
 requires-python = ">=3.9"
 keywords = ["mlops", "digital pathology"]
-license = {text = "Apache-2.0"}
+license = "Apache-2.0"
 dependencies = [
   "grpcio",
   "histomics-stream",
