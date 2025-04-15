@@ -37,8 +37,8 @@ RUN echo 'APT::Install-Suggests "0";' >> /etc/apt/apt.conf.d/00-docker && \
 
 USER myuser
 WORKDIR /home/myuser/simple_triton
-COPY simple_triton/ simple_triton
-COPY pyproject.toml .
+COPY --chown=myuser:myuser simple_triton/ simple_triton
+COPY --chown=myuser:myuser pyproject.toml .
 
 
 # make sure all messages always reach console
@@ -66,9 +66,9 @@ RUN echo 'APT::Install-Suggests "0";' >> /etc/apt/apt.conf.d/00-docker && \
 RUN curl -fsSL https://get.docker.com | sh
 # for jupyter notebooks as non-root
 RUN mkdir --mode a+rxw /.local /.jupyter /.cache /models/ /.config
+RUN chown myuser:myuser /home/myuser/simple_triton/
 USER myuser
 
-COPY pyproject.toml .
 # comment out scm (i.e. git) line in pyproject.toml
 RUN sed -i 's/.*\[tool.setuptools_scm\]/#&/g' pyproject.toml
 # Install CPU-version of torch so that MONAI doesn't default to pull the GPU version
@@ -76,6 +76,6 @@ COPY --chown=myuser:myuser README.md pyproject.toml ./
 RUN pip3 install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
 RUN pip3 install --no-cache-dir .[examples] tox pytest
 
-COPY tox.ini server.Dockerfile models_entrypoint.sh setup_repository.py ./
-COPY tests tests
-COPY models models
+COPY --chown=myuser:myuser tox.ini server.Dockerfile models_entrypoint.sh setup_repository.py ./
+COPY --chown=myuser:myuser tests tests
+COPY --chown=myuser:myuser models models
