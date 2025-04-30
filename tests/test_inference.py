@@ -79,6 +79,12 @@ def test_uni(data, triton):
     python_batch_compare(data, "uni", grpc_port)
 
 
+def test_uni2(data, triton):
+    _, grpc_port, _ = triton
+    verify_huggingface()
+    python_batch_compare(data, "uni2", grpc_port)
+
+
 def test_conch(data, triton):
     _, grpc_port, _ = triton
     verify_huggingface()
