@@ -34,7 +34,7 @@ class TritonPythonModel:
                 "dims": [224, 224, 3],
             }
         ]
-        outputs = [{"name": "output_0", "data_type": "TYPE_FP32", "dims": [1024]}]
+        outputs = [{"name": "output_0", "data_type": "TYPE_FP32", "dims": [1536]}]
         config = model_config.as_dict()
         input_names = [i["name"] for i in config["input"]]
         output_names = [i["name"] for i in config["output"]]
