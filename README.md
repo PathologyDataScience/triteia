@@ -143,13 +143,14 @@ simple-triton contains wrappers for serving popular pathology models including C
 
 | Model | Input | Output | Size |
 |---|---|---|---|
-| [CONCH](https://huggingface.co/MahmoodLab/CONCH) | (224, 224, 3) | 512 | 0.802 GB |
+| [conch](https://huggingface.co/MahmoodLab/CONCH) | (224, 224, 3) | 512 | 0.802 GB |
 | [gigapath](https://huggingface.co/prov-gigapath/prov-gigapath) | (224, 224, 3) | 1536 | 4.54 GB |
 | [hibou-L](https://huggingface.co/histai/hibou-L) | (224, 224, 3) | 1024 | 1.21 GB |
-| [Phikon](https://huggingface.co/owkin/phikon) | (224, 224, 3) | 768 | 0.346 GB |
-| [UNI](https://huggingface.co/MahmoodLab/UNI) | (224, 224, 3) | 1024 | 1.21 GB |
-| [Virchow](https://huggingface.co/paige-ai/Virchow) | (224, 224, 3) | 2560 | 2.53 GB |
-| [Virchow2](https://huggingface.co/paige-ai/Virchow2) | (224, 224, 3) | 2560 | 2.53 GB |
+| [phikon](https://huggingface.co/owkin/phikon) | (224, 224, 3) | 768 | 0.346 GB |
+| [uni](https://huggingface.co/MahmoodLab/UNI) | (224, 224, 3) | 1024 | 1.21 GB |
+| [uni2](https://huggingface.co/MahmoodLab/UNI2-h) | (224, 224, 3) | 1536 | 2.73 GB |
+| [virchow](https://huggingface.co/paige-ai/Virchow) | (224, 224, 3) | 2560 | 2.53 GB |
+| [virchow2](https://huggingface.co/paige-ai/Virchow2) | (224, 224, 3) | 2560 | 2.53 GB |
 
 A [dockerfile](server.Dockerfile) built on Triton Server container encapsulates all requirements for serving these models
 ```bash
