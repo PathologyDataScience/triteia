@@ -24,7 +24,7 @@ simple-triton is a Python client for inference with the NVIDIA Triton server. It
 simple-triton requires `histomcs_stream` and `large_image` packages with the tiff reader
 ```
 git clone https://github.com/PathologyDataScience/simple_triton.git
-pip install --editable ./simple_triton'
+pip install --editable ./simple_triton
 ```
 > `--editable` ensures that updates to the `simple_triton` package (after `git pull`) immediately takes effect.
 
@@ -171,7 +171,7 @@ Each folder in the `/models` directory contains a `model.py` file containing the
 A [huggingface token](https://huggingface.co/settings/tokens) is required to access the UNI, gigapath, and hibou-L models. This is passed to the server by setting the environment variable `HF_TOKEN` on the server, and passing the environment variable when running the 
 ```bash
 export HF_TOKEN=hf_**********************************
-docker run -e HF_TOKEN=$HF_TOKEN model-tritonserver -p 8000:8000 -p 8001:8001 -p 8002:8002 -p 8003:8003 --shm-size=1g --ulimit memlock=-1 --ipc=host -v ${PWD}/models/:/models model-tritonserver tritonserver --model-repository=/models --model-control-mode=explicit --exit-on-error=false
+docker run -e HF_TOKEN=$HF_TOKEN model-tritonserver --gpus=all -p 8000:8000 -p 8001:8001 -p 8002:8002 -p 8003:8003 --shm-size=1g --ulimit memlock=-1 --ipc=host -v ${PWD}/models/:/models model-tritonserver tritonserver --model-repository=/models --model-control-mode=explicit --exit-on-error=false
 ```
 
 ## Model configuration <a name="config"></a>
