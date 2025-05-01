@@ -32,7 +32,7 @@ def main():
             model_setup(os.path.join(MODEL_ROOT, f), sys.argv[1])
         print(f"Models setup in {sys.argv[1]}.")
     else:
-        print(f"No model folders found in {model_root}")
+        print(f"No model folders found in {MODEL_ROOT}")
 
 
 if __name__ == "__main__":
