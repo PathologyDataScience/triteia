@@ -64,7 +64,7 @@ docker run \
   --user $UID --rm -it \
   --shm-size=1g \
   --name tritonclient simple_triton_client:latest \
-  bash -c "jupyter-lab --notebook-dir examples/ --no-browser"
+  bash -c "jupyter-lab --notebook-dir /examples/ --no-browser"
 ```
 
 ### Running the Triton container <a name="container"></a>
