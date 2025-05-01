@@ -35,7 +35,11 @@ python download_test_data.py
 
 # simple_triton_client will be the name of the docker image
 docker build -f client.Dockerfile . -t simple_triton_client:latest --build-arg DOCKER_GROUP_ID=$(getent group docker | cut -d: -f3)
-docker run --security-opt seccomp:unconfined --network=host --shm-size=1g -v ${PWD}/test_data:/data:ro --rm --name tritonclient -it simple_triton_client:latest
+docker run \
+  --security-opt seccomp:unconfined --network=host \
+  --rm -it --shm-size=1g \
+  -v ${PWD}/test_data:/data:ro \
+  --name tritonclient simple_triton_client:latest
 ```
 > **_NOTE:_**  `--network=` lets the docker image see ports from other containers, in this case the host. The default shared memory size is now 64MB, so `--shm-size=` is necessary if you are reading large WSIs. `--security-opt seccomp:unconfined` might only be necessary on bigger machines, but it gives your process access to [openblas](https://www.openblas.net/) threads. `--rm` removes the container on exit, beware.
 
@@ -53,7 +57,14 @@ These examples requires a running tritonserver container on the client machine.
 This command is similar to the command [given below](#container), but with the addition of the jupyter-lab command, and making it run as your host user.
 This launches a jupyter-lab/notebook at port 8888. Copy the URL you see in the console into your web-browser.
 ```bash
-docker run --security-opt seccomp:unconfined --network=host --shm-size=1g -v ${PWD}/test_data:/data:ro  -v ${PWD}/examples:/examples:rw --user $UID --rm --name tritonclient -it simple_triton_client:latest bash -c "jupyter-lab --notebook-dir examples/ --no-browser"
+docker run \
+  --security-opt seccomp:unconfined --network=host \
+  -v ${PWD}/test_data:/data:ro \
+  -v ${PWD}/examples:/examples:rw \
+  --user $UID --rm -it \
+  --shm-size=1g \
+  --name tritonclient simple_triton_client:latest \
+  bash -c "jupyter-lab --notebook-dir examples/ --no-browser"
 ```
 
 ### Running the Triton container <a name="container"></a>
@@ -171,7 +182,13 @@ Each folder in the `/models` directory contains a `model.py` file containing the
 A [huggingface token](https://huggingface.co/settings/tokens) is required to access the UNI, gigapath, and hibou-L models. This is passed to the server by setting the environment variable `HF_TOKEN` on the server, and passing the environment variable when running the 
 ```bash
 export HF_TOKEN=hf_**********************************
-docker run -e HF_TOKEN=$HF_TOKEN model-tritonserver --gpus=all -p 8000:8000 -p 8001:8001 -p 8002:8002 -p 8003:8003 --shm-size=1g --ulimit memlock=-1 --ipc=host -v ${PWD}/models/:/models model-tritonserver tritonserver --model-repository=/models --model-control-mode=explicit --exit-on-error=false
+docker run \
+  -e HF_TOKEN=$HF_TOKEN \
+  --gpus=all \
+  -p 8000:8000 -p 8001:8001 -p 8002:8002 -p 8003:8003 \
+  --shm-size=1g --ulimit memlock=-1 --ipc=host \
+  -v ${PWD}/models/:/models \
+  model-tritonserver tritonserver --model-repository=/models --model-control-mode=explicit --exit-on-error=false
 ```
 
 ## Model configuration <a name="config"></a>
