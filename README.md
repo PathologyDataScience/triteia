@@ -24,7 +24,7 @@ simple-triton is a Python client for inference with the NVIDIA Triton server. It
 simple-triton requires `histomcs_stream` and `large_image` packages with the tiff reader
 ```
 git clone https://github.com/PathologyDataScience/simple_triton.git
-pip install --editable ./simple_triton'
+pip install --editable ./simple_triton
 ```
 > `--editable` ensures that updates to the `simple_triton` package (after `git pull`) immediately takes effect.
 
@@ -35,7 +35,11 @@ python download_test_data.py
 
 # simple_triton_client will be the name of the docker image
 docker build -f client.Dockerfile . -t simple_triton_client:latest --build-arg DOCKER_GROUP_ID=$(getent group docker | cut -d: -f3)
-docker run --security-opt seccomp:unconfined --network=host --shm-size=1g -v ${PWD}/test_data:/data:ro --rm --name tritonclient -it simple_triton_client:latest
+docker run \
+  --security-opt seccomp:unconfined --network=host \
+  --rm -it --shm-size=1g \
+  -v ${PWD}/test_data:/data:ro \
+  --name tritonclient simple_triton_client:latest
 ```
 > **_NOTE:_**  `--network=` lets the docker image see ports from other containers, in this case the host. The default shared memory size is now 64MB, so `--shm-size=` is necessary if you are reading large WSIs. `--security-opt seccomp:unconfined` might only be necessary on bigger machines, but it gives your process access to [openblas](https://www.openblas.net/) threads. `--rm` removes the container on exit, beware.
 
@@ -53,7 +57,14 @@ These examples requires a running tritonserver container on the client machine.
 This command is similar to the command [given below](#container), but with the addition of the jupyter-lab command, and making it run as your host user.
 This launches a jupyter-lab/notebook at port 8888. Copy the URL you see in the console into your web-browser.
 ```bash
-docker run --security-opt seccomp:unconfined --network=host --shm-size=1g -v ${PWD}/test_data:/data:ro  -v ${PWD}/examples:/examples:rw --user $UID --rm --name tritonclient -it simple_triton_client:latest bash -c "jupyter-lab --notebook-dir examples/ --no-browser"
+docker run \
+  --security-opt seccomp:unconfined --network=host \
+  -v ${PWD}/test_data:/data:ro \
+  -v ${PWD}/examples:/examples:rw \
+  --user $UID --rm -it \
+  --shm-size=1g \
+  --name tritonclient simple_triton_client:latest \
+  bash -c "jupyter-lab --notebook-dir /examples/ --no-browser"
 ```
 
 ### Running the Triton container <a name="container"></a>
@@ -143,13 +154,14 @@ simple-triton contains wrappers for serving popular pathology models including C
 
 | Model | Input | Output | Size |
 |---|---|---|---|
-| [CONCH](https://huggingface.co/MahmoodLab/CONCH) | (224, 224, 3) | 512 | 0.802 GB |
+| [conch](https://huggingface.co/MahmoodLab/CONCH) | (224, 224, 3) | 512 | 0.802 GB |
 | [gigapath](https://huggingface.co/prov-gigapath/prov-gigapath) | (224, 224, 3) | 1536 | 4.54 GB |
 | [hibou-L](https://huggingface.co/histai/hibou-L) | (224, 224, 3) | 1024 | 1.21 GB |
-| [Phikon](https://huggingface.co/owkin/phikon) | (224, 224, 3) | 768 | 0.346 GB |
-| [UNI](https://huggingface.co/MahmoodLab/UNI) | (224, 224, 3) | 1024 | 1.21 GB |
-| [Virchow](https://huggingface.co/paige-ai/Virchow) | (224, 224, 3) | 2560 | 2.53 GB |
-| [Virchow2](https://huggingface.co/paige-ai/Virchow2) | (224, 224, 3) | 2560 | 2.53 GB |
+| [phikon](https://huggingface.co/owkin/phikon) | (224, 224, 3) | 768 | 0.346 GB |
+| [uni](https://huggingface.co/MahmoodLab/UNI) | (224, 224, 3) | 1024 | 1.21 GB |
+| [uni2](https://huggingface.co/MahmoodLab/UNI2-h) | (224, 224, 3) | 1536 | 2.73 GB |
+| [virchow](https://huggingface.co/paige-ai/Virchow) | (224, 224, 3) | 2560 | 2.53 GB |
+| [virchow2](https://huggingface.co/paige-ai/Virchow2) | (224, 224, 3) | 2560 | 2.53 GB |
 
 A [dockerfile](server.Dockerfile) built on Triton Server container encapsulates all requirements for serving these models
 ```bash
@@ -170,7 +182,13 @@ Each folder in the `/models` directory contains a `model.py` file containing the
 A [huggingface token](https://huggingface.co/settings/tokens) is required to access the UNI, gigapath, and hibou-L models. This is passed to the server by setting the environment variable `HF_TOKEN` on the server, and passing the environment variable when running the 
 ```bash
 export HF_TOKEN=hf_**********************************
-docker run -e HF_TOKEN=$HF_TOKEN model-tritonserver -p 8000:8000 -p 8001:8001 -p 8002:8002 -p 8003:8003 --shm-size=1g --ulimit memlock=-1 --ipc=host -v ${PWD}/models/:/models model-tritonserver tritonserver --model-repository=/models --model-control-mode=explicit --exit-on-error=false
+docker run \
+  -e HF_TOKEN=$HF_TOKEN \
+  --gpus=all \
+  -p 8000:8000 -p 8001:8001 -p 8002:8002 -p 8003:8003 \
+  --shm-size=1g --ulimit memlock=-1 --ipc=host \
+  -v ${PWD}/models/:/models \
+  model-tritonserver tritonserver --model-repository=/models --model-control-mode=explicit --exit-on-error=false
 ```
 
 ## Model configuration <a name="config"></a>
