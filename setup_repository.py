@@ -9,7 +9,8 @@ MODEL_ROOT = "/hosted"
 
 def model_setup(source, destination):
     """Creates a valid model folder at destination"""
-    path = os.path.join(destination, os.path.basename(os.path.normpath(source)), "1")
+    base = os.path.basename(os.path.normpath(source))
+    path = os.path.join(destination, base, "1")
     os.makedirs(path, exist_ok=True)
     shutil.copy(os.path.join(source, "model.py"), path)
 
