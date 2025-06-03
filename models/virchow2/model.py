@@ -14,7 +14,6 @@ import tritonclient.utils as triton_utils
 
 
 class TritonPythonModel:
-
     @staticmethod
     def auto_complete_config(model_config):
         """Returns a minimal model configuration for the virchow2 model.
@@ -30,11 +29,7 @@ class TritonPythonModel:
           An object containing the auto-completed model configuration
         """
         inputs = [
-            {
-                "name": "input_0",
-                "data_type": "TYPE_UINT8",
-                "dims": [224, 224, 3],
-            }
+            {"name": "input_0", "data_type": "TYPE_UINT8", "dims": [224, 224, 3],}
         ]
         outputs = [{"name": "output_0", "data_type": "TYPE_FP32", "dims": [2560]}]
         config = model_config.as_dict()

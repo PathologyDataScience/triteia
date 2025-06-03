@@ -330,10 +330,7 @@ def tf_encoder(
     # build optional devonvolution layer
     input_kwargs = model.layers[0].get_config()
     input_0 = tf.keras.layers.Input(
-        shape=input_shape,
-        dtype=dtype,
-        name="input_0",
-        sparse=input_kwargs["sparse"],
+        shape=input_shape, dtype=dtype, name="input_0", sparse=input_kwargs["sparse"],
     )
     input_float = TfCast(tf.float32)(input_0) if dtype != tf.float32 else input_0
     output_kwargs = model.layers[-1].get_config()
