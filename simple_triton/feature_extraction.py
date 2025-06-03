@@ -110,7 +110,9 @@ def study(
             )
         else:
             tiles_by_grid_and_mask = hs.configure.TilesByGridAndMask(
-                study, overlap_height=overlap[0], overlap_width=overlap[1],
+                study,
+                overlap_height=overlap[0],
+                overlap_width=overlap[1],
             )
 
         # apply functions
@@ -299,7 +301,9 @@ def main():
     )
     parser.add_argument("output", type=str, help="Output directory.")
     parser.add_argument(
-        "model", type=str, help="Model name.",
+        "model",
+        type=str,
+        help="Model name.",
     )
     parser.add_argument(
         "-f",
@@ -544,9 +548,11 @@ def main():
             if i < len(files) - 1:
                 kwargs.update(
                     {
-                        "paths": files[i + 1][0]
-                        if files[i + 1][1] is None
-                        else (files[i + 1][0], files[i + 1][1])
+                        "paths": (
+                            files[i + 1][0]
+                            if files[i + 1][1] is None
+                            else (files[i + 1][0], files[i + 1][1])
+                        )
                     }
                 )
                 futures[files[i + 1][0]] = pool.submit(study, **kwargs)

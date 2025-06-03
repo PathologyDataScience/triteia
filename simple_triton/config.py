@@ -406,7 +406,12 @@ class TensorflowOptimization(PythonOptimization):
     """
 
     def __init__(
-        self, input_pinned=True, output_pinned=True, amp=None, trt=None, xla=None,
+        self,
+        input_pinned=True,
+        output_pinned=True,
+        amp=None,
+        trt=None,
+        xla=None,
     ):
         super(TensorflowOptimization, self).__init__(input_pinned, output_pinned)
         if amp is not None and trt is not None:
@@ -533,7 +538,11 @@ class OnnxOptimization(PythonOptimization):
     """
 
     def __init__(
-        self, input_pinned=True, output_pinned=True, trt=None, graph=None,
+        self,
+        input_pinned=True,
+        output_pinned=True,
+        trt=None,
+        graph=None,
     ):
         super(OnnxOptimization, self).__init__(input_pinned, output_pinned)
         if graph is not None and trt is not None:

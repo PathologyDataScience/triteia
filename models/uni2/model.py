@@ -27,7 +27,11 @@ class TritonPythonModel:
           An object containing the auto-completed model configuration
         """
         inputs = [
-            {"name": "input_0", "data_type": "TYPE_UINT8", "dims": [224, 224, 3],}
+            {
+                "name": "input_0",
+                "data_type": "TYPE_UINT8",
+                "dims": [224, 224, 3],
+            }
         ]
         outputs = [{"name": "output_0", "data_type": "TYPE_FP32", "dims": [1536]}]
         config = model_config.as_dict()
@@ -76,7 +80,9 @@ class TritonPythonModel:
             os.getenv("HF_TOKEN")
         )  # User Access Token, found at https://huggingface.co/settings/tokens
         self.model = timm.create_model(
-            "hf-hub:MahmoodLab/UNI2-h", pretrained=True, **timm_kwargs,
+            "hf-hub:MahmoodLab/UNI2-h",
+            pretrained=True,
+            **timm_kwargs,
         )
         self.model = self.model.to(torch.device(f"cuda:{self.gpu_id}"))
         self.transform = create_transform(
