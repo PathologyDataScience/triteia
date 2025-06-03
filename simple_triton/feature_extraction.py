@@ -540,19 +540,27 @@ def main():
             "objective": args.magnification,
             "mask_threshold": 0.01,
         }
-        futures = {0: pool.submit(study, **kwargs)}
+        futures = {files[0][0]: pool.submit(study, **kwargs)}
 
         # iterate through files and masks
         for i, (file, mask, stain) in enumerate(tqdm(files, desc="Slides ")):
             # prefetch study for next slide
             if i < len(files) - 1:
-                kwargs.update({"paths": file if mask is None else (file, mask)})
-                futures[(i + 1) % 2] = pool.submit(study, **kwargs)
+                kwargs.update(
+                    {
+                        "paths": (
+                            files[i + 1][0]
+                            if files[i + 1][1] is None
+                            else (files[i + 1][0], files[i + 1][1])
+                        )
+                    }
+                )
+                futures[files[i + 1][0]] = pool.submit(study, **kwargs)
 
             # wait on study completion for current job
-            wait([futures[i % 2]])
+            wait([futures[file]])
             try:
-                hs_study = futures[i % 2].result()
+                hs_study = futures[file].result()
             except Exception as exc:
                 print(f"Inference error {file}: {exc}")
                 continue

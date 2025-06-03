@@ -7,7 +7,6 @@ import tritonclient.utils as triton_utils
 
 
 class TritonPythonModel:
-
     @staticmethod
     def auto_complete_config(model_config):
         """Returns a minimal model configuration for the phikon model.
