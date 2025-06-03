@@ -39,10 +39,7 @@ class Benchmark:
         tile = self.args_dict["tile"]
         # create a histomic-stream study from a wsi/mask pair
         self.hs_study = study(
-            (wsi_path, mask_path),
-            t=(tile, tile),
-            chunk=(tile, tile),
-            objective=20.0,
+            (wsi_path, mask_path), t=(tile, tile), chunk=(tile, tile), objective=20.0,
         )
 
     def create_load_model(self):
@@ -117,8 +114,7 @@ class Benchmark:
         throughput_results = []
         elapsed_time_results = []
         self.create_hs_study(
-            self.args_dict["wsi_path"][0],
-            self.args_dict["mask_path"][0],
+            self.args_dict["wsi_path"][0], self.args_dict["mask_path"][0],
         )
         dtype = np.uint8
         iterator = TiffPrefetch(
@@ -126,16 +122,8 @@ class Benchmark:
         )
         # warm up Model
         print("Warmup Model")
-        (
-            self.features,
-            self.tile_info,
-            self.times,
-            self.failed,
-        ) = inference(
-            iterator,
-            model_name,
-            url=self.args_dict["url"],
-            limit=limit,
+        (self.features, self.tile_info, self.times, self.failed,) = inference(
+            iterator, model_name, url=self.args_dict["url"], limit=limit,
         )
         # inference for number of iterations
         print("Total iterations:", self.args_dict["iterations"])
@@ -149,24 +137,15 @@ class Benchmark:
                 self.args_dict["mask_path"][0],
             )
             self.create_hs_study(
-                self.args_dict["wsi_path"][0],
-                self.args_dict["mask_path"][0],
+                self.args_dict["wsi_path"][0], self.args_dict["mask_path"][0],
             )
             iterator = TiffPrefetch(
                 self.hs_study, dtype=dtype, batch=batch, workers=workers
             )
             # start timer
             start = time.time()
-            (
-                self.features,
-                self.tile_info,
-                self.times,
-                self.failed,
-            ) = inference(
-                iterator,
-                model_name,
-                url=self.args_dict["url"],
-                limit=limit,
+            (self.features, self.tile_info, self.times, self.failed,) = inference(
+                iterator, model_name, url=self.args_dict["url"], limit=limit,
             )
             elapsed_time_single = time.time() - start
             # throughput and elapsed time for single inference
