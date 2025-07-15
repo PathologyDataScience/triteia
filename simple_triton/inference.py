@@ -2,19 +2,26 @@ import argparse
 import os
 import time
 from functools import partial
-
 import numpy as np
 from tritonclient.utils import (
     InferenceServerException,
     triton_to_np_dtype,
     np_to_triton_dtype,
 )
-
 from simple_triton.model import TritonModel
-from simple_triton.tile_iterators import SharedNumpyArray
 from simple_triton.utils import create_client
 
-ARRAY_TYPES = (np.ndarray, SharedNumpyArray)
+
+def _is_numpy_shared(inputs):
+    """Determine if dealing with a shared numpy array, defined strictly as an
+    object with a `view` method that returns a numpy.ndarray."""
+    if isinstance(inputs, np.ndarray):
+        return True
+    else:
+        if hasattr(inputs, "view"):
+            if isinstance(inputs.view(), np.ndarray):
+                return True
+        return False
 
 
 class Requests(object):
@@ -179,7 +186,7 @@ class Requests(object):
                 )
 
         # validate type and number of inputs
-        if isinstance(inputs, ARRAY_TYPES):
+        if _is_numpy_shared(inputs):
             if len(model_dict["input"]) != 1:
                 raise Exception(
                     (
@@ -200,7 +207,8 @@ class Requests(object):
             raise Exception(
                 (
                     "inputs must be an np.ndarray or a dictionary of np.ndarrays"
-                    " keyed to the model inputs."
+                    " keyed to the model inputs, or a class with method `view` that"
+                    " returns an np.ndarray."
                 )
             )
 
@@ -214,7 +222,7 @@ class Requests(object):
         if "maxBatchSize" in model_dict:
             if model_dict["maxBatchSize"] > 0:
                 batching = True
-                if isinstance(inputs, ARRAY_TYPES):
+                if _is_numpy_shared(inputs):
                     batch_size = inputs.shape[0]
                 else:
                     batch_size = inputs[list(inputs.keys())[0]].shape[0]
@@ -225,14 +233,14 @@ class Requests(object):
 
         # validate input types
         if strict_types:
-            if isinstance(inputs, ARRAY_TYPES):
+            if _is_numpy_shared(inputs):
                 _compare_types(model_dict, inputs, model_dict["input"][0])
             else:
                 for i in model_dict["input"]:
                     _compare_types(model_dict, inputs[i["name"]], i)
 
         # validate input shapes
-        if isinstance(inputs, ARRAY_TYPES):
+        if _is_numpy_shared(inputs):
             _compare_shape(model_dict, inputs, model_dict["input"][0], batching)
         else:
             for i in model_dict["input"]:
@@ -240,7 +248,7 @@ class Requests(object):
 
         # validate batching
         if batching:
-            if isinstance(inputs, ARRAY_TYPES):
+            if _is_numpy_shared(inputs):
                 if inputs.shape[0] > model_dict["maxBatchSize"]:
                     raise Exception(
                         (
@@ -302,10 +310,11 @@ class Requests(object):
             iio.set_data_from_numpy(provided)
             return iio
 
-        if isinstance(inputs, np.ndarray):
-            infer_inputs = [add_input(inputs, model_dict["input"][0])]
-        elif isinstance(inputs, SharedNumpyArray):
-            infer_inputs = [add_input(inputs.view(), model_dict["input"][0])]
+        if _is_numpy_shared(inputs):
+            if hasattr(inputs, "view"):
+                infer_inputs = [add_input(inputs.view(), model_dict["input"][0])]
+            else:
+                infer_inputs = [add_input(inputs, model_dict["input"][0])]
         else:
             infer_inputs = [
                 add_input(
