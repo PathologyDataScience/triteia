@@ -378,16 +378,18 @@ def track_method(func, writer, slide_num, live_tracking=False, path="/"):
             disk_tracker.join()
             for g in gpu_monitors:
                 g.join()
+
         final_disk_io = psutil.disk_io_counters()
         final_disk_p = p.io_counters()
         bytes_read = final_disk_io.read_bytes - initial_disk_io.read_bytes
         chars_read = final_disk_p.read_chars - initial_disk_p.read_chars
         kilobytes_read = int(bytes_read / 1024)
-        writer.add_scalar("kilobytes_read", kilobytes_read, i)
-        writer.add_scalar("chars_read", chars_read, i)
-        writer.add_scalar("kilobytes_read_per_s", kilobytes_read / elapsed_time, i)
-        writer.add_scalar("chars_read_per_s", chars_read / elapsed_time, i)
-        writer.add_scalar("time_elapsed", elapsed_time, i)
+        writer.add_scalar("kilobytes_read", kilobytes_read, slide_num)
+        writer.add_scalar("chars_read", chars_read, slide_num)
+        writer.add_scalar(
+            "kilobytes_read_per_s", kilobytes_read / elapsed_time, slide_num
+        )
+        writer.add_scalar("chars_read_per_s", chars_read / elapsed_time, slide_num)
 
         return result
 
