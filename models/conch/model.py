@@ -40,7 +40,7 @@ class TritonPythonModel:
         for o in outputs:
             if o["name"] not in output_names:
                 model_config.add_output(o)
-        model_config.set_max_batch_size(128)
+        model_config.set_max_batch_size(256)
         model_config.set_dynamic_batching()
 
         return model_config
