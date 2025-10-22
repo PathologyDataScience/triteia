@@ -88,9 +88,10 @@ def study(
             "filename": filename,
             "slide_name": slide_name,
             "slide_group": name,
-            "chunk_height": chunk[0],
-            "chunk_width": chunk[1],
         }
+        if chunk is not None:
+            slides[name]["chunk_height"] = chunk[0]
+            slides[name]["chunk_width"] = chunk[1]
 
     # apply settings to each slide
     for name, path in zip(names, paths):
