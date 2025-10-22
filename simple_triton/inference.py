@@ -356,7 +356,7 @@ class Requests(object):
         result : grpcclient.InferResult
             The result of inference if successful.
         error : tritonclientutils.InferenceServerException
-            An exception if inference failed. Otherwise None.
+            An exception if inference failed. Otherwise, None.
         """
 
         if error:
