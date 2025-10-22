@@ -390,6 +390,7 @@ def track_method(func, writer, slide_num, live_tracking=False, path="/"):
             "kilobytes_read_per_s", kilobytes_read / elapsed_time, slide_num
         )
         writer.add_scalar("chars_read_per_s", chars_read / elapsed_time, slide_num)
+        writer.add_scalar("time_elapsed", elapsed_time, slide_num)
 
         return result
 
