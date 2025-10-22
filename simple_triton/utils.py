@@ -161,7 +161,7 @@ def init_tb_writer(tb_dir, tb_name, files, extra):
 
     writer = SummaryWriter(log_dir=tb_dst)
     logging.info(
-        f"Writing tensorboard stats to '{tb_dst}' (inspect with `tensoboard --logdir={tb_dst}`)"
+        f"Writing tensorboard stats to '{tb_dst}' (inspect with `tensorboard --logdir={tb_dst}`)"
     )
     try:
         writer.add_text("git_sha", os.popen("git rev-parse HEAD").read().strip())
