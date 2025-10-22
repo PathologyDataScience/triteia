@@ -347,6 +347,13 @@ def main():
         help="Skip files with existing embeddings in output.",
     )
     parser.add_argument(
+        "-l",
+        "--live-tracking",
+        dest="live_tracking",
+        action="store_true",
+        help="Whether or not to collect CPU and RAM metrics",
+    )
+    parser.add_argument(
         "-a",
         "--address",
         required=False,
@@ -590,7 +597,9 @@ def main():
                 source = None
 
             # inference
-            features, metadata, times, failures = track_method(inference, writer, i)(
+            features, metadata, times, failures = track_method(
+                inference, writer, i, live_tracking=args.live_tracking
+            )(
                 iterator,
                 args.model,
                 source=source,

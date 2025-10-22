@@ -195,19 +195,189 @@ def write_analysis_tb(analysis, writer, i):
     writer.add_scalar("retrieval_total_avg", analysis["avg"]["retrieval (% total)"], i)
 
 
-def track_method(func, writer, i):
+def monitor_gpu(stop_event, interval_sec, action, writer, gpu_index=0):
+    import importlib.util
+
+    pynvml_module = importlib.util.find_spec("pynvml")
+    if pynvml_module is not None:
+        from pynvml import (
+            nvmlInit,
+            nvmlShutdown,
+            nvmlDeviceGetHandleByIndex,
+            nvmlDeviceGetMemoryInfo,
+            nvmlDeviceGetUtilizationRates,
+        )
+    else:
+        return
+    """
+    Periodically logs GPU memory and processor usage.
+
+    Args:
+        stop_event: A threading.Event that signals the monitor to stop.
+        interval: Time in seconds between each log.
+        action: A string identifier for the action being monitored.
+        writer: A logging writer (e.g., TensorBoard writer).
+        gpu_index: Index of the GPU to monitor (default: 0).
+    """
+    nvmlInit()
+    try:
+        handle = nvmlDeviceGetHandleByIndex(gpu_index)
+        i = 0
+        while not stop_event.is_set():
+            # Memory usage
+            mem_info = nvmlDeviceGetMemoryInfo(handle)
+            gpu_mem_used = mem_info.used / (1024 * 1024)  # Convert to MB
+            gpu_mem_total = mem_info.total / (1024 * 1024)  # Convert to MB
+
+            # GPU utilization
+            utilization = nvmlDeviceGetUtilizationRates(handle)
+            gpu_util = utilization.gpu  # GPU utilization percentage
+
+            # Log metrics
+            writer.add_scalar(
+                f"{action}_gpu_{gpu_index}_mem_used_mb", gpu_mem_used, global_step=i
+            )
+            writer.add_scalar(
+                f"{action}_gpu_mem_{gpu_index}_total_mb", gpu_mem_total, global_step=i
+            )
+            writer.add_scalar(
+                f"{action}_gpu_{gpu_index}_util_percent", gpu_util, global_step=i
+            )
+            i += 1
+
+            time.sleep(interval_sec)
+    finally:
+        nvmlShutdown()
+
+
+def monitor_memory(stop_event, interval, action, writer):
+    """Periodically logs memory usage of the current process."""
+    process = psutil.Process(os.getpid())
+    i = 0
+    while not stop_event.is_set():
+        mem_info = process.memory_info()
+        mem_used = mem_info.rss / (1024 * 1024)
+        writer.add_scalar(f"{action}_mem_mb", mem_used, global_step=i)
+        i += 1
+        time.sleep(interval)
+
+
+def monitor_cpu(stop_event, interval, action, writer, python_only=False):
+    """Periodically logs CPU usage.
+
+    - Default: logs one scalar per CPU on the host system.
+    - If python_only=True: logs CPU usage for Python processes (total and per-PID).
+    """
+    process = psutil.Process(os.getpid())
+    i = 0
+
+    # Prime psutil CPU measurements to avoid 0.0 on first read
+    psutil.cpu_percent(percpu=True, interval=None)
+    process.cpu_percent(interval=None)
+
+    while not stop_event.is_set():
+        if python_only:
+            # Collect CPU percent for all Python processes
+            total_py_cpu = 0.0
+            per_pid = {}
+            for p in psutil.process_iter(attrs=["pid", "name"]):
+                try:
+                    name = (p.info.get("name") or "").lower()
+                    if "python" in name:
+                        # cpu_percent(None) returns the percent since last call
+                        per = p.cpu_percent(interval=None)
+                        per_pid[p.info["pid"]] = per
+                        total_py_cpu += per
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    continue
+
+            writer.add_scalar(
+                f"{action}_cpu_percent_python_total", total_py_cpu, global_step=i
+            )
+            # Also log per-PID to help disambiguate multiple Python workers
+            for pid, per in per_pid.items():
+                writer.add_scalar(
+                    f"{action}_cpu_percent_python_pid_{pid}", per, global_step=i
+                )
+        else:
+            # System-wide per-CPU usage
+            per_cpu = psutil.cpu_percent(percpu=True, interval=None)
+            writer.add_scalar(
+                f"{action}_cpu_percent_total/avg",
+                sum(per_cpu) / len(per_cpu),
+                global_step=i,
+            )
+            writer.add_scalar(
+                f"{action}_cpu_percent_total/agg", sum(per_cpu), global_step=i
+            )
+            for idx, val in enumerate(per_cpu):
+                writer.add_scalar(f"{action}_cpu_percent/cpu_{idx}", val, global_step=i)
+
+        i += 1
+        time.sleep(interval)
+
+
+def monitor_disk(stop_event, interval, action, writer, path="/"):
+    """Periodically logs disk usage percentage for the specified path."""
+    i = 0
+    while not stop_event.is_set():
+        disk_usage = psutil.disk_usage(path)
+        disk_percent = (disk_usage.used / disk_usage.total) * 100
+        writer.add_scalar(f"{action}_disk_usage_percent", disk_percent, global_step=i)
+        i += 1
+        time.sleep(interval)
+
+
+def track_method(func, writer, slide_num, live_tracking=False, path="/"):
     @wraps(func)
     def wrapper(*args, **kwargs):
         p = psutil.Process()
         initial_disk_io = psutil.disk_io_counters()
         initial_disk_p = p.io_counters()
 
-        start = time()
+        if live_tracking:
+            stop_event = threading.Event()
+            memory_tracker = threading.Thread(
+                target=monitor_memory,
+                args=(stop_event, 0.5, "memory", writer),
+                daemon=True,
+            )
+            cpu_tracker = threading.Thread(
+                target=monitor_cpu,
+                args=(stop_event, 0.5, "cpu", writer),
+                daemon=True,
+            )
+            disk_tracker = threading.Thread(
+                target=monitor_disk,
+                args=(stop_event, 0.5, "disk", writer, path),
+                daemon=True,
+            )
+            gpu_monitors = []
+            for i, g in enumerate([0]):
+                gpu_monitor = threading.Thread(
+                    target=monitor_gpu,
+                    args=(stop_event, 0.1, "gpu", writer, i),
+                    daemon=True,
+                )
+                gpu_monitor.start()
+                gpu_monitors.append(gpu_monitor)
+            memory_tracker.start()
+            cpu_tracker.start()
+            disk_tracker.start()
+
+        start = time.time()
 
         result = func(*args, **kwargs)
 
-        elapsed_time = time() - start
+        elapsed_time = time.time() - start
 
+        if live_tracking:
+            stop_event.set()
+            memory_tracker.join()
+            cpu_tracker.join()
+            disk_tracker.join()
+            for g in gpu_monitors:
+                g.join()
         final_disk_io = psutil.disk_io_counters()
         final_disk_p = p.io_counters()
         bytes_read = final_disk_io.read_bytes - initial_disk_io.read_bytes
