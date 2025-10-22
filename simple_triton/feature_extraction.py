@@ -2,6 +2,7 @@ import argparse
 import math
 import os
 import tempfile
+import logging
 from concurrent.futures import ProcessPoolExecutor, wait
 from time import sleep
 
@@ -600,31 +601,39 @@ def main():
             )
             if args.metrics_endpoint:
                 write_tritonserver_metrics(args.metrics_endpoint, writer, i)
-            writer.add_scalar("number_of_tiles", len(metadata["tile_left"]), i)
-            write_analysis_tb(analyze(times), writer, i)
+            if "tile_left" in metadata:
+                writer.add_scalar("number_of_tiles", len(metadata["tile_left"]), i)
+                write_analysis_tb(analyze(times), writer, i)
 
-            start = time()
-            features = np.concatenate(features[0], axis=0)
+            if len(features) > 0:
+                start = time()
+                features = np.concatenate(features[0], axis=0)
 
-            # write to tfrecord
-            precision = tf.float32 if args.float else tf.float16
-            write_record(
-                tfr_name(
-                    args.output,
-                    file,
-                    args.model,
-                    args.tile,
-                    args.overlap,
-                    args.magnification,
-                ),
-                features,
-                metadata,
-                labels={},
-                structured=False,
-                precision=precision,
-            )
-            feature_writing_time = time() - start
-            writer.add_scalar("feature_writing_elapsed_sec", feature_writing_time, i)
+                # write to tfrecord
+                precision = tf.float32 if args.float else tf.float16
+                write_record(
+                    tfr_name(
+                        args.output,
+                        file,
+                        args.model,
+                        args.tile,
+                        args.overlap,
+                        args.magnification,
+                    ),
+                    features,
+                    metadata,
+                    labels={},
+                    structured=False,
+                    precision=precision,
+                )
+                feature_writing_time = time() - start
+                writer.add_scalar(
+                    "feature_writing_elapsed_sec", feature_writing_time, i
+                )
+            else:
+                logging.warning(
+                    f"No features extracted for '{file}': see tritonserver logs."
+                )
 
 
 if __name__ == "__main__":
