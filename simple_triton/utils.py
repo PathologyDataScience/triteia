@@ -1,8 +1,8 @@
-import numpy as np
-import tensorflow as tf
-from time import time
+import threading
+from datetime import timedelta
+
+import time
 import tritonclient.grpc as grpcclient
-from tritonclient.utils import InferenceServerException
 import numpy as np
 import pandas as pd
 import subprocess
@@ -156,7 +156,7 @@ def init_tb_writer(tb_dir, tb_name, files, extra):
     # that multiple people on one server won't cause write errors
     user = get_username()
     tb_dir = tb_dir or os.path.join(tempfile.gettempdir(), f"tb_{user}")
-    tb_name = tb_name or str(time())
+    tb_name = tb_name or str(time.time())
     tb_dst = os.path.join(tb_dir, tb_name)
 
     writer = SummaryWriter(log_dir=tb_dst)
