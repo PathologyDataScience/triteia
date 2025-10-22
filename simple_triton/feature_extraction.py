@@ -133,7 +133,6 @@ def inference(
     target=None,
     url="localhost:8001",
     pre=None,
-    nchw=False,
     limit=10,
     rest=1e-3,
     timeout=None,
@@ -328,6 +327,12 @@ def main():
         default=None,
         type=str,
         help="Optional path to an image stain profile for single image input.",
+    )
+    parser.add_argument(
+        "--nchw",
+        action="store_true",
+        default=False,
+        help="Emit NCHW tile batches from iterator instead of NHWC (default: False).",
     )
     parser.add_argument(
         "-r",
@@ -574,6 +579,7 @@ def main():
                 icc=args.icc,
                 batch=args.batch,
                 prefetch=args.prefetch,
+                nchw=args.nchw,
                 workers=args.workers,
             )
 
