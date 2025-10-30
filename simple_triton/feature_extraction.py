@@ -411,7 +411,6 @@ def main():
         help="Skip files with existing embeddings in output.",
     )
     parser.add_argument(
-        "-l",
         "--live-tracking",
         dest="live_tracking",
         action="store_true",
@@ -470,6 +469,14 @@ def main():
         default=4,
         type=int,
         help="Reach chunk size (default 4 tiles).",
+    )
+    parser.add_argument(
+        "-l",
+        "--limit",
+        required=False,
+        default=10,
+        type=int,
+        help="The maximum number of allowable pending inferences. Default value 10",
     )
     parser.add_argument(
         "-p",
@@ -673,6 +680,7 @@ def main():
                 source=source,
                 target=target,
                 clients=clients,
+                limit=args.limit,
             )
             if args.metrics_endpoint:
                 write_tritonserver_metrics(args.metrics_endpoint, writer, i)
