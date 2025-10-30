@@ -1,16 +1,26 @@
 import argparse
 import math
-import os
+import warnings
 import tempfile
+from collections import defaultdict
 import logging
-from concurrent.futures import ProcessPoolExecutor, wait
+from concurrent.futures import (
+    ProcessPoolExecutor,
+    ThreadPoolExecutor,
+    wait,
+    as_completed,
+)
+from contextlib import ExitStack
+from itertools import cycle
 from time import sleep, time
+from typing import List
 import sys
 
 import histomics_stream as hs
 import large_image_source_tiff
 import numpy as np
 import tensorflow as tf
+from pytriton.client import ModelClient
 from tqdm import tqdm
 
 from simple_triton.utils import analyze, init_tb_writer, track_method, write_analysis_tb
@@ -129,6 +139,162 @@ def study(
     return study
 
 
+# A thread-local storage for each thread/worker
+thread_local_data = threading.local()
+
+
+def worker_init():
+    thread_local_data.read_start = time.time()
+
+
+def worker_infer(args):
+    read_end = (
+        time.time()
+    )  # we can now use "read_start" and "read_end" to see how long a call to __next__ took
+    client, pre, source, target, (sample, metadata_local) = args
+    if not ((source is None) and (target is None)):
+        sample = {
+            "input_0": sample,
+            "input_1": np.stack(
+                sample.shape[0] * [source.astype(np.float32)],
+                axis=0,
+            ),
+            "input_2": np.stack(
+                sample.shape[0] * [source.astype(np.float32)],
+                axis=0,
+            ),
+        }
+    if pre is not None:
+        sample = pre(sample)
+    features = None
+    submit_time = time.time()
+    try:
+        results = client.infer_batch(sample.view())
+        # Take the first output tensor
+        for _, v in results.items():
+            features = np.asarray(v)
+            break
+    except Exception as e:
+        # We allow errors - it's up to user to deal with them
+        logging.error(f"Inference failed for a request: ", e)
+
+    return (
+        features,
+        metadata_local,
+        {
+            "submitted": submit_time,
+            "read_start": thread_local_data.read_start,
+            "read_stop": read_end,
+            "retrieved": time.time(),
+        },
+    )
+
+
+def initialize_clients(stack, url, model_name, max_workers):
+    warnings.filterwarnings(
+        "ignore",
+        message=r"tritonclient\.grpc doesn't support timeout for other commands than infer\. Ignoring network_timeout: .*",
+    )
+    client = stack.enter_context(
+        ModelClient("grpc://" + url, model_name, lazy_init=False, init_timeout_s=10.0)
+    )
+    # "from_existing_client" depends on nvidia-pytriton > 0.7.0, which requires glibc >= 2.35
+    # clients = [client] + [stack.enter_context(ModelClient.from_existing_client(client)) for _ in range(max_workers - 1)]
+    clients = [client] + [
+        stack.enter_context(
+            ModelClient(
+                "grpc://" + url, model_name, lazy_init=False, init_timeout_s=10.0
+            )
+        )
+        for _ in range(max_workers - 1)
+    ]
+    return clients
+
+
+def inference_job(
+    iterator,
+    clients: List[ModelClient],
+    source=None,
+    target=None,
+    pre=None,
+):
+    """Inference on the data defined in an iterator.
+
+    Parameters
+    ----------
+    iterator : object
+        An iterator such as LargeImagePrefetch that produces (batch, metadata)
+        where batch is a numpy.ndarray and metadata is a dictionary describing the
+        batch.
+    clients : List[ModelClient]
+        Identical clients to be used for synchronous fetching of data.
+    source : array_like
+        Stain matrix (3x3) for the input slides. Requires a model with a normalization
+        layer. Default value is None.
+    target : array_like
+        Ideal stain matrix (3x3) for normalization. Required if `source` provided.
+    pre : function
+        A preprocessing function to apply to samples emitted from `iterator` prior
+        to inference. Default value is None.
+
+    Returns
+    -------
+    features : list of np.ndarray
+        Per-tile inference results
+    metadata : dict
+        A dictionary inference metadata where values are numpy arrays.
+        If using histomics stream this will contain file, magnification, and position
+        data for each batch produced by `dataset`.
+    performance : dict
+        A dictionary of time performance data on inference.
+    failures : List[dict]
+        A list of dictionaries with metadata for each failed batch/request.
+    """
+    inference_results = []
+    metadata_results = []
+    failures = []
+    timings = defaultdict(list)
+
+    static = (pre, source, target)
+    clients_tuple = tuple(clients)
+    n = len(clients_tuple)
+
+    def task_iter():
+        for _n, item in enumerate(iterator):
+            yield clients_tuple[_n % n], *static, item
+
+    metadata_results = defaultdict(list)
+
+    with ThreadPoolExecutor(n, initializer=worker_init) as executor:
+        timings["inference_started"] = [time()]
+        futs = [executor.submit(worker_infer, arg) for arg in task_iter()]
+        for i, f in enumerate(as_completed(futs)):
+            (features, metadata, time_stats) = f.result()
+            if features is None:
+                failures.append(metadata)
+                continue
+            inference_results.append(features)
+            for m in metadata:
+                for k, v in m.items():
+                    metadata_results[k].append(v)
+
+            for key, value in time_stats.items():
+                timings[key].append(value)
+
+    timings["inference_completed"] = [time.time()]
+
+    return (
+        (
+            np.concatenate(inference_results, axis=0)
+            if inference_results
+            else np.array([])
+        ),
+        metadata_results,
+        timings,
+        failures,
+    )
+
+
 def inference(
     iterator,
     model_name,
@@ -137,9 +303,6 @@ def inference(
     url="localhost:8001",
     pre=None,
     limit=10,
-    rest=1e-3,
-    timeout=None,
-    verbose=False,
 ):
     """Inference on the data defined in an iterator.
 
@@ -154,27 +317,16 @@ def inference(
         inference.
     source : array_like
         Stain matrix (3x3) for the input slides. Requires a model with a normalization
-        layer. Default value is None.
+        layer. The default value is None.
     target : array_like
         Ideal stain matrix (3x3) for normalization. Required if `source` provided.
     url : str
-        The url for the triton server grpc port. Default value is `localhost:8001`.
+        The url for the triton server grpc port. The default value is `localhost:8001`.
     pre : function
         A preprocessing function to apply to samples emitted from `iterator` prior
-        to inference. Default value is None.
-    nchw : bool
-        Whether to transpose the data from NHWC format to NCHW format. Default
-        value is False.
+        to inference. The default value is None.
     limit : int
         The maximum number of allowable pending inferences. Default value 10.
-    rest : float
-        The number of seconds to wait between polling for completed inferences.
-        Default value is 1 millisecond.
-    timeout : float
-        The number of seconds after which an inference times out. Default value of
-        None means no timeout.
-    verbose : bool
-        Update the console with inference progress and statistics.
 
     Returns
     -------
@@ -185,105 +337,19 @@ def inference(
         If using histomics stream this will contain file, magnification, and position
         data for each batch produced by `dataset`.
     performance : dict
-        A dictionary of time performance data on reading, inference, and inter-process
-        communication.
-    failed : list
-        A list of failed inference requests.
+        A dictionary of time performance data on inference.
+    failures : List[dict]
+        A list of dictionaries with metadata and timing results for each failed batch/request.
     """
+    inference_results = []
+    metadata_results = []
+    timings = {"submitted": [], "retrieved": []}
 
-    # perform inference
-    batches = []
+    max_workers = limit
 
-    # set flag indicating qin stop signal received
-    stop = False
-
-    # create requests object
-    req = Requests(url, limit)
-
-    if isinstance(iterator, TiffPrefetch):
-        number_of_tiles = sum(
-            len(iterator.read_kwargs[i]) for i in range(len(iterator.read_kwargs))
-        )
-        number_of_batches = math.ceil(number_of_tiles / iterator.batch) - 1
-    else:
-        number_of_batches = None
-
-    with tqdm(total=number_of_batches, desc="Batches") as pbar:
-        # loop until iterator is exhausted
-        while True:
-            if not stop:
-                # draw samples, preprocess, and submit for inference up to limit
-                for i in range(limit - len(req.pending)):
-                    try:
-                        t_start = time()
-                        sample, metadata = next(iterator)
-                        if not ((source is None) and (target is None)):
-                            sample = {
-                                "input_0": sample,
-                                "input_1": np.stack(
-                                    sample.shape[0] * [np.cast(source, np.float32)],
-                                    axis=0,
-                                ),
-                                "input_2": np.stack(
-                                    sample.shape[0] * [np.cast(target, np.float32)],
-                                    axis=0,
-                                ),
-                            }
-                        t_stop = time()
-                    except StopIteration as e:
-                        stop = True
-                    if not stop:
-                        if pre is not None:
-                            sample = pre(sample)
-                        request = {
-                            "model_name": model_name,
-                            "inputs": sample,
-                            "metadata": metadata,
-                            "times": {"read_start": t_start, "read_stop": t_stop},
-                        }
-                        req.insert(request, timeout)
-                    else:
-                        break
-
-            # check pending requests
-            completed = req.check(block=False)
-
-            # put completed post-processed requests into queue
-            for inference in completed:
-                # remove inputs
-                del inference["inputs"]
-
-                # place in queue
-                batches.append(inference)
-                pbar.update()
-
-            # if done send stop signal
-            if len(req.pending) == 0 and stop:
-                break
-
-            # sleep
-            sleep(rest)
-
-    # failures
-    failed = [b for b in batches if not b["success"]]
-    batches = [b for b in batches if b["success"]]
-
-    # successful results
-    if len(batches):
-        features = [
-            [b["result"][i] for b in batches] for i in range(len(batches[0]["result"]))
-        ]
-        metadata = {
-            k: np.stack([b[k] for batch in batches for b in batch["metadata"]])
-            for k in batches[0]["metadata"][0].keys()
-        }
-        times = {
-            k: [b["times"][k] for b in batches] for k in batches[0]["times"].keys()
-        }
-    else:
-        features, metadata, times = {}, {}, {}
-
-    return features, metadata, times, failed
+    with ExitStack() as stack:
+        clients = initialize_clients(stack, url, model_name, max_workers)
+        return _inference(iterator, clients, source, target, pre)
 
 
 def main():
@@ -544,7 +610,9 @@ def main():
     )
 
     # create studies in background while waiting for inference to finish
-    with ProcessPoolExecutor(max_workers=1) as pool:
+    with ProcessPoolExecutor(max_workers=1) as pool, ExitStack() as stack:
+        clients = initialize_clients(stack, args.address, args.model, args.limit)
+
         # create first study in background
         chunk = args.chunk * args.tile - (args.chunk - 1) * args.overlap
         kwargs = {
@@ -605,15 +673,12 @@ def main():
 
             # inference
             features, metadata, times, failures = track_method(
-                inference, writer, i, live_tracking=args.live_tracking
+                inference_job, writer, i, live_tracking=args.live_tracking
             )(
                 iterator,
-                args.model,
                 source=source,
                 target=target,
-                url=args.address,
-                limit=1,
-                rest=0.0,
+                clients=clients,
             )
             if args.metrics_endpoint:
                 write_tritonserver_metrics(args.metrics_endpoint, writer, i)
@@ -623,7 +688,6 @@ def main():
 
             if len(features) > 0:
                 start = time()
-                features = np.concatenate(features[0], axis=0)
 
                 # write to tfrecord
                 precision = tf.float32 if args.float else tf.float16

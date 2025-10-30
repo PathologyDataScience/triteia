@@ -17,8 +17,7 @@ from simple_triton.config import (
     TensorflowXla,
     TensorRt,
 )
-from simple_triton.model import TritonModel
-
+from simple_triton.model import TritonModel, create_client
 
 MODEL = "EfficientNetV2S.tensorflow"
 BASIC = {"name": MODEL}
@@ -28,7 +27,7 @@ def test_max_batch_size(data, triton):
     """Verify max batch size setting properly"""
     _, grpc_port, _ = triton
     url = f"localhost:{grpc_port}"
-    client = grpcclient.InferenceServerClient(url=url, verbose=False)
+    client = create_client(url=url)
     batch = 512
     model = TritonModel(MODEL, url)
 
@@ -48,7 +47,7 @@ def test_response_cache(data, triton):
     """Verify response cache setting properly"""
     _, grpc_port, _ = triton
     url = f"localhost:{grpc_port}"
-    client = grpcclient.InferenceServerClient(url=url, verbose=False)
+    client = create_client(url=url)
     model = TritonModel(MODEL, url)
 
     config = TensorflowConfig(MODEL, max_batch_size=128, response_cache=True)
@@ -68,7 +67,7 @@ def test_add_instance_group(data, triton):
     """Verify setting instance groups properly"""
     _, grpc_port, _ = triton
     url = f"localhost:{grpc_port}"
-    client = grpcclient.InferenceServerClient(url=url, verbose=False)
+    client = create_client(url=url)
     model = TritonModel(MODEL, url)
 
     instance_group = InstanceGroup(count=0)
@@ -123,7 +122,7 @@ def test_add_mixed_precision(data, triton):
 
     _, grpc_port, _ = triton
     url = f"localhost:{grpc_port}"
-    client = grpcclient.InferenceServerClient(url=url, verbose=False)
+    client = create_client(url=url)
     model = TritonModel(MODEL, url)
 
     model.load(config=ampxla_config.json())
@@ -132,7 +131,7 @@ def test_add_mixed_precision(data, triton):
         "gpuExecutionAccelerator": [{"name": "auto_mixed_precision"}]
     }
 
-    client = grpcclient.InferenceServerClient(url=url, verbose=False)
+    client = create_client(url=url)
     batch = 512
     config = TensorflowConfig(MODEL, max_batch_size=batch)
     model.load(config=config.json())
@@ -147,7 +146,7 @@ def test_add_trt(data, triton):
     """Verify trt setting properly"""
     _, grpc_port, _ = triton
     url = f"localhost:{grpc_port}"
-    client = grpcclient.InferenceServerClient(url=url, verbose=False)
+    client = create_client(url=url)
     model = TritonModel(MODEL, url)
 
     def test_fp(precision_mode):

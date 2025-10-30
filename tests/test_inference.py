@@ -3,24 +3,15 @@ import numpy as np
 import os
 from simple_triton.config import PythonConfig, TensorflowConfig
 from simple_triton.feature_extraction import inference
-from simple_triton.inference import Requests
 from simple_triton.model import TritonModel
 from simple_triton.tile_iterators import TiffPrefetch
 from .triton import triton
 
 
 def infer_batch(name, batch, grpc_port):
-    req = Requests(f"localhost:{grpc_port}", limit=10)
-    request = {
-        "model_name": name,
-        "inputs": batch,
-        "metadata": {"x": 0, "y": 0, "other_stuff": None},
-        "times": {},
-    }
-    req.insert(request, timeout=None)
-    completed = req.check(block=True)
-    return completed[0]["result"]
-
+    url = f"localhost:{grpc_port}"
+    features,_,__,___ = inference(iter([(batch, {})]), model_name=name, url=url)
+    return features
 
 def python_batch_compare(data, name, grpc_port, max_batch_size=64):
     basic = PythonConfig(name, max_batch_size)
@@ -30,7 +21,7 @@ def python_batch_compare(data, name, grpc_port, max_batch_size=64):
     batch = np.load(data.fetch("batch.npy"))
     truth = np.load(data.fetch(f"{name}_batch.npy"))
     output = infer_batch(name, batch, grpc_port)
-    assert all([cosine_similarity(o, t) > 0.999 for o, t in zip(output[0], truth[0])])
+    assert all([cosine_similarity(o, t) > 0.999 for o, t in zip(output, truth[0])])
     model.unload(block=True)
 
 
@@ -49,7 +40,8 @@ def test_inference(data, it_kwargs_icc, inferred, triton):
     features, metadata, times, failures = inference(
         iterator, model_name, url=f"localhost:{grpc_port}"
     )
-    result = hash_inference(metadata, np.concatenate(features[0], axis=0))
+    assert len(failures) == 0
+    result = hash_inference(metadata, features)
     assert result.keys() == inferred.keys()
     assert all(
         [cosine_similarity(result[k], inferred[k]) > 0.999 for k in result.keys()]

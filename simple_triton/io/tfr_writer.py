@@ -106,19 +106,6 @@ def _train_variable(variable, variable_type_list=variable_type_list, serialize=F
         )
 
 
-def _generate_tile_index(tile_info):
-    """For an inference result containing multiple slides, extract the
-    indices of the tiles for each slide as well as the slide name."""
-
-    # format 'slide_name' for input to tf.unique (1D)
-    slide_names = tf.squeeze(tf.constant(tile_info["slide_name"]))
-
-    # get unique slide names in result and slide index for each tile
-    slide_names, slide_index = tf.unique(slide_names)
-
-    return slide_index, slide_names
-
-
 def inference_metadata(tile_info):
     """Extracts slide and tile metadata from the inference result of a histomics_stream study.
     histomics_stream produces a dictionary describing the tiles generated
@@ -145,15 +132,24 @@ def inference_metadata(tile_info):
         documentation for details.
     """
 
+    slide_metadata = {}
+
+    # for i,slide in enumerate(tile_info["slide_name"]):
+    #     slide_metadata[slide]
+
     # get list of unique slide names and tile indices
-    slide_index, slide_names = _generate_tile_index(tile_info)
+    slide_names, slide_index = np.unique(
+        np.array(tile_info["slide_name"]), return_inverse=True
+    )
 
     # sequence of unique slide indices
     seq = tf.range(0, tf.shape(slide_names))
 
     # for each slide, extract slide metadata
     slide_metadata = {
-        k: (np.array([tile_info[k][slide_index == i][0] for i in seq]).ravel())
+        k: (
+            np.array([np.array(tile_info[k])[slide_index == i][0] for i in seq]).ravel()
+        )
         for k in slide_keys
         if k in tile_info
     }
@@ -164,7 +160,9 @@ def inference_metadata(tile_info):
     #######################################################
 
     # extract tile metadata - skip 'slide_index' not returned by histomics_stream
-    tile_metadata = {k: tile_info[k].ravel() for k in tile_keys if k != "slide_index"}
+    tile_metadata = {
+        k: np.array(tile_info[k]).ravel() for k in tile_keys if k != "slide_index"
+    }
 
     return slide_metadata, tile_metadata, slide_index
 

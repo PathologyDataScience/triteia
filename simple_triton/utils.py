@@ -66,12 +66,10 @@ def analyze(times, floatfmt=".2f"):
     total = np.subtract(times["retrieved"], times["read_start"])
     read = np.subtract(times["read_stop"], times["read_start"])
     submission = np.subtract(times["submitted"], times["read_stop"])
-    completion = np.subtract(times["completed"], times["submitted"])
-    retrieval = np.subtract(times["retrieved"], times["completed"])
+    retrieval = np.subtract(times["retrieved"], times["submitted"])
 
     # Convert to percentages
     read_frac = [100.0 * r / t for (t, r) in zip(total, read)]
-    completion_frac = [100.0 * c / t for (t, c) in zip(total, completion)]
     retrieval_frac = [100.0 * r / t for (t, r) in zip(total, retrieval)]
     submission_frac = [100.0 * s / t for (t, s) in zip(total, submission)]
 
@@ -83,22 +81,18 @@ def analyze(times, floatfmt=".2f"):
             stats(total),
             stats(read),
             stats(submission),
-            stats(completion),
             stats(retrieval),
             stats(read_frac),
             stats(submission_frac),
-            stats(completion_frac),
             stats(retrieval_frac),
         ],
         index=[
             "total (sec)",
             "read (sec)",
             "submission (sec)",
-            "completion (sec)",
             "retrieval (sec)",
             "read (% total)",
             "submission (% total)",
-            "completion (% total)",
             "retrieval (% total)",
         ],
         columns=["median", "stdv", "avg", "min", "max"],
