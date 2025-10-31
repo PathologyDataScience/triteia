@@ -514,6 +514,8 @@ def main():
 
     # parse model's configurations
     model = TritonModel(args.model, args.address)
+    if not model.is_loaded():
+        model.load()
     config = model.get_config()
     dtype = (
         np.float32 if config["input"][0]["dataType"] == "TYPE_FP32" else np.uint8
