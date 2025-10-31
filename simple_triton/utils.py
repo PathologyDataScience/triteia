@@ -2,7 +2,6 @@ import threading
 from datetime import timedelta
 
 import time
-import tritonclient.grpc as grpcclient
 import numpy as np
 import pandas as pd
 import subprocess
@@ -13,32 +12,6 @@ from functools import wraps
 import psutil
 import logging
 import tempfile
-
-
-def create_client(url="localhost:8001", verbose=False):
-    """Create a grpcclient.
-
-    Parameters
-    ----------
-    url : string
-        The url for the remote-procedure call port of the Triton server.
-        Default value is "localhost:8001".
-    verbose : bool
-        If True the client will emit status messages to stdout. Default
-        is False.
-
-    Returns
-    -------
-    client : grpcclient.InferenceServerClient
-        A client
-    """
-
-    try:
-        client = grpcclient.InferenceServerClient(url=url, verbose=verbose)
-        return client
-    except Exception as e:
-        print("context creation failed: " + str(e), flush=True)
-        raise
 
 
 def analyze(times, floatfmt=".2f"):
