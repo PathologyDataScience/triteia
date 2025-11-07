@@ -1,0 +1,16 @@
+model_warmup [
+  {
+    name: "warmup_sample_1"
+    batch_size: 64
+    inputs {
+      key: "input_0"
+      value {
+        data_type: TYPE_UINT8
+        dims: [ 224, 224, 3 ]
+        random_data: true
+      }
+    }
+    count: 10
+  }
+]
+
