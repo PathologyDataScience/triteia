@@ -51,8 +51,8 @@ def study(
 
     Returns
     -------
-    study : object
-        A histomics_stream study object containing the slides defined in paths, and analysis
+    study : dict
+        A histomics_stream study dict containing the slides defined in paths, and analysis
         plan defined by tile size, tile overlap, and magnification/reading parameters.
     """
 
