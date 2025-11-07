@@ -4,7 +4,8 @@ import os
 import tempfile
 import logging
 from concurrent.futures import ProcessPoolExecutor, wait
-from time import sleep
+from time import sleep, time
+import sys
 
 import histomics_stream as hs
 import large_image_source_tiff
@@ -12,7 +13,7 @@ import numpy as np
 import tensorflow as tf
 from tqdm import tqdm
 
-from simple_triton.utils import *
+from simple_triton.utils import analyze, init_tb_writer, track_method, write_analysis_tb
 from simple_triton.inference import Requests
 from simple_triton.io.tfr_writer import write_record
 from simple_triton.model import TritonModel
