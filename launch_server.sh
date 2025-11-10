@@ -13,7 +13,7 @@ Usage: launch_server.sh [OPTIONS] [MODEL_NAME]
 Starts a Docker container running Triton Inference Server with a selected model.
 
 Positional:
-  MODEL_NAME                 Name of model directory under ./models (if omitted, you will be prompted)
+  MODEL_NAME                 Name of model directory under the model repository (if omitted, you will be prompted)
 
 Options:
   --num-gpus N               Number of GPUs to expose to the container (default: 1; 0 disables GPUs)
@@ -23,6 +23,7 @@ Options:
   --http-port PORT           Host HTTP port to map to Triton (default: 8000)
   --grpc-port PORT           Host gRPC port to map to Triton (default: 8001)
   --metrics-port PORT        Host Metrics port to map to Triton (default: 8002)
+  -m, --models-dir PATH      Host path to models directory to mount (default: "$PWD/models")
   -h, --help                 Show this help and exit
 EOF
 }
@@ -35,6 +36,7 @@ IMAGE_NAME="model-tritonserver:latest"
 HTTP_PORT=8000
 GRPC_PORT=8001
 METRICS_PORT=8002
+MODELS_DIR="$PWD/models"
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -71,6 +73,10 @@ while [[ $# -gt 0 ]]; do
       METRICS_PORT="$2"
       shift 2
       ;;
+    -m|--models-dir)
+      MODELS_DIR="$2"
+      shift 2
+      ;;
     *)
       MODEL="$1"
       shift
@@ -78,10 +84,10 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Build a selectable list of models from ./models if MODEL not provided explicitly
+# Build a selectable list of models from MODELS_DIR if MODEL not provided explicitly
 if [[ -z "$MODEL" ]]; then
-  if [[ -d "./models" ]]; then
-    mapfile -t MODEL_DIRS < <(find ./models -maxdepth 1 -mindepth 1 -type d -printf "%f\n" | sort)
+  if [[ -d "$MODELS_DIR" ]]; then
+    mapfile -t MODEL_DIRS < <(find "$MODELS_DIR" -maxdepth 1 -mindepth 1 -type d -printf "%f\n" | sort)
     if [[ ${#MODEL_DIRS[@]} -gt 0 ]]; then
       echo "Select which models:"
       for i in "${!MODEL_DIRS[@]}"; do
@@ -94,10 +100,10 @@ if [[ -z "$MODEL" ]]; then
         echo "Invalid selection"; exit 1
       fi
     else
-      echo "No models found in ./models"; exit 1
+      echo "No models found in $MODELS_DIR"; exit 1
     fi
   else
-    echo "./models directory not found"; exit 1
+    echo "Models directory not found: $MODELS_DIR"; exit 1
   fi
 fi
 
@@ -152,8 +158,8 @@ docker run \
   --shm-size=1g \
   --ulimit memlock=-1 \
   --ipc=host \
-  -v $PWD/models:/models \
+  -v "$MODELS_DIR":/models \
   "$IMAGE_NAME" \
   tritonserver --model-repository=/models --model-control-mode=explicit --exit-on-error=false \
   --backend-config=default-max-batch-size=256 --metrics-config summary_latencies=true \
-  --load-model $MODEL
+  --load-model "$MODEL"
