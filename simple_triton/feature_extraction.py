@@ -1,9 +1,10 @@
 import argparse
-import math
-import warnings
-import tempfile
-from collections import defaultdict
 import logging
+import os
+import sys
+import threading
+import warnings
+from collections import defaultdict
 from concurrent.futures import (
     ProcessPoolExecutor,
     ThreadPoolExecutor,
@@ -12,9 +13,8 @@ from concurrent.futures import (
 )
 from contextlib import ExitStack
 from itertools import cycle
-from time import sleep, time
+from time import time
 from typing import List
-import sys
 
 import histomics_stream as hs
 import large_image_source_tiff
@@ -23,11 +23,16 @@ import tensorflow as tf
 from pytriton.client import ModelClient
 from tqdm import tqdm
 
-from simple_triton.utils import analyze, init_tb_writer, track_method, write_analysis_tb
-from simple_triton.inference import Requests
 from simple_triton.io.tfr_writer import write_record
 from simple_triton.model import TritonModel
 from simple_triton.tile_iterators import TiffPrefetch
+from simple_triton.utils import (
+    analyze,
+    init_tb_writer,
+    track_method,
+    write_analysis_tb,
+    write_tritonserver_metrics,
+)
 
 
 def study(
@@ -144,12 +149,12 @@ thread_local_data = threading.local()
 
 
 def worker_init():
-    thread_local_data.read_start = time.time()
+    thread_local_data.read_start = time()
 
 
 def worker_infer(args):
     read_end = (
-        time.time()
+        time()
     )  # we can now use "read_start" and "read_end" to see how long a call to __next__ took
     client, pre, source, target, (sample, metadata_local) = args
     if not ((source is None) and (target is None)):
@@ -167,7 +172,7 @@ def worker_infer(args):
     if pre is not None:
         sample = pre(sample)
     features = None
-    submit_time = time.time()
+    submit_time = time()
     try:
         results = client.infer_batch(sample.view())
         # Take the first output tensor
@@ -185,7 +190,7 @@ def worker_infer(args):
             "submitted": submit_time,
             "read_start": thread_local_data.read_start,
             "read_stop": read_end,
-            "retrieved": time.time(),
+            "retrieved": time(),
         },
     )
 
@@ -281,7 +286,7 @@ def inference_job(
             for key, value in time_stats.items():
                 timings[key].append(value)
 
-    timings["inference_completed"] = [time.time()]
+    timings["inference_completed"] = [time()]
 
     return (
         (
