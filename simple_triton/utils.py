@@ -162,7 +162,7 @@ def write_analysis_tb(analysis, writer, i):
     writer.add_scalar("retrieval_total_avg", analysis["avg"]["retrieval (% total)"], i)
 
 
-def monitor_gpu(stop_event, interval_sec, action, writer, gpu_index=0):
+def monitor_gpu(stop_event, interval_sec, action, writer):
     import importlib.util
 
     pynvml_module = importlib.util.find_spec("pynvml")
@@ -173,43 +173,48 @@ def monitor_gpu(stop_event, interval_sec, action, writer, gpu_index=0):
             nvmlDeviceGetHandleByIndex,
             nvmlDeviceGetMemoryInfo,
             nvmlDeviceGetUtilizationRates,
+            nvmlDeviceGetCount,
         )
     else:
         return
     """
-    Periodically logs GPU memory and processor usage.
+    Periodically logs GPU memory and processor usage for all GPUs.
 
     Args:
         stop_event: A threading.Event that signals the monitor to stop.
         interval: Time in seconds between each log.
         action: A string identifier for the action being monitored.
         writer: A logging writer (e.g., TensorBoard writer).
-        gpu_index: Index of the GPU to monitor (default: 0).
     """
     nvmlInit()
     try:
-        handle = nvmlDeviceGetHandleByIndex(gpu_index)
+        gpu_count = nvmlDeviceGetCount()
+        handles = []
+        for gpu_idx in range(gpu_count):
+            handles.append(nvmlDeviceGetHandleByIndex(gpu_idx))
+
         i = 0
         while not stop_event.is_set():
-            # Memory usage
-            mem_info = nvmlDeviceGetMemoryInfo(handle)
-            gpu_mem_used = mem_info.used / (1024 * 1024)  # Convert to MB
-            gpu_mem_total = mem_info.total / (1024 * 1024)  # Convert to MB
+            for gpu_idx, handle in enumerate(handles):
+                # Memory usage
+                mem_info = nvmlDeviceGetMemoryInfo(handle)
+                gpu_mem_used = mem_info.used / (1024 * 1024)  # Convert to MB
+                gpu_mem_total = mem_info.total / (1024 * 1024)  # Convert to MB
 
-            # GPU utilization
-            utilization = nvmlDeviceGetUtilizationRates(handle)
-            gpu_util = utilization.gpu  # GPU utilization percentage
+                # GPU utilization
+                utilization = nvmlDeviceGetUtilizationRates(handle)
+                gpu_util = utilization.gpu  # GPU utilization percentage
 
-            # Log metrics
-            writer.add_scalar(
-                f"{action}_gpu_{gpu_index}_mem_used_mb", gpu_mem_used, global_step=i
-            )
-            writer.add_scalar(
-                f"{action}_gpu_mem_{gpu_index}_total_mb", gpu_mem_total, global_step=i
-            )
-            writer.add_scalar(
-                f"{action}_gpu_{gpu_index}_util_percent", gpu_util, global_step=i
-            )
+                # Log metrics
+                writer.add_scalar(
+                    f"{action}_gpu_{gpu_idx}_mem_used_mb", gpu_mem_used, global_step=i
+                )
+                writer.add_scalar(
+                    f"{action}_gpu_mem_{gpu_idx}_total_mb", gpu_mem_total, global_step=i
+                )
+                writer.add_scalar(
+                    f"{action}_gpu_{gpu_idx}_util_percent", gpu_util, global_step=i
+                )
             i += 1
 
             time.sleep(interval_sec)
@@ -323,7 +328,7 @@ def track_method(func, writer, slide_num, live_tracking=False, path="/"):
             for i, g in enumerate([0]):
                 gpu_monitor = threading.Thread(
                     target=monitor_gpu,
-                    args=(stop_event, 0.1, "gpu", writer, i),
+                    args=(stop_event, 0.1, "gpu", writer),
                     daemon=True,
                 )
                 gpu_monitor.start()
