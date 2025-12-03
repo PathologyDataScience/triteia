@@ -48,7 +48,7 @@ class TritonPythonModel:
         inputs = [
             {
                 "name": "input_0",
-                "data_type": "TYPE_FP32",
+                "data_type": "TYPE_UINT8",
                 "dims": [224, 224, 3],
             }
         ]
