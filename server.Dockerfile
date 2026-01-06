@@ -11,6 +11,6 @@ RUN pip install --no-cache-dir timm huggingface-hub
 # conch
 RUN pip install --no-cache-dir git+https://github.com/Mahmoodlab/CONCH.git
 
-# prevent creation of .pyc files owned by root
+# avoid creating root-owned .pyc files in user repository
 RUN mkdir /pycache
 ENV PYTHONPYCACHEPREFIX=/pycache
