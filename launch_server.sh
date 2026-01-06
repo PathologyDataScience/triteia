@@ -84,6 +84,21 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Copy github provided  models to repository - skip directories with an existing versioned model
+if [[ -d "$MODELS_DIR" ]]; then
+  mapfile -t MODELS < <(find "$PWD/models" -maxdepth 1 -mindepth 1 -type d -printf "%f\n" | sort)
+  for i in "${!MODELS[@]}"; do
+    if ! [[ -d "$MODELS_DIR/${MODELS[$i]}/1" ]]; then
+      mkdir -p "$MODELS_DIR/${MODELS[$i]}/1"
+      cp -r "$PWD/models/${MODELS[$i]}/model.py" "$MODELS_DIR/${MODELS[$i]}/1/"
+    else
+      echo "Skipping model ${MODELS[$i]} - already exists in repository $MODELS_DIR";
+    fi
+  done
+else
+  echo "Models directory not found: $MODELS_DIR"; exit 1
+fi
+
 # Build a selectable list of models from MODELS_DIR if MODEL not provided explicitly
 if [[ -z "$MODEL" ]]; then
   if [[ -d "$MODELS_DIR" ]]; then
