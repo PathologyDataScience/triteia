@@ -11,8 +11,6 @@ RUN pip install --no-cache-dir timm huggingface-hub
 # conch
 RUN pip install --no-cache-dir git+https://github.com/Mahmoodlab/CONCH.git
 
-COPY models/ /hosted
-COPY setup_repository.py /
-COPY models_entrypoint.sh .
-RUN chmod +x models_entrypoint.sh
-ENTRYPOINT ["./models_entrypoint.sh"]
+# avoid creating root-owned .pyc files in user repository
+RUN mkdir /pycache
+ENV PYTHONPYCACHEPREFIX=/pycache
