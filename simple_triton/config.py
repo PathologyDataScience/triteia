@@ -1,8 +1,11 @@
-from google.protobuf import json_format, text_format
-import numpy as np
 import os
-from tritonclient.utils import np_to_triton_dtype
+
+import numpy as np
+from google.protobuf import json_format, text_format
 from tritonclient.grpc import model_config_pb2
+from tritonclient.utils import np_to_triton_dtype
+
+ONNX_TRT_WHITELIST = {"precision_mode", "max_workspace_size_bytes"}
 
 
 class DynamicBatching(object):
@@ -28,10 +31,12 @@ class DynamicBatching(object):
 
     def __init__(
         self,
-        preferred_batch_size=[64],
+        preferred_batch_size=None,
         max_queue_delay_microseconds=0,
         preserve_ordering=True,
     ):
+        if preferred_batch_size is None:
+            preferred_batch_size = [64]
         self.config = {
             "PreferredBatchSize": preferred_batch_size,
             "max_queue_delay_microseconds": max_queue_delay_microseconds,
@@ -70,7 +75,7 @@ class ModelInput(object):
             "dims": shape,
         }
         if optional:
-            input["optional":True]
+            input["optional"] = True
         self.config = input
 
 
@@ -168,8 +173,8 @@ class PythonConfig(object):
     """A model configuration for the python backend.
 
     This class can generate JSON format dictionaries for use with model loading
-    functions, and can save and load configurations in protocol buffer format
-    for file-based configuration.
+    functions, and can save configurations in protocol buffer format for
+    file-based configuration.
 
     Parameters
     ----------
@@ -216,7 +221,7 @@ class PythonConfig(object):
                     "`input` must be a ModelInput object or a list of ModelInput objects."
                 )
             if isinstance(input, list):
-                if not all([isinstance(i, (ModelInput)) for i in input]):
+                if not all([isinstance(i, ModelInput) for i in input]):
                     raise ValueError("elements of `input` must be a ModelInput object.")
         if output is not None:
             if not isinstance(output, (ModelOutput, list)):
@@ -224,7 +229,7 @@ class PythonConfig(object):
                     "`output` must be a ModelOutput object or a list of ModelOutput objects."
                 )
             if isinstance(output, list):
-                if not all([isinstance(i, (ModelOutput)) for i in output]):
+                if not all([isinstance(i, ModelOutput) for i in output]):
                     raise ValueError(
                         "elements of `output` must be a ModelOutput object."
                     )
@@ -347,10 +352,10 @@ class TensorflowXla(object):
     ----------
     level : int {-1, 0, 1, 2}
         The optimization level can be off (-1), off but delayed (0), moderate
-        optimization(1), or higher optimization (2).
+        optimization(1), or higher optimization (2). Default value is 2.
     """
 
-    def __init__(self, level=0):
+    def __init__(self, level=2):
         if not isinstance(level, int) or not level in {-1, 0, 1, 2}:
             raise ValueError("`level` must be type int with of -1, 0, 1, or 2.")
         self.config = {"graph": {"level": level}}
@@ -429,8 +434,8 @@ class TensorflowConfig(PythonConfig):
     """A model configuration for the tensorflow backend.
 
     This class can generate JSON format dictionaries for use with model loading
-    functions, and can save and load configurations in protocol buffer format
-    for file-based configuration.
+    functions, and can save configurations in protocol buffer format for
+    file-based configuration.
 
     Parameters
     ----------
@@ -484,6 +489,139 @@ class TensorflowConfig(PythonConfig):
             self.config["optimization"] = optimization.config
         self.config["backend"] = "tensorflow"
         self.config["platform"] = "tensorflow_savedmodel"
+
+
+class OnnxGraph(object):
+    """ONNX graph optimization.
+
+    Sets the level of graph optimization for Onnx models.
+
+    Parameters
+    ----------
+    level : int {-1, 1, 2}
+        The optimization level can be basic (-1), extended (1), or disabled (2).
+
+    References
+    ----------
+    https://onnxruntime.ai/docs/performance/model-optimizations/graph-optimizations.html
+    """
+
+    def __init__(self, level=1):
+        if not isinstance(level, int) or not level in {-1, 1, 2}:
+            raise ValueError("`level` must be type int with of -1, 1, or 2.")
+        self.config = {"graph": {"level": level}}
+
+
+class OnnxOptimization(PythonOptimization):
+    """ONNX backend optimization configuration.
+
+    The ONNX backend supports the memory page locking and tensorrt optimizations.
+    The default optimization enables page locking. Openvino optmization is currently
+    not supported.
+
+    Parameters
+    ----------
+    input_pinned : bool
+        Page lock memory used to send model inputs. Default value is True.
+    output_pinned : bool
+        Page lock memory used to recieve model outputs. Default value is True.
+    trt : TensorRt
+        A TensorRt configuration to enable reduced precision and operation fusion.
+        Default value is None.
+    graph : OnnxGraph
+        An OnnxGraph configuration to enable graph optimizations including redundant
+        operation elimination and operation fusion.
+
+    References
+    ----------
+    https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/user_guide/optimization.html#onnx-with-tensorrt-optimization-ort-trt
+    """
+
+    def __init__(
+        self,
+        input_pinned=True,
+        output_pinned=True,
+        trt=None,
+        graph=None,
+    ):
+        super(OnnxOptimization, self).__init__(input_pinned, output_pinned)
+        if graph is not None and trt is not None:
+            raise ValueError("`trt` cannot be enabled concurrently with `graph`.")
+        if trt is not None:
+            if not isinstance(trt, TensorRt):
+                raise ValueError("`trt` must be a TensorRt object.")
+            parameters = trt.config["executionAccelerators"]["gpuExecutionAccelerator"][
+                0
+            ]["parameters"]
+            parameters = {
+                k: v for k, v in parameters.items() if k in ONNX_TRT_WHITELIST
+            }
+            trt.config["executionAccelerators"]["gpuExecutionAccelerator"][0][
+                "parameters"
+            ] = parameters
+            self.config.update(trt.config)
+        if graph is not None:
+            if not isinstance(graph, OnnxGraph):
+                raise ValueError("`graph` must be a OnnxGraph object.")
+            self.config.update(graph.config)
+
+
+class OnnxConfig(PythonConfig):
+    """A model configuration for the ONNX backend.
+
+    This class can generate JSON format dictionaries for use with model loading
+    functions, and can save configurations in protocol buffer format for
+    file-based configuration.
+
+    Parameters
+    ----------
+    name : str
+        Model name as stored in the model repository.
+    input : ModelInput or list
+        Model inputs.
+    output : ModelOutput or list
+        Model outputs.
+    instance_group : InstanceGroup
+        An instance group configuration defining model resources.
+    max_batch_size : int
+        The maximum number of samples in a request. Use 0 for a non-batching model.
+    optimization : TensorflowOptimization
+        Python backend optimization configuration. Default value None enables
+        pinned memory by default.
+    response_cache : bool
+        Whether to cache model input-output pairs. See reference below. Default value
+        is False for no caching.
+
+    References
+    ----------
+    https://github.com/triton-inference-server/server/blob/main/docs/user_guide/response_cache.md
+    """
+
+    def __init__(
+        self,
+        name,
+        max_batch_size,
+        input=None,
+        output=None,
+        instance_group=None,
+        dynamic_batching=None,
+        optimization=None,
+        response_cache=False,
+    ):
+        super(OnnxConfig, self).__init__(
+            name=name,
+            input=input,
+            output=output,
+            instance_group=instance_group,
+            max_batch_size=max_batch_size,
+            dynamic_batching=dynamic_batching,
+            response_cache=response_cache,
+        )
+        if optimization is not None:
+            if not isinstance(optimization, OnnxOptimization):
+                raise ValueError("`optimization` must be an OnnxOptimization object.")
+            self.config["optimization"] = optimization.config
+        self.config["backend"] = "onnxruntime"
 
 
 def load(path):

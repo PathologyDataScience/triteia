@@ -1,17 +1,19 @@
+import pandas as pd
 import argparse
-from simple_triton.feature_extraction import study, inference
-from simple_triton.tile_iterators import TiffPrefetch
-from simple_triton.model import TritonModel
-from simple_triton.utils import analyze
-from simple_triton.config import *
-from large_image.cache_util import cachesClear
-import tensorflow as tf
-import time
+import functools
+import logging
 import subprocess
 import sys
-import os
-import functools
-import numpy as np
+import time
+
+import tensorflow as tf
+from large_image.cache_util import cachesClear
+
+from simple_triton.config import *
+from simple_triton.feature_extraction import study, inference
+from simple_triton.model import TritonModel
+from simple_triton.tile_iterators import TiffPrefetch
+from simple_triton.utils import analyze
 
 
 class Benchmark:
@@ -30,8 +32,6 @@ class Benchmark:
         from the whole-slide image (magnification, tile size, tile overlap, mask file).
 
         Args:
-            args_dict (dict): The inputs to the model from argparse.
-            tile (int): tile default value is 224.
             wsi_path (string): path for .svs file
             mask_path (string): path for png file
         """
@@ -53,12 +53,8 @@ class Benchmark:
         Parameters in this stage include the inference server (address), the model (model name,
         maximum batch size).
 
-        Args:
-            client (tritonclient.grpc.InferenceServerClient):
-            args_dict (dict): The inputs to the model from argparse.
-            maxBatchSize (int): max batch size to for config
         """
-        # slide paramters
+        # slide parameters
         url = self.args_dict["url"]  # url for grpc access to triton server
         model_name = self.args_dict["model_name"]
         maxBatchSize = self.args_dict["maxbatchsize"]  # set max batch size
@@ -81,7 +77,7 @@ class Benchmark:
             amp=TensorflowMixedPrecision() if self.args_dict["use_amp"] else None
         )
         config = TensorflowConfig(
-            name=args_dict["model_name"],
+            name=self.args_dict["model_name"],
             max_batch_size=maxBatchSize,
             instance_group=instances,
             response_cache=False,
@@ -97,10 +93,6 @@ class Benchmark:
 
         Parameters here include the number of tiles per batch, the number of workers,
         and the maximum number of pending inferences per worker.
-
-        Args:
-            client (tritonclient.grpc.InferenceServerClient):
-            args_dict (dict): The inputs to the model from argparse.
 
         Returns:
             Inference time
@@ -142,7 +134,7 @@ class Benchmark:
         ) = inference(
             iterator,
             model_name,
-            url=args_dict["url"],
+            url=self.args_dict["url"],
             limit=limit,
         )
         # inference for number of iterations
@@ -173,12 +165,12 @@ class Benchmark:
             ) = inference(
                 iterator,
                 model_name,
-                url=args_dict["url"],
+                url=self.args_dict["url"],
                 limit=limit,
             )
             elapsed_time_single = time.time() - start
             # throughput and elapsed time for single inference
-            throughput_single = (self.tile_info["version"].size) / elapsed_time_single
+            throughput_single = self.tile_info["version"].size / elapsed_time_single
             # Append to a list
             throughput_results.append(throughput_single)
             elapsed_time_results.append(elapsed_time_single)
@@ -192,6 +184,7 @@ class Benchmark:
         # Calculate average
         self.args_dict["throughput"] = throughput / (self.args_dict["iterations"])
         self.args_dict["elapsed_time"] = elapsed_time / (self.args_dict["iterations"])
+        self.args_dict["throughput_all"] = throughput_results
         analyze(self.times)
 
     def client_nogpu(self):
@@ -233,8 +226,6 @@ def install():
     subprocess.check_call([sys.executable, "-m", "pip", "install", f"../simple_triton"])
     subprocess.check_call([sys.executable, "-m", "pip", "install", "ray"])
     subprocess.check_call([sys.executable, "-m", "pip", "install", "pyarrow"])
-    # install mil
-    subprocess.check_call([sys.executable, "-m", "pip", "install", f"../../mil"])
 
 
 def check_readiness(args_dict):
@@ -243,7 +234,7 @@ def check_readiness(args_dict):
     assert model.is_loaded()
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--model-name",
@@ -307,7 +298,7 @@ if __name__ == "__main__":
     parser.add_argument("--limit", type=int, default=10)
     parser.add_argument("--workers", type=int, default=32)
     parser.add_argument("-v", "--verbose", default=True)
-    parser.add_argument("-f", "--fileoutput", default="benchmark_output.txt")
+    parser.add_argument("-o", "--output", default="benchmark_out")
     # pass whole slide image
     parser.add_argument(
         "-w",
@@ -368,23 +359,46 @@ if __name__ == "__main__":
         "elapsed_time(sec):",
         args_dict["elapsed_time"],
     )
-    f = open(args_dict["fileoutput"], "a")
-    f.write(
-        "model_name: {},  maxbatchsize: {}, gpu_num: {}, gpu_intance_count: {}, use_amp: {}, precision: {}, workers: {}, limit: {}, iterations: {}, throughput(tiles/sec): {}, elapsed_time(sec): {} \n".format(
-            args_dict["model_name"],
-            args_dict["maxbatchsize"],
-            args_dict["gpu_num"],
-            args_dict["gpu_instance_count"],
-            args_dict["use_amp"],
-            args_dict["precision"],
-            args_dict["workers"],
-            args_dict["limit"],
-            args_dict["iterations"],
-            args_dict["throughput"],
-            args_dict["elapsed_time"],
-        )
+
+    # Create a directory if it doesn't exist for path in args_dict["output"]
+    if not os.path.exists(args_dict["output"]):
+        os.makedirs(args_dict["output"])
+
+    # Create a dictionary with the information
+    data = {
+        "model_name": [args_dict["model_name"]],
+        "maxbatchsize": [args_dict["maxbatchsize"]],
+        "gpu_num": [args_dict["gpu_num"]],
+        "gpu_instance_count": [args_dict["gpu_instance_count"]],
+        "use_amp": [args_dict["use_amp"]],
+        "use_trt": [args_dict["use_trt"]],
+        "precision": [args_dict["precision"]],
+        "workers": [args_dict["workers"]],
+        "limit": [args_dict["limit"]],
+        "iterations": [args_dict["iterations"]],
+        "throughput(tiles/sec)": [args_dict["throughput"]],
+        "elapsed_time(sec)": [args_dict["elapsed_time"]],
+    }
+
+    df = pd.DataFrame(data)
+    out_csv = os.path.join(args_dict["output"], "benchmark_out.csv")
+    df.to_csv(out_csv, mode="a", header=not os.path.exists(out_csv), index=False)
+
+    throughput_data = {"throughput_all": args_dict["throughput_all"]}
+    df_throughput = pd.DataFrame(throughput_data)
+    # limit to two decimals
+    df_throughput = df_throughput.round(2)
+    throughput_fileoutput = os.path.join(
+        args_dict["output"], "benchmark_throughput_out.csv"
     )
-    f.close()
-    with open(args_dict["fileoutput"], "r") as f:
-        print(f.readlines()[-1])
-        f.close()
+    df_throughput.to_csv(
+        throughput_fileoutput,
+        mode="a",
+        header=not os.path.exists(throughput_fileoutput),
+        index=False,
+    )
+
+
+if __name__ == "__main__":
+    logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+    main()

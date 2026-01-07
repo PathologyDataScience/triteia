@@ -1,10 +1,11 @@
 from datetime import datetime
-from simple_triton.io import slide_keys, tile_keys
-from simple_triton.io.tfr_reader import peek, read_record
-from simple_triton.io.tfr_transforms import flatten, structure
+
 import numpy as np
 import tensorflow as tf
 
+from simple_triton.io import slide_keys, tile_keys
+from simple_triton.io.tfr_reader import peek, read_record
+from simple_triton.io.tfr_transforms import structure
 
 # acceptable types for user-provided metadata
 variable_type_list = [bytes, int, float, str, bool]
@@ -368,7 +369,7 @@ def merge_records(path, inputs, label_mode="first", stack_axis=0):
 
 
 def write_record(
-    path, features, tile_info, labels={}, structured=False, precision=tf.float16
+    path, features, tile_info, labels=None, structured=False, precision=tf.float16
 ):
     """Writes a tfrecord (.tfr) file from the inference results of a histomics stream study.
 
@@ -396,6 +397,8 @@ def write_record(
         to be inferred from the "precision" field of the file at runtime.
         Default value is tf.float16.
     """
+    if labels is None:
+        labels = {}
 
     # extract tile coordinates and slide metadata from study
     slide_metadata, tile_metadata, slide_index = inference_metadata(tile_info)

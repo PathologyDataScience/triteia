@@ -2,6 +2,8 @@
 
 simple-triton is a Python client for inference with the NVIDIA Triton server. It provides model deployment, configuration, and optimization capabilities for the TensorFlow, ONNX, and Python triton backends directly from Python. This was developed to address limitations of the [PyTriton](https://github.com/triton-inference-server/pytriton) package that only supports deployments with the Python backend where TensorRT, XLA, and mixed precision are not available.
 
+![triton_overview.png](triton_overview.png)
+
 # User guide <a name="user-guide"></a>
 
 ## Contents
@@ -9,11 +11,12 @@ simple-triton is a Python client for inference with the NVIDIA Triton server. It
 - [Quick start](#quick-start)
     - [Example](#example)
     - [Running the Triton container](#container)
-- [Model configuration](#config)
-- [Model control](#control)
 - [Command-line interfaces](#cli)
     - [Model loading](#cli-loading)
     - [Inference](#cli-inference)
+- [Model wrappers](#wrappers)
+- [Model configuration](#config)
+- [Model control](#control)
 - [Developer guide](#developer-guide)
     - [Testing](#testing)
 
@@ -22,45 +25,71 @@ simple-triton is a Python client for inference with the NVIDIA Triton server. It
 simple-triton requires `histomcs_stream` and `large_image` packages with the tiff reader
 ```
 git clone https://github.com/PathologyDataScience/simple_triton.git
-pip install ./simple_triton histomics_stream 'large_image[tiff]'
+pip install --editable ./simple_triton
 ```
+> `--editable` ensures that updates to the `simple_triton` package (after `git pull`) immediately takes effect.
 
-Or, you can try the docker image:
+Or, you can try the docker image. First, run `git clone` (as above) or make sure to do a `git pull` inside the "simple_triton" directory. Then:  
 ```bash
 # optional: download test data
 python download_test_data.py
 
 # simple_triton_client will be the name of the docker image
-docker build . -t simple_triton_client:latest
-docker run --init --security-opt seccomp:unconfined --network=container:<name of tritonserver docker container> --shm-size=1g -v ${PWD}/test_data:/data:ro --rm --name tritonclient -it simple_triton_client:latest
+docker build -f client.Dockerfile . -t simple_triton_client:latest --build-arg DOCKER_GROUP_ID=$(getent group docker | cut -d: -f3)
+docker run \
+  --security-opt seccomp:unconfined --network=host \
+  --rm -it --shm-size=1g \
+  -v ${PWD}/test_data:/data:ro \
+  --name tritonclient simple_triton_client:latest
 ```
-> **_NOTE:_**  `--init` ensures that the docker container has a "master process" to do clean multi-processing. `--network=` lets the docker image see ports from other containers, in this case the triton server. The default shared memory size is now 64MB, so `--shm-size=` is necessary if you are reading large WSIs. `--security-opt seccomp:unconfined` might only be necessary on bigger machines, but it gives your process access to [openblas](https://www.openblas.net/) threads. `--rm` removes the container on exit, beware.
+> **_NOTE:_**  `--network=` lets the docker image see ports from other containers, in this case the host. The default shared memory size is now 64MB, so `--shm-size=` is necessary if you are reading large WSIs. `--security-opt seccomp:unconfined` might only be necessary on bigger machines, but it gives your process access to [openblas](https://www.openblas.net/) threads. `--rm` removes the container on exit, beware.
 
 > The client docker utilizes the server docker network so any ports required by the client must be exposed when launching the _server_ container. For example, running a jupyter notebook on the client requires exposing the jupyter port (8888) on the server using -p <your port>:8888.
 
 ### Example <a name="example"></a>
 
-The notebook `examples\feature_extraction.ipynb` demonstrates whole-slide image feature extraction. This example requires a running Triton container on the client machine.
+* [feature_extraction](./examples/feature_extraction.ipynb) demonstrates whole-slide image feature extraction.
+* [patch_inference](./examples/patch_inference.ipynb) demonstrates feature extraction using a list of images instead of WSIs.
+* [export_pytorch_model](./examples/export_pytorch_model.ipynb) demonstrates how to export a PyTorch model to be used with tritonserver.
+
+These examples requires a running tritonserver container on the client machine.
+
+#### Running notebook examples with docker:
+This command is similar to the command [given below](#container), but with the addition of the jupyter-lab command, and making it run as your host user.
+This launches a jupyter-lab/notebook at port 8888. Copy the URL you see in the console into your web-browser.
+```bash
+docker run \
+  --security-opt seccomp:unconfined --network=host \
+  -v ${PWD}/test_data:/data:ro \
+  -v ${PWD}/examples:/examples:rw \
+  --user $UID --rm -it \
+  --shm-size=1g \
+  --name tritonclient simple_triton_client:latest \
+  bash -c "jupyter-lab --notebook-dir /examples/ --no-browser"
+```
 
 ### Running the Triton container <a name="container"></a>
 
-simple-triton is tested with [Triton version 23.03](https://github.com/triton-inference-server/server/releases/tag/v2.32.0).
+simple-triton is tested with [Triton version 24.12](https://github.com/triton-inference-server/server/releases/tag/v2.53.0).
 
-The simplest way to deploy Triton is to run a Triton Docker container from the Nvidia GPU Cloud (NGC). See the NVIDIA Triton [quick start guide](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/getting_started/quickstart.html) for more information on running and verifying the container, including specifying a model repository.
-
-Two Triton server container runtime options are important for use with simple-triton:
-1. `--model-control-mode=explicit` is required to be able to load and modify models at runtime
-2. `--strict-model-config=false` allows Triton to auto-fill many options for model configuration
-
-for example,
-
+Download and launch the Triton Docker container from the NVIDIA GPU Cloud (NGC). You should be inside of this directory (simple_triton).
 ```
-docker run --gpus=8 --rm -p 8000:8000 -p 8001:8001 -p 8002:8002 -p 8003:8003 --shm-size=1g --ulimit memlock=-1 --ipc=host -v host_model_repository:/models nvcr.io/nvidia/tritonserver:23.03-py3 tritonserver --model-repository=/models --model-control-mode=explicit --exit-on-error=false --strict-model-config=false
+docker run \
+  --gpus=all \
+  -d \
+  --rm \
+  -p 8000:8000 -p 8001:8001 -p 8002:8002 -p 8003:8003 \
+  --shm-size=1g \
+  --ulimit memlock=-1 \
+  --ipc=host \
+  -v $PWD/models:/models \
+  nvcr.io/nvidia/tritonserver:24.12-py3 \
+  tritonserver --model-repository=/models --model-control-mode=explicit --exit-on-error=false
 ```
 
-where `host_model_repository` is the location of your model repository folder on the host machine.
+This sets the path `./models` as the model repository. The `--model-control-mode=explicit` argument is required to load and modify models at runtime.
 
-> **Note:** The options `--ipc`, `--shm-size`, and `--ulimit memlock` are recommended when using shared memory for client/server communication. This allows Triton to access host system shared memory, increases the default 64MB shared memory limit, and prevents paging of RAM out to disk. If the client is run in a container then the `--ipc` and `--shm-size` options should be passed to the client container run command. Running the client container with `--network=host` is the easiest configuration to allow the client and server to communicate over the host network.
+> **Note:** The options `--ipc`, `--shm-size`, and `--ulimit memlock` are recommended when using shared memory for client/server communication. This allows Triton to access host shared memory, increasing the default 64MB limit, and prevents paging of RAM out to disk. If running the client in a container then `--ipc` and `--shm-size` should also be used to launch the client container. Running the client container with `--network=host` is the simplest option to allow the client and server to communicate using the host network.
 
 ## Command-line interface <a name="cli"></a>
 
@@ -83,67 +112,67 @@ Parameters
 - `-u` Unload a model (requires only model name parameter)
 
 Load a model named EfficientNetV2S on the TensorFlow backend
-```console
+```bash
 $python load_model.py EfficientNetV2S tensorflow
 ```
 
 Change the maximum batch size from 64 to 128
-```console
+```bash
 $python load_model.py EfficientNetV2S tensorflow -m 64
 ```
 
 Enable dynamic batching with a preferred batch size of 128 and a max wait of 200 microseconds
-```console
+```bash
 $python load_model.py EfficientNetV2S tensorflow -d 128 200
 ```
 
 Enable the caching of model outputs
-```console
+```bash
 $python load_model.py EfficientNetV2S tensorflow -r
 ```
 
 Load two copies of the model per GPU
-```console
+```bash
 $python load_model.py EfficientNetV2S tensorflow -i 2
 ```
 
 Run the model on CPU instead of GPU
-```console
+```bash
 $python load_model.py EfficientNetV2S tensorflow -c
 ```
 
 Run the model on 4 GPUs
-```console
+```bash
 $python load_model.py EfficientNetV2S tensorflow -g 4
 ```
 
 Run the model on GPUs 0, 2, and 4
-```console
+```bash
 $python load_model.py EfficientNetV2S tensorflow -g 0,2,4
 ```
 
 Disable pinned memory
-```console
+```bash
 $python load_model.py EfficientNetV2S tensorflow -p
 ```
 
 Enable automatic mixed precision for a model hosted on the TensorFlow backend
-```console
+```bash
 $python load_model.py EfficientNetV2S tensorflow -a
 ```
 
 Enable TensorRT optimization for a model hosted on the TensorFlow or ONNX backends. Use half-float precision. Max cached engines (100), minimum segment size (3), and workspace size (4GB) will have default values.
-```console
+```bash
 $python load_model.py EfficientNetV2S tensorflow -t
 ```
 
 Enable XLA optimization for a model hosted on the TensorFlow backend with optimization level 2
-```console
+```bash
 $python load_model.py EfficientNetV2S tensorflow -x 2
 ```
 
 Unload a model with name EfficientNetV2S for any backend
-```console
+```bash
 $python load_model.py EfficientNetV2S -u
 ```
 
@@ -151,58 +180,100 @@ $python load_model.py EfficientNetV2S -u
 `inference` is a command line interface for model inference with one or more slides and with control of tiling, masking, data loading, and serialization parameters.
 
 Perform inference with the EfficientNetV2S model on a single slide, outputting serialized embeddings to your home directory
-```console
+```bash
 $python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow
 ```
 
 Optional parameters allow restricting inference to a tissue mask (`-m`)
-```console
-$python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -m TCGA-AN-A0G0-01Z-00-DX1.mask.png
+```bash
+python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -m TCGA-AN-A0G0-01Z-00-DX1.mask.png
 ```
 
 Store features in float32 precision rather than default float16 (`-f`)
-```console
-$python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -f
+```bash
+python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -f
 ```
 
 modification tile size (`-t`), add tile overlap (`-o`), and change magnification (`-M`)
-```console
-$python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -t 256 -o 128 -M 10
+```bash
+python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -t 256 -o 128 -M 10
 ```
 
 adjustment of tile reading parameters including ICC correction (`-i`), read chunk size (`-c`), batch size (`-b`), prefetch (`-p`), and multiprocessing workers (`-w`).
-```console
-$python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -i -c 8 -b 128 -p 2 -w 16
+```bash
+python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -i -c 8 -b 128 -p 2 -w 16
 ```
 
 Provide image source (`-n`) and target (`-r`) parameters for Macenko color normalization
-```console
-$python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -n ~/TCGA-AN-A0G0-01Z-00-DX1.stain.npy -r ~/standard_stain.npy
+```bash
+python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -n ~/TCGA-AN-A0G0-01Z-00-DX1.stain.npy -r ~/standard_stain.npy
 ```
 
 Change the address of the Triton inference server
-```console
-$python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -a "foo.edu:8001"
+```bash
+python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -a "foo.edu:8001"
 ```
 
 Increase the precision of serialized features to float (default is half float)
-```console
-$python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -f
+```bash
+python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -f
 ```
 
 For large jobs use a tab-delimited file containing input images and optionally their masks and normalization stain profiles
-```console
-$more ~/inputs.tsv
+```bash
+more ~/inputs.tsv
 TCGA-AN-A0G0-01Z-00-DX1.svs    TCGA-AN-A0G0-01Z-00-DX1.mask.py    TCGA-AN-A0G0-01Z-00-DX1.stain.npy    
 TCGA-AN-A0G0-01Z-00-DX2.svs    TCGA-AN-A0G0-01Z-00-DX2.mask.py    TCGA-AN-A0G0-01Z-00-DX2.stain.npy
 TCGA-AN-A0G0-01Z-00-DX3.svs    TCGA-AN-A0G0-01Z-00-DX3.mask.py    TCGA-AN-A0G0-01Z-00-DX3.stain.npy
 TCGA-AN-A0G0-01Z-00-DX4.svs    TCGA-AN-A0G0-01Z-00-DX4.mask.py    TCGA-AN-A0G0-01Z-00-DX4.stain.npy
-$python feature_extraction.py ~/inputs.tsv ~/ EfficientNetV2S.tensorflow
+python feature_extraction.py ~/inputs.tsv ~/ EfficientNetV2S.tensorflow
 ```
 
 Skip images where output already exists
-```console
-$python feature_extraction.py ~/inputs.tsv ~/ EfficientNetV2S.tensorflow -s
+```bash
+python feature_extraction.py ~/inputs.tsv ~/ EfficientNetV2S.tensorflow -s
+```
+
+## Model wrappers <a name="wrappers"></a>
+simple-triton contains wrappers for serving popular pathology models including CONCH, UNI, gigapath, hibou-L, Phikon, Virchow, and Virchow2 on the [Python backend](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/python_backend/README.html). All models are served using mixed precision.
+
+| Model | Input | Output | Size |
+|---|---|---|---|
+| [conch](https://huggingface.co/MahmoodLab/CONCH) | (224, 224, 3) | 512 | 0.802 GB |
+| [gigapath](https://huggingface.co/prov-gigapath/prov-gigapath) | (224, 224, 3) | 1536 | 4.54 GB |
+| [hibou-L](https://huggingface.co/histai/hibou-L) | (224, 224, 3) | 1024 | 1.21 GB |
+| [phikon](https://huggingface.co/owkin/phikon) | (224, 224, 3) | 768 | 0.346 GB |
+| [uni](https://huggingface.co/MahmoodLab/UNI) | (224, 224, 3) | 1024 | 1.21 GB |
+| [uni2](https://huggingface.co/MahmoodLab/UNI2-h) | (224, 224, 3) | 1536 | 2.73 GB |
+| [virchow](https://huggingface.co/paige-ai/Virchow) | (224, 224, 3) | 2560 | 2.53 GB |
+| [virchow2](https://huggingface.co/paige-ai/Virchow2) | (224, 224, 3) | 2560 | 2.53 GB |
+
+A [dockerfile](server.Dockerfile) built on Triton Server container encapsulates all requirements for serving these models
+```bash
+docker build -t model-tritonserver -f server.Dockerfile .
+```
+
+Each folder in the `/models` directory contains a `model.py` file containing the logic for model loading, inference, and cleanup. The `model.py` files need to be copied into the model repository for serving (a `config.pbtxt` file is not required)
+
+```plaintext
+    models
+    └── phikon                  # Phikon model folder
+        └── 1                   # version 1
+            └── model.py        # TritonPythonModel Class adapted for Phikon
+```
+
+
+### Huggingface tokens
+A [huggingface token](https://huggingface.co/settings/tokens) is required to access the UNI, gigapath, and hibou-L models. This is passed to the server by setting the environment variable `HF_TOKEN` on the server, and passing the environment variable when running the 
+```bash
+export HF_TOKEN=hf_**********************************
+docker run \
+  -e HF_TOKEN=$HF_TOKEN \
+  --gpus=all \
+  -p 8000:8000 -p 8001:8001 -p 8002:8002 -p 8003:8003 \
+  --shm-size=1g --ulimit memlock=-1 --ipc=host \
+  -v ${PWD}/models/:/models \
+  model-tritonserver tritonserver --model-repository=/models --model-control-mode=explicit --exit-on-error=false
 ```
 
 ## Model configuration <a name="config"></a>
@@ -301,7 +372,7 @@ Inference is performed using `inference.inference`. This function consumes data 
 # Developer guide <a name="developer-guide"></a>
 
 ## Testing <a name="testing"></a>
-
+### Locally
 Testing and code formatting is automated using tox and pytest and can be run using `python -m tox run`. Running this will evaluate the tests in the environments defined in `tox.ini` and will format the source using Black. Following testing, a coverage.html file will be located in .tox/coverage.
 
 Testing requires running a Triton server on the local machine. Tests are run using a `EfficientNetV2S.tensorflow` model that can be downloaded using pooch:
@@ -315,3 +386,11 @@ pooch.retrieve(
     path=host_model_repository
 )
 ```
+
+### Using standalone docker container
+To test using the docker container, launch and build the client as follows:  
+```
+docker build -f client.Dockerfile . -t simple_triton_client:latest --build-arg DOCKER_GROUP_ID=$(getent group docker | cut -d: -f3)
+./launch_test_container.sh
+```
+You can now run `pytest tests` to run tests inside the container

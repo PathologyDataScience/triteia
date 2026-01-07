@@ -1,22 +1,22 @@
 import argparse
+import math
 import os
+import tempfile
+import logging
 from concurrent.futures import ProcessPoolExecutor, wait
 from time import sleep, time
+import sys
 
 import histomics_stream as hs
 import large_image_source_tiff
 import numpy as np
-import os
-from simple_triton.io.tfr_writer import write_record
-from simple_triton.inference import Requests
-from simple_triton.model import TritonModel
-from simple_triton.tile_iterators import TiffPrefetch
-from time import sleep, time
-from tqdm import tqdm
 import tensorflow as tf
+from tqdm import tqdm
 
+from simple_triton.utils import analyze, init_tb_writer, track_method, write_analysis_tb
 from simple_triton.inference import Requests
 from simple_triton.io.tfr_writer import write_record
+from simple_triton.model import TritonModel
 from simple_triton.tile_iterators import TiffPrefetch
 
 
@@ -53,8 +53,8 @@ def study(
 
     Returns
     -------
-    study : object
-        A histomics_stream study object containing the slides defined in paths, and analysis
+    study : dict
+        A histomics_stream study dict containing the slides defined in paths, and analysis
         plan defined by tile size, tile overlap, and magnification/reading parameters.
     """
 
@@ -71,12 +71,12 @@ def study(
             file = os.path.split(path)[1]
         elif isinstance(path, tuple):
             file = os.path.split(path[0])[1]
+        else:
+            raise ValueError("Invalid path type.")
         names.append(file)
 
     # fill basic study parameters
-    study = {"version": "version-1"}
-    study["tile_height"] = t[0]
-    study["tile_width"] = t[1]
+    study = {"version": "version-1", "tile_height": t[0], "tile_width": t[1]}
     slides = study["slides"] = {}
 
     # add slides to study
@@ -90,9 +90,10 @@ def study(
             "filename": filename,
             "slide_name": slide_name,
             "slide_group": name,
-            "chunk_height": chunk[0],
-            "chunk_width": chunk[1],
         }
+        if chunk is not None:
+            slides[name]["chunk_height"] = chunk[0]
+            slides[name]["chunk_width"] = chunk[1]
 
     # apply settings to each slide
     for name, path in zip(names, paths):
@@ -135,7 +136,6 @@ def inference(
     target=None,
     url="localhost:8001",
     pre=None,
-    nchw=False,
     limit=10,
     rest=1e-3,
     timeout=None,
@@ -200,83 +200,88 @@ def inference(
     # create requests object
     req = Requests(url, limit)
 
-    # loop until iterator is exhausted
-    while True:
-        if not stop:
-            # draw samples, preprocess, and submit for inference up to limit
-            for i in range(limit - len(req.pending)):
-                try:
-                    t_start = time()
-                    sample, metadata = next(iterator)
-                    if not ((source is None) and (target is None)):
-                        sample = {
-                            "input_0": sample,
-                            "input_1": np.stack(
-                                sample.shape[0] * [np.cast(source, np.float32)],
-                                axis=0,
-                            ),
-                            "input_2": np.stack(
-                                sample.shape[0] * [np.cast(target, np.float32)],
-                                axis=0,
-                            ),
+    if isinstance(iterator, TiffPrefetch):
+        number_of_tiles = sum(
+            len(iterator.read_kwargs[i]) for i in range(len(iterator.read_kwargs))
+        )
+        number_of_batches = math.ceil(number_of_tiles / iterator.batch) - 1
+    else:
+        number_of_batches = None
+
+    with tqdm(total=number_of_batches, desc="Batches") as pbar:
+        # loop until iterator is exhausted
+        while True:
+            if not stop:
+                # draw samples, preprocess, and submit for inference up to limit
+                for i in range(limit - len(req.pending)):
+                    try:
+                        t_start = time()
+                        sample, metadata = next(iterator)
+                        if not ((source is None) and (target is None)):
+                            sample = {
+                                "input_0": sample,
+                                "input_1": np.stack(
+                                    sample.shape[0] * [np.cast(source, np.float32)],
+                                    axis=0,
+                                ),
+                                "input_2": np.stack(
+                                    sample.shape[0] * [np.cast(target, np.float32)],
+                                    axis=0,
+                                ),
+                            }
+                        t_stop = time()
+                    except StopIteration as e:
+                        stop = True
+                    if not stop:
+                        if pre is not None:
+                            sample = pre(sample)
+                        request = {
+                            "model_name": model_name,
+                            "inputs": sample,
+                            "metadata": metadata,
+                            "times": {"read_start": t_start, "read_stop": t_stop},
                         }
-                    t_stop = time()
-                except StopIteration as e:
-                    stop = True
-                if not stop:
-                    if pre is not None:
-                        sample = pre(sample)
-                    request = {
-                        "model_name": model_name,
-                        "inputs": sample,
-                        "metadata": metadata,
-                        "times": {"read_start": t_start, "read_stop": t_stop},
-                    }
-                    req.insert(request, timeout)
-                else:
-                    break
+                        req.insert(request, timeout)
+                    else:
+                        break
 
-        # check pending requests
-        completed = req.check(block=False)
+            # check pending requests
+            completed = req.check(block=False)
 
-        # put completed post-processed requests into queue
-        for inference in completed:
-            # remove inputs
-            del inference["inputs"]
+            # put completed post-processed requests into queue
+            for inference in completed:
+                # remove inputs
+                del inference["inputs"]
 
-            # place in queue
-            batches.append(inference)
+                # place in queue
+                batches.append(inference)
+                pbar.update()
 
-        # if done send stop signal
-        if len(req.pending) == 0 and stop:
-            break
+            # if done send stop signal
+            if len(req.pending) == 0 and stop:
+                break
 
-        # sleep
-        sleep(rest)
+            # sleep
+            sleep(rest)
 
     # failures
     failed = [b for b in batches if not b["success"]]
     batches = [b for b in batches if b["success"]]
 
     # successful results
-    features = (
-        [[b["result"][i] for b in batches] for i in range(len(batches[0]["result"]))]
-        if len(batches)
-        else []
-    )
-    metadata = (
-        {
+    if len(batches):
+        features = [
+            [b["result"][i] for b in batches] for i in range(len(batches[0]["result"]))
+        ]
+        metadata = {
             k: np.stack([b[k] for batch in batches for b in batch["metadata"]])
             for k in batches[0]["metadata"][0].keys()
         }
-        if len(batches)
-        else {}
-    )
-    times = (
-        {k: [b["times"][k] for b in batches] for k in batches[0]["times"].keys()}
-        if len(batches)
-        else {}
-    )
+        times = {
+            k: [b["times"][k] for b in batches] for k in batches[0]["times"].keys()
+        }
+    else:
+        features, metadata, times = {}, {}, {}
 
     return features, metadata, times, failed
 
@@ -327,12 +332,18 @@ def main():
         help="Optional path to an image stain profile for single image input.",
     )
     parser.add_argument(
+        "--nchw",
+        action="store_true",
+        default=False,
+        help="Emit NCHW tile batches from iterator instead of NHWC (default: False).",
+    )
+    parser.add_argument(
         "-r",
         "--target",
         required=False,
         default=None,
         type=str,
-        help=("Optional target stain profile for Macenko normalization."),
+        help="Optional target stain profile for Macenko normalization.",
     )
     parser.add_argument(
         "-s",
@@ -340,6 +351,13 @@ def main():
         dest="skip",
         action="store_true",
         help="Skip files with existing embeddings in output.",
+    )
+    parser.add_argument(
+        "-l",
+        "--live-tracking",
+        dest="live_tracking",
+        action="store_true",
+        help="Whether or not to collect CPU and RAM metrics",
     )
     parser.add_argument(
         "-a",
@@ -355,7 +373,7 @@ def main():
         required=False,
         default=224,
         type=int,
-        help=("Tile size in pixels (default to internal tile size)."),
+        help="Tile size in pixels (default to internal tile size).",
     )
     parser.add_argument(
         "-o",
@@ -385,7 +403,7 @@ def main():
         required=False,
         default=64,
         type=int,
-        help=("Batch size (default 64 tiles)."),
+        help="Batch size (default 64 tiles).",
     )
     parser.add_argument(
         "-c",
@@ -393,7 +411,7 @@ def main():
         required=False,
         default=4,
         type=int,
-        help=("Reach chunk size (default 4 tiles)."),
+        help="Reach chunk size (default 4 tiles).",
     )
     parser.add_argument(
         "-p",
@@ -401,7 +419,7 @@ def main():
         required=False,
         default=4,
         type=int,
-        help=("The number of batches to prefetch from disk (default 4)."),
+        help="The number of batches to prefetch from disk (default 4).",
     )
     parser.add_argument(
         "-w",
@@ -409,7 +427,27 @@ def main():
         required=False,
         default=32,
         type=int,
-        help=("The number of data loader processes (default 32)."),
+        help="The number of data loader processes (default 32).",
+    )
+    parser.add_argument(
+        "--tensorboard-name",
+        required=False,
+        type=str,
+        help="Name of the run, used for tracking stats. e.g. 'testing_no_cache', etc, or leave blank",
+    )
+    parser.add_argument(
+        "--tensorboard-dir",
+        required=False,
+        type=str,
+        default=None,
+        help="Tensorboard outputdir. Defaults to /tmp/tb_$USER",
+    )
+    parser.add_argument(
+        "--metrics-endpoint",
+        required=False,
+        type=str,
+        default=None,
+        help="Tritonserver metrics endpoint. Used to scrape additional metrics for tensorboard",
     )
     args = parser.parse_args()
 
@@ -491,6 +529,20 @@ def main():
     else:
         target = None
 
+    writer = init_tb_writer(
+        args.tensorboard_dir,
+        args.tensorboard_name,
+        files,
+        {
+            "icc": args.icc,
+            "workers": args.workers,
+            "batch": args.batch,
+            "chunk": args.chunk,
+            "prefetch": args.prefetch,
+            "tile_size": args.tile,
+        },
+    )
+
     # create studies in background while waiting for inference to finish
     with ProcessPoolExecutor(max_workers=1) as pool:
         # create first study in background
@@ -503,19 +555,27 @@ def main():
             "objective": args.magnification,
             "mask_threshold": 0.01,
         }
-        futures = {0: pool.submit(study, **kwargs)}
+        futures = {files[0][0]: pool.submit(study, **kwargs)}
 
         # iterate through files and masks
-        for i, (file, mask, stain) in enumerate(tqdm(files)):
+        for i, (file, mask, stain) in enumerate(tqdm(files, desc="Slides ")):
             # prefetch study for next slide
             if i < len(files) - 1:
-                kwargs.update({"paths": file if mask is None else (file, mask)})
-                futures[(i + 1) % 2] = pool.submit(study, **kwargs)
+                kwargs.update(
+                    {
+                        "paths": (
+                            files[i + 1][0]
+                            if files[i + 1][1] is None
+                            else (files[i + 1][0], files[i + 1][1])
+                        )
+                    }
+                )
+                futures[files[i + 1][0]] = pool.submit(study, **kwargs)
 
             # wait on study completion for current job
-            wait([futures[i % 2]])
+            wait([futures[file]])
             try:
-                hs_study = futures[i % 2].result()
+                hs_study = futures[file].result()
             except Exception as exc:
                 print(f"Inference error {file}: {exc}")
                 continue
@@ -529,6 +589,7 @@ def main():
                 icc=args.icc,
                 batch=args.batch,
                 prefetch=args.prefetch,
+                nchw=args.nchw,
                 workers=args.workers,
             )
 
@@ -543,7 +604,9 @@ def main():
                 source = None
 
             # inference
-            features, metadata, times, failures = inference(
+            features, metadata, times, failures = track_method(
+                inference, writer, i, live_tracking=args.live_tracking
+            )(
                 iterator,
                 args.model,
                 source=source,
@@ -552,28 +615,43 @@ def main():
                 limit=1,
                 rest=0.0,
             )
+            if args.metrics_endpoint:
+                write_tritonserver_metrics(args.metrics_endpoint, writer, i)
+            if "tile_left" in metadata:
+                writer.add_scalar("number_of_tiles", len(metadata["tile_left"]), i)
+                write_analysis_tb(analyze(times), writer, i)
 
-            # concatenate features
-            features = np.concatenate(features[0], axis=0)
+            if len(features) > 0:
+                start = time()
+                features = np.concatenate(features[0], axis=0)
 
-            # write to tfrecord
-            precision = tf.float32 if args.float else tf.float16
-            write_record(
-                tfr_name(
-                    args.output,
-                    file,
-                    args.model,
-                    args.tile,
-                    args.overlap,
-                    args.magnification,
-                ),
-                features,
-                metadata,
-                labels={},
-                structured=False,
-                precision=precision,
-            )
+                # write to tfrecord
+                precision = tf.float32 if args.float else tf.float16
+                write_record(
+                    tfr_name(
+                        args.output,
+                        file,
+                        args.model,
+                        args.tile,
+                        args.overlap,
+                        args.magnification,
+                    ),
+                    features,
+                    metadata,
+                    labels={},
+                    structured=False,
+                    precision=precision,
+                )
+                feature_writing_time = time() - start
+                writer.add_scalar(
+                    "feature_writing_elapsed_sec", feature_writing_time, i
+                )
+            else:
+                logging.warning(
+                    f"No features extracted for '{file}': see tritonserver logs."
+                )
 
 
 if __name__ == "__main__":
+    logging.basicConfig(stream=sys.stdout, level=logging.INFO)
     main()

@@ -1,18 +1,18 @@
 import argparse
-from functools import partial
-import numpy as np
 import os
-from simple_triton.model import TritonModel
-from simple_triton.tile_iterators import SharedNumpyArray
-from simple_triton.utils import create_client
-
 import time
+from functools import partial
+
+import numpy as np
 from tritonclient.utils import (
     InferenceServerException,
     triton_to_np_dtype,
     np_to_triton_dtype,
 )
 
+from simple_triton.model import TritonModel
+from simple_triton.tile_iterators import SharedNumpyArray
+from simple_triton.utils import create_client
 
 ARRAY_TYPES = (np.ndarray, SharedNumpyArray)
 
@@ -356,7 +356,7 @@ class Requests(object):
         result : grpcclient.InferResult
             The result of inference if successful.
         error : tritonclientutils.InferenceServerException
-            An exception if inference failed. Otherwise None.
+            An exception if inference failed. Otherwise, None.
         """
 
         if error:

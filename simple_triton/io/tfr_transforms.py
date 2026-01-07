@@ -119,6 +119,8 @@ def structure(flattened, shape, x, t, overlap):
     ----------
     flattened : float
         An [m*n, D] structured tensor containing m * n instances each with D features.
+    shape: tuple(int, int, int)
+        The shape of the structured tensor to create.
     x : tuple(int, int)
         The (x, y) coordinates (pixels) of the upper left corner of each tile in the
         whole slide image.

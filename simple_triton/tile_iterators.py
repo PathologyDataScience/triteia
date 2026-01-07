@@ -1,13 +1,12 @@
-from collections import deque
-from concurrent.futures import ProcessPoolExecutor, ALL_COMPLETED, wait
 import functools
-import large_image_source_tiff
 import math
 import multiprocessing.shared_memory
-import numpy as np
 import operator
-import os
-import PIL
+from collections import deque
+from concurrent.futures import ProcessPoolExecutor, ALL_COMPLETED, wait
+
+import large_image_source_tiff
+import numpy as np
 
 
 class SharedNumpyArray:
@@ -337,7 +336,7 @@ class TiffPrefetch(object):
                     self.pos = self.pos + 1
                 self.overflow = len(batch_kwargs) % self.batch
 
-                """ if last read spans multipe batches, link that read's future
+                """ if last read spans multiple batches, link that read's future
                 to the other batches - also divide kwargs according to batch boundaries
                 """
                 futures = [futures] + (batches - 1) * [[futures[-1]]]
