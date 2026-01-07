@@ -1,6 +1,6 @@
 # simple-triton
 
-simple-triton is a Python client for inference with the NVIDIA Triton server. It provides model deployment, configuration, and optimization capabilities for the TensorFlow, ONNX, and Python triton backends directly from Python. This was developed to address limitations of the [PyTriton](https://github.com/triton-inference-server/pytriton) package that only suppports deployments with the Python backend where TensorRT, XLA, and mixed precision are not available.
+simple-triton is a Python client for inference with the NVIDIA Triton server. It provides model deployment, configuration, and optimization capabilities for the TensorFlow, ONNX, and Python triton backends directly from Python. This was developed to address limitations of the [PyTriton](https://github.com/triton-inference-server/pytriton) package that only supports deployments with the Python backend where TensorRT, XLA, and mixed precision are not available.
 
 ![triton_overview.png](triton_overview.png)
 
@@ -12,7 +12,8 @@ simple-triton is a Python client for inference with the NVIDIA Triton server. It
     - [Example](#example)
     - [Running the Triton container](#container)
 - [Command-line interfaces](#cli)
-    - [Inference](#inference)
+    - [Model loading](#cli-loading)
+    - [Inference](#cli-inference)
 - [Model wrappers](#wrappers)
 - [Model configuration](#config)
 - [Model control](#control)
@@ -91,12 +92,96 @@ This sets the path `./models` as the model repository. The `--model-control-mode
 > **Note:** The options `--ipc`, `--shm-size`, and `--ulimit memlock` are recommended when using shared memory for client/server communication. This allows Triton to access host shared memory, increasing the default 64MB limit, and prevents paging of RAM out to disk. If running the client in a container then `--ipc` and `--shm-size` should also be used to launch the client container. Running the client container with `--network=host` is the simplest option to allow the client and server to communicate using the host network.
 
 ## Command-line interface <a name="cli"></a>
-### Inference <a name="inference"></a>
-A command-line interface is provided for inference with single or multiple slides and with control of tiling, masking, data loading, and serialization parameters. Models must be loaded prior to inference.
 
-Perform inference with the EfficientNetV2S model on a single slide, outputing serialized embeddings to your home directory
+### Loading models <a name="cli-loading"></a>
+`load_model` is a command line interface for loading models stored in the Triton repository that provides control over batching, response caching, hardware allocation, and optimizations. When loading a model with this CLI the input/output shapes and types are configured by Triton automatically.
+
+Parameters
+- `-n` model name
+- `-b` backend one of `tensorflow`, `python`, or `onnx`
+- `-m` maximum batch size (default 64 samples per batch, 0 for a non-batching model)
+- `-d` dynamic batching preferred batch size(s) and delay (default disable dynamic batching)
+- `-r` cache outputs (default outputs are not cached)
+- `-i` model instances per gpu / cpu (default 1)
+- `-c` use cpu (default runs inference on GPU)
+- `-g` number or list of gpus to use (default all GPUs)
+- `-p` disable pin memory optimization (default enables page-locked memory for model inputs/outputs)
+- `-a` automatic mixed precision optimization (TensorFlow) (default 32-bit precision)
+- `-t` TensorRt optimization (TensorFlow, ONNX) (default disable TRT)
+- `-x` XLA optimization (TensorFlow) one of -1 (disable) 0 (default), 1 (moderate), or 2 (intense) (default is 0 for backend default)
+- `-u` Unload a model (requires only model name parameter)
+
+Load a model named EfficientNetV2S on the TensorFlow backend
 ```bash
-python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow
+$python load_model.py EfficientNetV2S tensorflow
+```
+
+Change the maximum batch size from 64 to 128
+```bash
+$python load_model.py EfficientNetV2S tensorflow -m 64
+```
+
+Enable dynamic batching with a preferred batch size of 128 and a max wait of 200 microseconds
+```bash
+$python load_model.py EfficientNetV2S tensorflow -d 128 200
+```
+
+Enable the caching of model outputs
+```bash
+$python load_model.py EfficientNetV2S tensorflow -r
+```
+
+Load two copies of the model per GPU
+```bash
+$python load_model.py EfficientNetV2S tensorflow -i 2
+```
+
+Run the model on CPU instead of GPU
+```bash
+$python load_model.py EfficientNetV2S tensorflow -c
+```
+
+Run the model on 4 GPUs
+```bash
+$python load_model.py EfficientNetV2S tensorflow -g 4
+```
+
+Run the model on GPUs 0, 2, and 4
+```bash
+$python load_model.py EfficientNetV2S tensorflow -g 0,2,4
+```
+
+Disable pinned memory
+```bash
+$python load_model.py EfficientNetV2S tensorflow -p
+```
+
+Enable automatic mixed precision for a model hosted on the TensorFlow backend
+```bash
+$python load_model.py EfficientNetV2S tensorflow -a
+```
+
+Enable TensorRT optimization for a model hosted on the TensorFlow or ONNX backends. Use half-float precision. Max cached engines (100), minimum segment size (3), and workspace size (4GB) will have default values.
+```bash
+$python load_model.py EfficientNetV2S tensorflow -t
+```
+
+Enable XLA optimization for a model hosted on the TensorFlow backend with optimization level 2
+```bash
+$python load_model.py EfficientNetV2S tensorflow -x 2
+```
+
+Unload a model with name EfficientNetV2S for any backend
+```bash
+$python load_model.py EfficientNetV2S -u
+```
+
+### Inference <a name="cli-inference"></a>
+`inference` is a command line interface for model inference with one or more slides and with control of tiling, masking, data loading, and serialization parameters.
+
+Perform inference with the EfficientNetV2S model on a single slide, outputting serialized embeddings to your home directory
+```bash
+$python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow
 ```
 
 Optional parameters allow restricting inference to a tissue mask (`-m`)
