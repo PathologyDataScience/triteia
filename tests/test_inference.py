@@ -10,8 +10,9 @@ from .triton import triton
 
 def infer_batch(name, batch, grpc_port):
     url = f"localhost:{grpc_port}"
-    features,_,__,___ = inference(iter([(batch, {})]), model_name=name, url=url)
+    features, _, __, ___ = inference(iter([(batch, {})]), model_name=name, url=url)
     return features
+
 
 def python_batch_compare(data, name, grpc_port, max_batch_size=64):
     basic = PythonConfig(name, max_batch_size)

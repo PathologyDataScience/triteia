@@ -1,12 +1,13 @@
-from .data import data
-from functools import partial
 import os
-import pytest
+import socket
 import subprocess
+from contextlib import closing
+from functools import partial
 from time import sleep, time
 
-import socket
-from contextlib import closing
+import pytest
+
+from .data import data
 
 
 def find_free_port():
@@ -126,17 +127,12 @@ def triton(data):
             pytest.fail(
                 f"Setup: Could not stop triton containers w/ ancestor {TRITON_IMAGE_NAME}"
             )
-    if running_by_ancestor("nvcr.io/nvidia/tritonserver"):
-        if not stop_by_ancestor("nvcr.io/nvidia/tritonserver"):
-            pytest.fail(
-                f"Setup: Could not stop triton containers w/ ancestor nvcr.io/nvidia/tritonserver"
-            )
     if not triton_image_available():
         build_result = cmd(build_cmd)
         build_result.check_returncode()
     ready, container_name, http_port, grpc_port, metrics_port = triton_launch(data.path)
     if ready:
-        yield (http_port, grpc_port, metrics_port)
+        yield http_port, grpc_port, metrics_port
         if not stop_by_container(container_name):
             pytest.fail(
                 f"Teardown: Could not stop triton test container {container_name}."
@@ -145,4 +141,4 @@ def triton(data):
         if running_by_ancestor(TRITON_IMAGE_NAME):
             stop_by_ancestor(TRITON_IMAGE_NAME)
         else:
-            raise RuntimeError("Error occured: triton server not ready")
+            raise RuntimeError("Error occurred: triton server not ready")
