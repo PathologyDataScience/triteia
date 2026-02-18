@@ -38,10 +38,9 @@ def test_inference(data, it_kwargs_icc, inferred, triton):
     basic = TensorflowConfig(model_name, max_batch_size=64)
     model.load(config=basic.json())
     assert model.is_loaded()
-    features, metadata, times, failures = inference(
+    features, metadata, times = inference(
         iterator, model_name, url=f"localhost:{grpc_port}"
     )
-    assert len(failures) == 0
     result = hash_inference(metadata, features)
     assert result.keys() == inferred.keys()
     assert all(

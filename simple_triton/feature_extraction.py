@@ -173,15 +173,11 @@ def worker_infer(args):
         sample = pre(sample)
     features = None
     submit_time = time()
-    try:
-        results = client.infer_batch(sample.view())
-        # Take the first output tensor
-        for _, v in results.items():
-            features = np.asarray(v)
-            break
-    except Exception as e:
-        # We allow errors - it's up to user to deal with them
-        logging.error(f"Inference failed for a request: ", e)
+    results = client.infer_batch(sample.view())
+    # Take the first output tensor
+    for _, v in results.items():
+        features = np.asarray(v)
+        break
 
     return (
         features,
@@ -252,12 +248,9 @@ def inference_job(
         data for each batch produced by `dataset`.
     performance : dict
         A dictionary of time performance data on inference.
-    failures : List[dict]
-        A list of dictionaries with metadata for each failed batch/request.
     """
     inference_results = []
     metadata_results = []
-    failures = []
     timings = defaultdict(list)
 
     static = (pre, source, target)
@@ -275,9 +268,6 @@ def inference_job(
         futs = [executor.submit(worker_infer, arg) for arg in task_iter()]
         for i, f in enumerate(as_completed(futs)):
             (features, metadata, time_stats) = f.result()
-            if features is None:
-                failures.append(metadata)
-                continue
             inference_results.append(features)
             for m in metadata:
                 for k, v in m.items():
@@ -296,7 +286,6 @@ def inference_job(
         ),
         metadata_results,
         timings,
-        failures,
     )
 
 
@@ -343,8 +332,6 @@ def inference(
         data for each batch produced by `dataset`.
     performance : dict
         A dictionary of time performance data on inference.
-    failures : List[dict]
-        A list of dictionaries with metadata and timing results for each failed batch/request.
     """
     inference_results = []
     metadata_results = []
@@ -677,7 +664,7 @@ def main():
                 source = None
 
             # inference
-            features, metadata, times, failures = track_method(
+            features, metadata, times = track_method(
                 inference_job, writer, i, live_tracking=args.live_tracking
             )(
                 iterator,
