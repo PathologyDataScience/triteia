@@ -267,7 +267,7 @@ def inference_job(
         timings["inference_started"] = [time()]
         futs = [executor.submit(worker_infer, arg) for arg in task_iter()]
         for i, f in enumerate(as_completed(futs)):
-            (features, metadata, time_stats) = f.result()
+            features, metadata, time_stats = f.result()
             inference_results.append(features)
             for m in metadata:
                 for k, v in m.items():

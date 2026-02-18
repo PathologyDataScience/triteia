@@ -319,6 +319,7 @@ class TritonModel(object):
             except InferenceServerException as e:
                 raise
 
+
 def create_client(url="localhost:8001", verbose=False):
     """Create a grpcclient.
 
