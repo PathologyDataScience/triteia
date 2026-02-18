@@ -5,11 +5,14 @@ import triton_python_backend_utils as pb_utils
 from torch.nn import Module
 from torch.utils.dlpack import to_dlpack
 
+
 class EmptyModule(Module):
     def __init__(self):
         super().__init__()
+
     def forward(self, _):
         return torch.tensor([1])
+
 
 class TritonPythonModel:
     def initialize(self, args):
@@ -20,9 +23,7 @@ class TritonPythonModel:
         device = "cuda" if args["model_instance_kind"] == "GPU" else "cpu"
         device_id = args["model_instance_device_id"]
         self.device = f"{device}:{device_id}"
-        self.model = torch.nn.Sequential(EmptyModule()) \
-            .to(self.device) \
-            .eval()
+        self.model = torch.nn.Sequential(EmptyModule()).to(self.device).eval()
 
         self.gpu_id = args.get("model_instance_device_id", 0)
         self.model_config = model_config = json.loads(args["model_config"])

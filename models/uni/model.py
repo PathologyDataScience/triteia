@@ -1,15 +1,12 @@
-from huggingface_hub import login
 import json
-import numpy as np
 import os
-from PIL import Image
+
+import numpy as np
 import timm
-from timm.data import resolve_data_config, transforms
-from timm.data.transforms_factory import create_transform
-from torchvision import transforms
 import torch
 import triton_python_backend_utils as pb_utils
 import tritonclient.utils as triton_utils
+from huggingface_hub import login
 
 
 class TritonPythonModel:
@@ -71,8 +68,16 @@ class TritonPythonModel:
         )
         self.device = torch.device(f"cuda:{self.gpu_id}")
         self.model = self.model.to(self.device)
-        self.mean = torch.tensor(self.model.pretrained_cfg['mean']).view(1, 3, 1, 1).to(self.device)
-        self.std = torch.tensor(self.model.pretrained_cfg['std']).view(1, 3, 1, 1).to(self.device)
+        self.mean = (
+            torch.tensor(self.model.pretrained_cfg["mean"])
+            .view(1, 3, 1, 1)
+            .to(self.device)
+        )
+        self.std = (
+            torch.tensor(self.model.pretrained_cfg["std"])
+            .view(1, 3, 1, 1)
+            .to(self.device)
+        )
 
         self.model.eval()
 
@@ -90,8 +95,10 @@ class TritonPythonModel:
                 in_t = (in_t / 255.0).permute(0, 3, 1, 2)
                 in_t = (in_t - self.mean) / self.std
 
-                with (torch.inference_mode(),
-                      torch.autocast(device_type="cuda", dtype=torch.float16)):
+                with (
+                    torch.inference_mode(),
+                    torch.autocast(device_type="cuda", dtype=torch.float16),
+                ):
                     features = self.model(in_t).detach().cpu().numpy()
 
                 out_tensor_features = pb_utils.Tensor(
