@@ -70,7 +70,8 @@ docker run \
 
 ### Running the Triton container <a name="container"></a>
 
-simple-triton is tested with [Triton version 24.12](https://github.com/triton-inference-server/server/releases/tag/v2.53.0).
+simple-triton is tested with [Triton version 25.02](https://github.com/triton-inference-server/server/releases/tag/v2.55.0).
+Support for Tensorflow is deprecated in later versions, but other models should still work.
 
 Download and launch the Triton Docker container from the NVIDIA GPU Cloud (NGC). You should be inside of this directory (simple_triton).
 ```

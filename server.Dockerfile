@@ -1,4 +1,5 @@
-FROM nvcr.io/nvidia/tritonserver:24.12-py3
+FROM nvcr.io/nvidia/tritonserver:25.02-py3
+# later versions of tritonserver deprecate tensorflow
 
 # common dependencies
 RUN pip install --no-cache-dir tritonclient
