@@ -18,6 +18,7 @@ simple-triton is a Python client for inference with the NVIDIA Triton server. It
 - [Model control](#control)
 - [Developer guide](#developer-guide)
     - [Testing](#testing)
+    - [TRT Conversion](#trt)
 
 ## Quick start <a name="quick-start"></a>
 
@@ -309,3 +310,13 @@ docker build -f client.Dockerfile . -t simple_triton_client:latest --build-arg D
 ./launch_test_container.sh
 ```
 You can now run `pytest tests` to run tests inside the container
+
+
+## TRT Conversion <a name="trt"></a>
+Models usually come as PyTorch, tensorflow or ONNX backends. NVIDIA has a format called "TRT" (https://github.com/NVIDIA/TensorRT) that is optimized for inference.
+In [examples/resnet50_trt](./examples/resnet50_trt/), we have an example for downloading a PyTorch model, converting it to ONNX, and then converting that file to a TRT backend.
+The approach can be modified to work with different types of models. 
+
+Be aware that extra performance is not a guaranteed. 
+PyTorch has a lot of optimizations that may not be available in the ONNX or TRT backend.
+
