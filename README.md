@@ -321,3 +321,16 @@ The approach can be modified to work with different types of models.
 Be aware that extra performance is not a guaranteed. 
 PyTorch has a lot of optimizations that may not be available in the ONNX or TRT backend.
 
+## Paper results
+To reproduce the (TBD) paper: `OUTPUT_DIR="./results" ./benchmarking/paper_benchmarks.sh $OUTPUT_DIR`
+Results can be inspected either as tensorboards: `tensorboard --logdir=...`, or as figures:
+```bash
+# convert tensorboard to CSV
+./benchmarking/tensorboard_to_csv.py
+# CSV to plot files 
+`./benchmarking/tensorboard_csv_to_plot.py`
+```
+
+To do the benchmarks using Docker, use the `benchmark_client.Dockerfile` in the benchmarking directory.
+It is identical to the `client.Dockerfile` in this directory, except it has access to CUDA so that it can automatically start and stop Triton with GPUs.
+To build it from the git root directory: `docker build -f benchmarking/benchmark_client.Dockerfile . -t simple_triton_client:benchmark`

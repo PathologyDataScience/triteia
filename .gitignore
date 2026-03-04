@@ -1,3 +1,6 @@
+plot_out/
+*.csv
+*_results/
 models/resnet50_trt_uint8/
 models/resnet50_trt_float32/
 *.onnx
