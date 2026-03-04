@@ -341,7 +341,7 @@ def inference(
 
     with ExitStack() as stack:
         clients = initialize_clients(stack, url, model_name, max_workers)
-        return _inference(iterator, clients, source, target, pre)
+        return inference_job(iterator, clients, source, target, pre)
 
 
 def main():
@@ -678,7 +678,6 @@ def main():
                 source=source,
                 target=target,
                 clients=clients,
-                limit=args.limit,
             )
             if args.metrics_endpoint:
                 write_tritonserver_metrics(args.metrics_endpoint, writer)
