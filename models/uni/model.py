@@ -1,14 +1,12 @@
-from huggingface_hub import login
 import json
-import numpy as np
 import os
-from PIL import Image
+
+import numpy as np
 import timm
-from timm.data import resolve_data_config
-from timm.data.transforms_factory import create_transform
 import torch
 import triton_python_backend_utils as pb_utils
 import tritonclient.utils as triton_utils
+from huggingface_hub import login
 
 
 class TritonPythonModel:
@@ -66,12 +64,21 @@ class TritonPythonModel:
             "hf-hub:MahmoodLab/uni",
             pretrained=True,
             init_values=1e-5,
-            dynamic_img_size=True,
+            dynamic_img_size=False,
         )
-        self.model = self.model.to(torch.device(f"cuda:{self.gpu_id}"))
-        self.transform = create_transform(
-            **resolve_data_config(self.model.pretrained_cfg, model=self.model)
+        self.device = torch.device(f"cuda:{self.gpu_id}")
+        self.model = self.model.to(self.device)
+        self.mean = (
+            torch.tensor(self.model.pretrained_cfg["mean"])
+            .view(1, 3, 1, 1)
+            .to(self.device)
         )
+        self.std = (
+            torch.tensor(self.model.pretrained_cfg["std"])
+            .view(1, 3, 1, 1)
+            .to(self.device)
+        )
+
         self.model.eval()
 
     def execute(self, requests):
@@ -84,23 +91,15 @@ class TritonPythonModel:
 
             try:
                 in_0 = pb_utils.get_input_tensor_by_name(request, "input_0")
-                input_np = in_0.as_numpy()
-
-                batch_size = input_np.shape[0]
-                pil_images = [Image.fromarray(input_np[i]) for i in range(batch_size)]
-                transformed_images = torch.stack(
-                    [self.transform(img) for img in pil_images]
-                )
-                input_norm = transformed_images.float().to(
-                    torch.device(f"cuda:{self.gpu_id}")
-                )
+                in_t = torch.from_numpy(in_0.as_numpy()).to(self.device)
+                in_t = (in_t / 255.0).permute(0, 3, 1, 2)
+                in_t = (in_t - self.mean) / self.std
 
                 with (
                     torch.inference_mode(),
                     torch.autocast(device_type="cuda", dtype=torch.float16),
                 ):
-                    feature_emb = self.model(input_norm)
-                    features = feature_emb.detach().cpu().numpy()
+                    features = self.model(in_t).detach().cpu().numpy()
 
                 out_tensor_features = pb_utils.Tensor(
                     "output_0", features.astype(np.float32)
@@ -110,7 +109,7 @@ class TritonPythonModel:
                 )
                 responses.append(inference_response)
             except triton_utils.InferenceServerException as e:
-                print("An error occured in Inference")
+                print("An error occurred in inference")
                 print(e)
 
         return responses
