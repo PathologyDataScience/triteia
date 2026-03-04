@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import subprocess
 import sys
-from tensorboardX import SummaryWriter
+from tensorboardX import SummaryWriter, GlobalSummaryWriter
 import os
 from functools import wraps
 import psutil
@@ -77,7 +77,7 @@ def analyze(times, floatfmt=".2f"):
 
 
 # poll from the tritonserver using HTTP endpoint
-def write_tritonserver_metrics(endpoint, writer, step):
+def write_tritonserver_metrics(endpoint, writer):
     keys = [
         "nv_inference_count",
         "nv_inference_request_failure",
@@ -98,7 +98,7 @@ def write_tritonserver_metrics(endpoint, writer, step):
     for line in output:
         if " " in line:
             key, value = line.split(" ", 1)
-            writer.add_scalar(key, int(value), step)
+            writer.add_scalar(key, int(value))
 
 
 def get_username():
@@ -126,7 +126,7 @@ def init_tb_writer(tb_dir, tb_name, files, extra):
     tb_name = tb_name or str(time.time())
     tb_dst = os.path.join(tb_dir, tb_name)
 
-    writer = SummaryWriter(log_dir=tb_dst)
+    writer = GlobalSummaryWriter(log_dir=tb_dst)
     logging.info(
         f"Writing tensorboard stats to '{tb_dst}' (inspect with `tensorboard --logdir={tb_dst}`)"
     )
@@ -147,19 +147,17 @@ def init_tb_writer(tb_dir, tb_name, files, extra):
     return writer
 
 
-def write_analysis_tb(analysis, writer, i):
-    writer.add_scalar("read_total_median", analysis["median"]["read (% total)"], i)
+def write_analysis_tb(analysis, writer):
+    writer.add_scalar("read_total_median", analysis["median"]["read (% total)"])
     writer.add_scalar(
-        "submission_total_median", analysis["median"]["submission (% total)"], i
+        "submission_total_median", analysis["median"]["submission (% total)"]
     )
     writer.add_scalar(
-        "retrieval_total_median", analysis["median"]["retrieval (% total)"], i
+        "retrieval_total_median", analysis["median"]["retrieval (% total)"]
     )
-    writer.add_scalar("read_total_avg", analysis["avg"]["read (% total)"], i)
-    writer.add_scalar(
-        "submission_total_avg", analysis["avg"]["submission (% total)"], i
-    )
-    writer.add_scalar("retrieval_total_avg", analysis["avg"]["retrieval (% total)"], i)
+    writer.add_scalar("read_total_avg", analysis["avg"]["read (% total)"])
+    writer.add_scalar("submission_total_avg", analysis["avg"]["submission (% total)"])
+    writer.add_scalar("retrieval_total_avg", analysis["avg"]["retrieval (% total)"])
 
 
 def monitor_gpu(stop_event, interval_sec, action, writer):
@@ -193,7 +191,6 @@ def monitor_gpu(stop_event, interval_sec, action, writer):
         for gpu_idx in range(gpu_count):
             handles.append(nvmlDeviceGetHandleByIndex(gpu_idx))
 
-        i = 0
         while not stop_event.is_set():
             for gpu_idx, handle in enumerate(handles):
                 # Memory usage
@@ -206,16 +203,9 @@ def monitor_gpu(stop_event, interval_sec, action, writer):
                 gpu_util = utilization.gpu  # GPU utilization percentage
 
                 # Log metrics
-                writer.add_scalar(
-                    f"{action}_gpu_{gpu_idx}_mem_used_mb", gpu_mem_used, global_step=i
-                )
-                writer.add_scalar(
-                    f"{action}_gpu_mem_{gpu_idx}_total_mb", gpu_mem_total, global_step=i
-                )
-                writer.add_scalar(
-                    f"{action}_gpu_{gpu_idx}_util_percent", gpu_util, global_step=i
-                )
-            i += 1
+                writer.add_scalar(f"{action}_gpu_{gpu_idx}_mem_used_mb", gpu_mem_used)
+                writer.add_scalar(f"{action}_gpu_mem_{gpu_idx}_total_mb", gpu_mem_total)
+                writer.add_scalar(f"{action}_gpu_{gpu_idx}_util_percent", gpu_util)
 
             time.sleep(interval_sec)
     finally:
@@ -225,12 +215,10 @@ def monitor_gpu(stop_event, interval_sec, action, writer):
 def monitor_memory(stop_event, interval, action, writer):
     """Periodically logs memory usage of the current process."""
     process = psutil.Process(os.getpid())
-    i = 0
     while not stop_event.is_set():
         mem_info = process.memory_info()
         mem_used = mem_info.rss / (1024 * 1024)
-        writer.add_scalar(f"{action}_mem_mb", mem_used, global_step=i)
-        i += 1
+        writer.add_scalar(f"{action}_mem_mb", mem_used)
         time.sleep(interval)
 
 
@@ -241,7 +229,6 @@ def monitor_cpu(stop_event, interval, action, writer, python_only=False):
     - If python_only=True: logs CPU usage for Python processes (total and per-PID).
     """
     process = psutil.Process(os.getpid())
-    i = 0
 
     # Prime psutil CPU measurements to avoid 0.0 on first read
     psutil.cpu_percent(percpu=True, interval=None)
@@ -263,44 +250,34 @@ def monitor_cpu(stop_event, interval, action, writer, python_only=False):
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     continue
 
-            writer.add_scalar(
-                f"{action}_cpu_percent_python_total", total_py_cpu, global_step=i
-            )
+            writer.add_scalar(f"{action}_cpu_percent_python_total", total_py_cpu)
             # Also log per-PID to help disambiguate multiple Python workers
             for pid, per in per_pid.items():
-                writer.add_scalar(
-                    f"{action}_cpu_percent_python_pid_{pid}", per, global_step=i
-                )
+                writer.add_scalar(f"{action}_cpu_percent_python_pid_{pid}", per)
         else:
             # System-wide per-CPU usage
             per_cpu = psutil.cpu_percent(percpu=True, interval=None)
             writer.add_scalar(
                 f"{action}_cpu_percent_total/avg",
                 sum(per_cpu) / len(per_cpu),
-                global_step=i,
             )
-            writer.add_scalar(
-                f"{action}_cpu_percent_total/agg", sum(per_cpu), global_step=i
-            )
+            writer.add_scalar(f"{action}_cpu_percent_total/agg", sum(per_cpu))
             for idx, val in enumerate(per_cpu):
-                writer.add_scalar(f"{action}_cpu_percent/cpu_{idx}", val, global_step=i)
+                writer.add_scalar(f"{action}_cpu_percent/cpu_{idx}", val)
 
-        i += 1
         time.sleep(interval)
 
 
 def monitor_disk(stop_event, interval, action, writer, path="/"):
     """Periodically logs disk usage percentage for the specified path."""
-    i = 0
     while not stop_event.is_set():
         disk_usage = psutil.disk_usage(path)
         disk_percent = (disk_usage.used / disk_usage.total) * 100
-        writer.add_scalar(f"{action}_disk_usage_percent", disk_percent, global_step=i)
-        i += 1
+        writer.add_scalar(f"{action}_disk_usage_percent", disk_percent)
         time.sleep(interval)
 
 
-def track_method(func, writer, slide_num, live_tracking=False, path="/"):
+def track_method(func, writer, live_tracking=False, path="/"):
     @wraps(func)
     def wrapper(*args, **kwargs):
         p = psutil.Process()
@@ -356,13 +333,11 @@ def track_method(func, writer, slide_num, live_tracking=False, path="/"):
         bytes_read = final_disk_io.read_bytes - initial_disk_io.read_bytes
         chars_read = final_disk_p.read_chars - initial_disk_p.read_chars
         kilobytes_read = int(bytes_read / 1024)
-        writer.add_scalar("kilobytes_read", kilobytes_read, slide_num)
-        writer.add_scalar("chars_read", chars_read, slide_num)
-        writer.add_scalar(
-            "kilobytes_read_per_s", kilobytes_read / elapsed_time, slide_num
-        )
-        writer.add_scalar("chars_read_per_s", chars_read / elapsed_time, slide_num)
-        writer.add_scalar("time_elapsed", elapsed_time, slide_num)
+        writer.add_scalar("kilobytes_read", kilobytes_read)
+        writer.add_scalar("chars_read", chars_read)
+        writer.add_scalar("kilobytes_read_per_s", kilobytes_read / elapsed_time)
+        writer.add_scalar("chars_read_per_s", chars_read / elapsed_time)
+        writer.add_scalar("time_elapsed", elapsed_time)
 
         return result
 

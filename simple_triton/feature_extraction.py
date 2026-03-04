@@ -672,7 +672,7 @@ def main():
 
             # inference
             features, metadata, times = track_method(
-                inference_job, writer, i, live_tracking=args.live_tracking
+                inference_job, writer, live_tracking=args.live_tracking
             )(
                 iterator,
                 source=source,
@@ -681,10 +681,10 @@ def main():
                 limit=args.limit,
             )
             if args.metrics_endpoint:
-                write_tritonserver_metrics(args.metrics_endpoint, writer, i)
+                write_tritonserver_metrics(args.metrics_endpoint, writer)
             if "tile_left" in metadata:
-                writer.add_scalar("number_of_tiles", len(metadata["tile_left"]), i)
-                write_analysis_tb(analyze(times), writer, i)
+                writer.add_scalar("number_of_tiles", len(metadata["tile_left"]))
+                write_analysis_tb(analyze(times), writer)
 
             if len(features) > 0:
                 start = time()
@@ -707,9 +707,7 @@ def main():
                     precision=precision,
                 )
                 feature_writing_time = time() - start
-                writer.add_scalar(
-                    "feature_writing_elapsed_sec", feature_writing_time, i
-                )
+                writer.add_scalar("feature_writing_elapsed_sec", feature_writing_time)
             else:
                 logging.warning(
                     f"No features extracted for '{file}': see tritonserver logs."
