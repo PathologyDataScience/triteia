@@ -267,7 +267,7 @@ def inference_job(
         timings["inference_started"] = [time()]
         futs = [executor.submit(worker_infer, arg) for arg in task_iter()]
         for i, f in enumerate(as_completed(futs)):
-            (features, metadata, time_stats) = f.result()
+            features, metadata, time_stats = f.result()
             inference_results.append(features)
             for m in metadata:
                 for k, v in m.items():
@@ -411,7 +411,6 @@ def main():
         help="Skip files with existing embeddings in output.",
     )
     parser.add_argument(
-        "-l",
         "--live-tracking",
         dest="live_tracking",
         action="store_true",
@@ -472,6 +471,14 @@ def main():
         help="Reach chunk size (default 4 tiles).",
     )
     parser.add_argument(
+        "-l",
+        "--limit",
+        required=False,
+        default=10,
+        type=int,
+        help="The maximum number of allowable pending inferences. Default value 10",
+    )
+    parser.add_argument(
         "-p",
         "--prefetch",
         required=False,
@@ -514,6 +521,8 @@ def main():
 
     # parse model's configurations
     model = TritonModel(args.model, args.address)
+    if not model.is_loaded():
+        model.load()
     config = model.get_config()
     dtype = (
         np.float32 if config["input"][0]["dataType"] == "TYPE_FP32" else np.uint8
@@ -640,8 +649,6 @@ def main():
                 print(f"Inference error {file}: {exc}")
                 continue
 
-            precision = np.dtype("float32") if args.float else np.dtype("float16")
-
             # tile iterator
             iterator = TiffPrefetch(
                 study=hs_study,
@@ -671,6 +678,7 @@ def main():
                 source=source,
                 target=target,
                 clients=clients,
+                limit=args.limit,
             )
             if args.metrics_endpoint:
                 write_tritonserver_metrics(args.metrics_endpoint, writer, i)

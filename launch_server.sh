@@ -169,8 +169,8 @@ docker run \
   --detach="$DETACH_ARG" \
   -e HF_TOKEN="${HF_TOKEN}" \
   --name tritonserver_$USER \
-  -p "${HTTP_PORT}:8000" -p "${GRPC_PORT}:8001" -p "${METRICS_PORT}:8002" -p 8003:8003 \
-  --shm-size=1g \
+  -p "${HTTP_PORT}:8000" -p "${GRPC_PORT}:8001" -p "${METRICS_PORT}:8002" \
+  --shm-size=4g \
   --ulimit memlock=-1 \
   --ipc=host \
   -v "$MODELS_DIR":/models \

@@ -2,9 +2,8 @@ import json
 import time
 
 from google.protobuf.json_format import MessageToDict
+import tritonclient.grpc as grpcclient
 from tritonclient.utils import InferenceServerException
-
-from simple_triton.utils import create_client
 
 
 class TritonModel(object):
@@ -319,3 +318,29 @@ class TritonModel(object):
                     return
             except InferenceServerException as e:
                 raise
+
+
+def create_client(url="localhost:8001", verbose=False):
+    """Create a grpcclient.
+
+    Parameters
+    ----------
+    url : string
+        The url for the remote-procedure call port of the Triton server.
+        Default value is "localhost:8001".
+    verbose : bool
+        If True the client will emit status messages to stdout. Default
+        is False.
+
+    Returns
+    -------
+    client : grpcclient.InferenceServerClient
+        A client
+    """
+
+    try:
+        client = grpcclient.InferenceServerClient(url=url, verbose=verbose)
+        return client
+    except Exception as e:
+        print("context creation failed: " + str(e), flush=True)
+        raise
