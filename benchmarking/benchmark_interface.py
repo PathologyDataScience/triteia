@@ -126,12 +126,7 @@ class Benchmark:
         )
         # warm up Model
         print("Warmup Model")
-        (
-            self.features,
-            self.tile_info,
-            self.times,
-            self.failed,
-        ) = inference(
+        (self.features, self.tile_info, self.times, self.failed,) = inference(
             iterator,
             model_name,
             url=self.args_dict["url"],
@@ -157,12 +152,7 @@ class Benchmark:
             )
             # start timer
             start = time.time()
-            (
-                self.features,
-                self.tile_info,
-                self.times,
-                self.failed,
-            ) = inference(
+            (self.features, self.tile_info, self.times, self.failed,) = inference(
                 iterator,
                 model_name,
                 url=self.args_dict["url"],
