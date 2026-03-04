@@ -157,7 +157,7 @@ fi
 
 if [[ -z "$HF_TOKEN" ]]
 then
-  echo "Warning: no HF_TOKEN defined, some models may be downloaded" > /dev/fd/2
+  echo "Warning: no HF_TOKEN defined, some models may not be available for download" > /dev/fd/2
   sleep 3 # give users a chance to ctrl+c
 fi
 
