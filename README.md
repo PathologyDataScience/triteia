@@ -1,8 +1,8 @@
-# simple-triton
+# triteia
 
-simple-triton is a Python client for performing inference on the NVIDIA Triton Inference Server. It provides model deployment, configuration, and optimization capabilities for the TensorFlow, ONNX, and Python Triton backends directly from Python. This was developed to address limitations in the [PyTriton](https://github.com/triton-inference-server/pytriton) package that only suppports deployments with the Python backend where TensorRT, XLA, and mixed precision are not available.
+triteia is a Python client for performing inference on the NVIDIA Triton Inference Server. It provides model deployment, configuration, and optimization capabilities for the TensorFlow, ONNX, and Python Triton backends directly from Python. This was developed to address limitations in the [PyTriton](https://github.com/triton-inference-server/pytriton) package that only suppports deployments with the Python backend where TensorRT, XLA, and mixed precision are not available.
 
-![triton_overview.png](triton_overview.png)
+![doc/overview_figure.png](doc/overview_figure.png)
 
 # User guide <a name="user-guide"></a>
 
@@ -22,25 +22,25 @@ simple-triton is a Python client for performing inference on the NVIDIA Triton I
 
 ## Quick start <a name="quick-start"></a>
 
-simple-triton requires `histomcs_stream` and `large_image` packages with the tiff reader
+triteia requires `histomcs_stream` and `large_image` packages with the tiff reader
 ```
-git clone https://github.com/PathologyDataScience/simple_triton.git
-pip install --editable ./simple_triton
+git clone https://github.com/PathologyDataScience/triteia.git
+pip install --editable ./triteia
 ```
-> `--editable` ensures that updates to the `simple_triton` package (after `git pull`) immediately takes effect.
+> `--editable` ensures that updates to the `triteia` package (after `git pull`) immediately takes effect.
 
-Or, you can try the Docker image. First, run `git clone` (as above) or make sure to do a git pull inside the "simple_triton" directory. Then:
+Or, you can try the Docker image. First, run `git clone` (as above) or make sure to do a git pull inside the "triteia" directory. Then:
 ```bash
 # optional: download test data
 python download_test_data.py
 
-# simple_triton_client will be the name of the Docker image
-docker build -f client.Dockerfile . -t simple_triton_client:latest --build-arg DOCKER_GROUP_ID=$(getent group docker | cut -d: -f3)
+# triteia will be the name of the Docker image
+docker build -f client.Dockerfile . -t triteia:latest --build-arg DOCKER_GROUP_ID=$(getent group docker | cut -d: -f3)
 docker run \
   --security-opt seccomp:unconfined --network=host \
   --rm -it --shm-size=1g \
   -v ${PWD}/test_data:/data:ro \
-  --name tritonclient simple_triton_client:latest
+  --name tritonclient triteia:latest
 ```
 > **_NOTE:_**  `--network=` option allows the Docker image to access ports from other containers or the host. The default shared memory size for Docker containers is 64MB; use `--shm-size=` to increase it if you need to process large whole-slide images. The `--security-opt seccomp:unconfined` option may be needed on larger machines to enable [OpenBLAS](https://www.openblas.net/) threading support. The `--rm` option removes the container after it stops, so be cautious if you need persistent data.
 
@@ -64,13 +64,13 @@ docker run \
   -v ${PWD}/examples:/examples:rw \
   --user $UID --rm -it \
   --shm-size=1g \
-  --name tritonclient simple_triton_client:latest \
+  --name tritonclient triteia:latest \
   bash -c "jupyter-lab --notebook-dir /examples/ --no-browser"
 ```
 
 ### Running the Triton container <a name="container"></a>
 
-simple-triton is tested with [Triton version 25.02](https://github.com/triton-inference-server/server/releases/tag/v2.55.0).
+triteia is tested with [Triton version 25.02](https://github.com/triton-inference-server/server/releases/tag/v2.55.0).
 Support for Tensorflow is deprecated in later versions, but other model backends (like PyTorch) should still work.
 
 We recommend starting from the repository’s root directory (the same as the directory containing this README.md file). You can run using the `./launch_server.sh` script (which also has some command-line options) or the command below:
@@ -153,7 +153,7 @@ python feature_extraction.py ~/inputs.tsv ~/ EfficientNetV2S.tensorflow -s
 ```
 
 ## Model wrappers <a name="wrappers"></a>
-simple-triton contains wrappers for serving popular digital pathology models, including CONCH, UNI, Prov-GigaPath, hibou-L, Phikon, Virchow, and Virchow2 on the [Python backend](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/python_backend/README.html). All models are served using mixed precision.
+triteia contains wrappers for serving popular digital pathology models, including CONCH, UNI, Prov-GigaPath, hibou-L, Phikon, Virchow, and Virchow2 on the [Python backend](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/python_backend/README.html). All models are served using mixed precision.
 
 | Model | Input | Output | Size |
 |---|---|---|---|
@@ -195,14 +195,14 @@ docker run \
 ```
 
 ## Model configuration <a name="config"></a>
-`simple_triton.config` includes model configuration classes that implement backend-specific configuration options. These classes enable configuration of batching behavior, specification of model input/output shapes and types, and backend optimizations. Refer to the Triton documentation on [model configuration](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/user_guide/model_configuration.html#model-configuration) and [optimization](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/user_guide/optimization.html) for further details.
+`triteia.config` includes model configuration classes that implement backend-specific configuration options. These classes enable configuration of batching behavior, specification of model input/output shapes and types, and backend optimizations. Refer to the Triton documentation on [model configuration](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/user_guide/model_configuration.html#model-configuration) and [optimization](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/user_guide/optimization.html) for further details.
 
 Configuration classes like `PythonConfiguration` and `TensorflowConfiguration` take additional data classes as inputs that configure batching and caching behavior, hardware resources, and model input/output signatures.
 
 When Triton is launched with `--strict-model-config=false`, the server automatically configures basic information such as input/output signatures, and the configuration can omit them.
 ```python
-from simple_triton.config import TensorflowConfig
-from simple_triton.model import TritonModel
+from triteia.config import TensorflowConfig
+from triteia.model import TritonModel
 name = "mymodel.tensorflow"
 config = TensorflowConfig(name, max_batch_size=64)
 model = TritonModel(name, "localhost:8001")
@@ -211,7 +211,7 @@ model.load(config=config.json())
 
 Alternatively, model inputs and output signatures can be defined using the `ModelInput` and `ModelOutput` classes
 ```python
-from simple_triton.config import ModelInput
+from triteia.config import ModelInput
 input = [ModelInput(name="input_0", shape=[224, 224, 3], dtype=np.float32, optional=False)]
 config = TensorflowConfig(name, max_batch_size=64, input=input)
 ```
@@ -220,14 +220,14 @@ Variable-sized input dimensions can be indicated using a value of -1.
 
 The `InstanceGroup` class configures the use of CPU or GPU resources and the number of model instances hosted on each GPU.
 ```python
-from simple_triton.config import InstanceGroup
+from triteia.config import InstanceGroup
 instances = InstanceGroup(count=2, kind="gpu", gpus=[0,1,2,3])
 config = TensorflowConfig(name=name, instance_group=instances)
 ```
 
 `TensorflowOptimization` can be used with `TensorflowMixedPrecision`, `TensorflowXla`, and `TensorRt` to activate automatic mixed precision, XLA compilation, or TensorRT optimization.
 ```python
-from simple_triton.config import TensorflowMixedPrecision, TensorflowXla, TensorflowOptimization
+from triteia.config import TensorflowMixedPrecision, TensorflowXla, TensorflowOptimization
 amp = TensorflowMixedPrecision()
 xla = TensorflowXla(level=2)
 optimizer = TensorflowOptimization(amp=amp, xla=xla)
@@ -253,11 +253,11 @@ File-based configuration is useful for distributing models. When configuring and
 The `TritonModel` class can be used to load/unload models, retrieve model configurations or metadata, or check whether a model is idle or loaded. A model is defined by a model name and a server URL.
 
 ```python
-from simple_triton.model import TritonModel
+from triteia.model import TritonModel
 model = TritonModel("EfficientNetV2S.tensorflow", "localhost:8001")
 ```
 
-When unloading a model, simple-triton will check that the model is idle.
+When unloading a model, triteia will check that the model is idle.
 ```python
 # load model with auto-generated configuration
 # block and timeout after 1 second
@@ -306,7 +306,7 @@ pooch.retrieve(
 ### Using standalone docker container
 To test using the Docker container, launch and build the client as follows:
 ```
-docker build -f client.Dockerfile . -t simple_triton_client:latest --build-arg DOCKER_GROUP_ID=$(getent group docker | cut -d: -f3)
+docker build -f client.Dockerfile . -t triteia:latest --build-arg DOCKER_GROUP_ID=$(getent group docker | cut -d: -f3)
 ./launch_test_container.sh
 ```
 You can now run tests inside the container using `pytest tests` inside the container.
@@ -331,4 +331,4 @@ Results can be inspected either as tensorboards: `tensorboard --logdir=...`, or 
 
 To do the benchmarks using Docker, use the `benchmark_client.Dockerfile` in the benchmarking directory.
 It is identical to the `client.Dockerfile` in this directory, except it has access to CUDA so it can automatically start and stop Triton with GPUs.
-To build it from the git root directory: `docker build -f benchmarking/benchmark_client.Dockerfile . -t simple_triton_client:benchmark`
+To build it from the git root directory: `docker build -f benchmarking/benchmark_client.Dockerfile . -t triteia:benchmark`

@@ -16,12 +16,12 @@ docker run \
   --network=host \
   --init \
   --shm-size=20g \
-  -v "$PWD/launch_server.sh":/home/$USER/simple_triton/launch_server.sh \
-  -v "$PWD/benchmarking":/home/$USER/simple_triton/benchmarking \
-  -v /home/aza4423/BENCHMARK_DATA/:/data:ro \
-  -v "$PWD/test_data":/home/$USER/simple_triton/test_data/ \
-  -v /data/anders_aza4423/simple_triton_results/:/results \
+  -v "$PWD/launch_server.sh":/home/$USER/triteia/launch_server.sh \
+  -v "$PWD/benchmarking":/home/$USER/triteia/benchmarking \
+  -v ../BENCHMARK_DATA/:/data:ro \
+  -v "$PWD/test_data":/home/$USER/triteia/test_data/ \
+  -v ./results/:/results \
   -v /var/run/docker.sock:/var/run/docker.sock \
   --rm \
-  --name tritonclient_test_$USER \
-  -it simple_triton_client:benchmark
+  --name triteia_test_$USER \
+  -it triteia:benchmark

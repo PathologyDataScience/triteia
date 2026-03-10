@@ -10,7 +10,7 @@ import os
 from contextlib import ExitStack
 from pprint import pprint
 
-# ensure we're loading the simple_triton in this directory, not installed in path
+# ensure we're loading the triteia in this directory, not installed in path
 from sys import path
 from time import perf_counter
 
@@ -19,8 +19,8 @@ import tensorflow as tf
 import torch
 from tensorboardX import GlobalSummaryWriter
 
-# Make sure we're testing the local simple_triton
-path.append(os.path.join(os.path.dirname(__file__), "../simple_triton"))
+# Make sure we're testing the local triteia
+path.append(os.path.join(os.path.dirname(__file__), "../triteia"))
 from config import PythonConfig, InstanceGroup
 from model import TritonModel
 from feature_extraction import study, inference, inference_job, initialize_clients

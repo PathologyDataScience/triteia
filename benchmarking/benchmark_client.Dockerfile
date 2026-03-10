@@ -1,5 +1,5 @@
 # for the paper, this docker image is built with:
-# docker build -f client.Dockerfile . -t simple_triton_client:benchmark --build-arg DOCKER_GROUP_ID=$(getent group docker | cut -d: -f3) --build-arg UID=$(id -u) --build-arg GID=$(id -g)  --build-arg USERNAME=$USER
+# docker build -f client.Dockerfile . -t triteia:benchmark --build-arg DOCKER_GROUP_ID=$(getent group docker | cut -d: -f3) --build-arg UID=$(id -u) --build-arg GID=$(id -g)  --build-arg USERNAME=$USER
 FROM python:3.10-slim AS build-image
 ARG USERNAME=myuser
 
@@ -14,9 +14,9 @@ RUN echo 'APT::Install-Suggests "0";' >> /etc/apt/apt.conf.d/00-docker && \
     apt clean && \
     rm -rf /var/lib/apt/lists/*
 
-# install simple-triton
-WORKDIR /home/$USERNAME/code/simple_triton
-COPY simple_triton/ simple_triton
+# install triteia
+WORKDIR /home/$USERNAME/code/triteia
+COPY triteia/ triteia
 COPY pyproject.toml .
 # comment out scm (i.e. git) line in pyproject.toml
 RUN sed -i 's/.*\[tool.setuptools_scm\]/#&/g' pyproject.toml
@@ -44,8 +44,8 @@ RUN echo 'APT::Install-Suggests "0";' >> /etc/apt/apt.conf.d/00-docker && \
     rm -rf /var/lib/apt/lists/*
 
 USER $USERNAME
-WORKDIR /home/$USERNAME/simple_triton
-COPY --chown=$USERNAME:$USERNAME simple_triton/ simple_triton
+WORKDIR /home/$USERNAME/triteia
+COPY --chown=$USERNAME:$USERNAME triteia/ triteia
 COPY --chown=$USERNAME:$USERNAME pyproject.toml .
 
 
@@ -76,7 +76,7 @@ RUN echo 'APT::Install-Suggests "0";' >> /etc/apt/apt.conf.d/00-docker && \
 RUN curl -fsSL https://get.docker.com | sh
 # for jupyter notebooks as non-root
 RUN mkdir --mode a+rxw /.local /.jupyter /.cache /models/ /.config
-RUN chown $USERNAME:$USERNAME /home/$USERNAME/simple_triton/
+RUN chown $USERNAME:$USERNAME /home/$USERNAME/triteia/
 USER $USERNAME
 
 COPY --chown=$USERNAME:$USERNAME README.md pyproject.toml ./
