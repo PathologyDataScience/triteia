@@ -1,0 +1,100 @@
+\documentclass[tikz,border=8pt]{standalone}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,shadows.blur,calc}
+\usepackage[scaled]{helvet}
+\renewcommand{\familydefault}{\sfdefault}
+\usepackage{sfmath}
+
+\begin{document}
+\begin{tikzpicture}[
+  font=\sffamily,
+  node distance=1.6cm and 1.8cm,
+  box/.style={draw, rounded corners, very thick, align=center, inner sep=8pt, fill=gray!3},
+  light/.style={fill=gray!6, draw=gray!60, rounded corners, thick},
+  title/.style={font=\bfseries},
+  arrow/.style={-{Latex[length=3mm]}, very thick},
+  thinarrow/.style={-{Latex[length=2.4mm]}, thick},
+  callout/.style={font=\large, align=center, text=gray!50!black},
+  label/.style={font=\normalsize\bfseries, text=gray!30!black}
+  every node/.style={font=\sffamily}
+]
+
+
+
+
+% --- Blocks ----------------------------------------------------
+\node[box, minimum width=27mm, minimum height=8mm] (data) {%
+  \textbf{Whole-Slide Image(s)}\\[0.5mm]
+      \begin{tikzpicture}
+          \foreach \x in {1,...,3}
+              {
+              \node[yslant=-0.5] (wsi\x) at (\x*.4,0) {
+                  \includegraphics[width=1.1cm, height=1.1cm]{wsi\x}
+              };
+          }
+
+      \end{tikzpicture}
+};
+
+\node[box, right=3.5cm of data, minimum width=45mm, minimum height=20mm] (client) {%
+  \textbf{Triteia (client)}\\
+  \normalsize batching, tiling, I/O};
+
+% --- Triton Server with CPU+GPU icons ---------------------------
+\node[box, right=7.2cm of client, minimum width=50mm, minimum height=34mm] (server) {%
+  \textbf{Triton (server)}\\
+
+  % small embedded TikZ picture for icons
+  \begin{tikzpicture}[scale=0.6, baseline={(current bounding box.center)}]
+    % model stack (blue rectangles) - centered
+    \node[inner sep=0] (models) at (2,0.8) {
+        \normalsize hosts DL model(s)\\[2mm]
+      \begin{tikzpicture}
+        \foreach \i in {0,1,2,3}{
+          \draw[fill=blue!25, draw=blue!40, sharp corners] (\i*0.22,\i*0.07) rectangle ++(0.3,1.6+\i*0.07);
+        }
+      \end{tikzpicture}
+    };
+
+    % GPU section - below models
+    \node[below=0.5cm of models, anchor=center] (gpu-section) {
+        \normalsize GPU\\[2mm]
+      \begin{tikzpicture}[baseline={(current bounding box.center)}]
+        \draw[fill=gray!20, draw=gray!60, rounded corners=1pt] (0.1,0) rectangle (1.5,0.9);
+        \draw[fill=gray!50, draw=none] (0.2,0.2) rectangle (0.5,0.7);
+        \draw[fill=gray!40, draw=none] (1.2,0.2) rectangle (1.4,0.7);
+        % connector lines
+        \draw[gray!60, thick] (1.5,0.45) -- ++(0.25,0);
+      \end{tikzpicture}
+    };
+
+    % CPU section - to the right of GPU
+    \node[below=0.3cm of gpu-section, anchor=center] (cpu-section) {
+        \normalsize CPU\\[2mm]
+      \begin{tikzpicture}
+        \draw[fill=gray!15, draw=gray!50, thick] (0.1,0) rectangle (1.0,0.9);
+        \foreach \x in {0.1,0.3,0.5,0.7,0.9}{
+          \draw[gray!60] (\x+0.1,-0.1) -- ++(0,-0.1);
+          \draw[gray!60] (\x+0.1,1.0) -- ++(0,0.1);
+          \draw[gray!60] (0.0,\x) -- ++(-0.1,0);
+          \draw[gray!60] (1.1,\x) -- ++(0.1,0);
+        }
+      \end{tikzpicture}
+    };
+  \end{tikzpicture}
+};
+
+% --- Aggregation / Postproc
+\node[box, below=2.2cm of client, minimum width=45mm] (agg) {%
+  \textbf{Aggregation \& Post-processing}};
+
+\node[callout, above=0.1cm of $(client)!0.5!(server)$] {inference request (gRPC)};
+
+% --- Flow arrows ------------------------------------------------
+\draw[arrow] (data) -- node[above, yshift=1mm, callout] {image tiles} (client);
+\draw[arrow] (client) -- (server);
+\draw[thinarrow] (server.west) -- ++(0,-2.1) -| (client.south);
+\draw[arrow] (client) -- node[above,align=right,xshift=4cm, callout] {inference results (gRPC)} (agg);
+
+\end{tikzpicture}
+\end{document}
