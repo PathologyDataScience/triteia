@@ -329,7 +329,7 @@ def parse_args():
     if not args.wsi_path:
         raise FileNotFoundError(f"No WSI files found in {args.wsi_path}")
 
-    if not os.path.exists(args.output_path):
-        raise FileNotFoundError(f"Did not find output directory {args.output_path}")
+    if not os.path.exists(args.output):
+        raise FileNotFoundError(f"Did not find output directory {args.output}")
 
     return args
