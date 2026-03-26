@@ -36,6 +36,7 @@ examples = [
   "matplotlib",
   "medmnist@git+https://github.com/andsild/MedMNIST-no-gpu",
   "monai",
+  "onnxscript",
   "pooch",
   "scikit-learn",
   "umap-learn",
