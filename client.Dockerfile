@@ -73,7 +73,7 @@ RUN echo 'APT::Install-Suggests "0";' >> /etc/apt/apt.conf.d/00-docker && \
     rm -rf /var/lib/apt/lists/*
 RUN curl -fsSL https://get.docker.com | sh
 # for jupyter notebooks as non-root
-RUN mkdir --mode a+rxw /.local /.jupyter /.cache /models/ /.config
+RUN mkdir --mode a+rxw /.local /.jupyter /.cache /.config
 RUN chown $USERNAME:$USERNAME /home/$USERNAME/triteia/
 USER $USERNAME
 
