@@ -207,7 +207,7 @@ def main():
             )
 
             start_time = perf_counter()
-            features, metadata, times, failures = track_method(
+            features, metadata, times = track_method(
                 inference_job,
                 writer,
                 live_tracking=args.live_tracking,
@@ -219,7 +219,6 @@ def main():
             )
             elapsed_time = end_time - start_time
             write_tritonserver_metrics(args.metrics_endpoint, writer)
-            assert len(failures) == 0, "should not be any failures"
             number_of_tiles = len(features)
             writer.add_scalar("number_of_tiles", number_of_tiles)
             number_of_batches = math.ceil(number_of_tiles / args.batch_size)
