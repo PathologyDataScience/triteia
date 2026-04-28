@@ -6,8 +6,19 @@ import timm
 import torch
 import triton_python_backend_utils as pb_utils
 import tritonclient.utils as triton_utils
-from huggingface_hub import login
+from huggingface_hub import login, get_token
 
+def require_hf_token(repo_id):
+    token =  get_token()
+    if not token:
+        raise RuntimeError(
+            "Missing Hugging Face access token for "
+            f"{repo_id}. Set HF_TOKEN to a token with read access to the repository."
+        )
+
+    os.environ["HF_TOKEN"] = token
+    os.environ.setdefault("HUGGING_FACE_HUB_TOKEN", token)
+    return token
 
 class TritonPythonModel:
     @staticmethod
@@ -57,9 +68,7 @@ class TritonPythonModel:
         self.output0_dtype = pb_utils.triton_string_to_numpy(
             output0_config["data_type"]
         )
-        login(
-            os.getenv("HF_TOKEN")
-        )  # User Access Token, found at https://huggingface.co/settings/tokens
+        require_hf_token("hf_hub:prov-gigapath/prov-gigapath")
         self.model = timm.create_model(
             "hf_hub:prov-gigapath/prov-gigapath",
             pretrained=True,
