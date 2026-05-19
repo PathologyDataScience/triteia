@@ -21,7 +21,7 @@ from tensorboardX import GlobalSummaryWriter
 
 # Make sure we're testing the local triteia
 path.append(os.path.join(os.path.dirname(__file__), "../triteia"))
-from config import PythonConfig, InstanceGroup
+from config import PythonConfig, InstanceGroup, TensorRTConfig
 from model import TritonModel
 from feature_extraction import study, inference, inference_job, initialize_clients
 from tile_iterators import TiffPrefetch
@@ -106,11 +106,22 @@ def main():
     args = parse_args()
 
     if not args.preload:
-        config = PythonConfig(
-            args.model_name,
-            args.max_batch_size,
-            instance_group=InstanceGroup(count=args.instance_group),
-        )
+        if "trt" in args.model_name:
+            config = TensorRTConfig(
+                args.model_name,
+                args.max_batch_size,
+                instance_group=InstanceGroup(
+                    count=args.instance_group, kind="gpu", gpus=args.gpus
+                ),
+            )
+        else:
+            config = PythonConfig(
+                args.model_name,
+                args.max_batch_size,
+                instance_group=InstanceGroup(
+                    count=args.instance_group, kind="gpu", gpus=args.gpus
+                ),
+            )
         model = TritonModel(args.model_name, args.url)
         model.load(config=config.json())
         assert model.is_loaded()
