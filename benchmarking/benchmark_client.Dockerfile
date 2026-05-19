@@ -1,4 +1,5 @@
 # for the paper, this docker image is built with:
+# this file is intended to be similar to the client.Dockerfile, except with GPUs available to the client (to read performance metrics, etc).
 # docker build -f client.Dockerfile . -t triteia:benchmark --build-arg DOCKER_GROUP_ID=$(getent group docker | cut -d: -f3) --build-arg UID=$(id -u) --build-arg GID=$(id -g)  --build-arg USERNAME=$USER
 FROM python:3.10-slim AS build-image
 ARG USERNAME=myuser

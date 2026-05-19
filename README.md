@@ -320,8 +320,11 @@ Be aware that extra performance is not guaranteed.
 PyTorch offers many optimizations that may not be available in the ONNX or TRT backends.
 
 ## Paper results
-To reproduce the (TBD) paper: `OUTPUT_DIR="./results" ./benchmarking/paper_benchmarks.sh $OUTPUT_DIR`
-Results can be inspected either as tensorboards: `tensorboard --logdir=...`, or as figures:
+To reproduce the (TBD) paper
+1. start the NVIDIA triton server with all GPUs and models available: `./launch_server.sh --num-gpus <num_gpu> --http-port 7984 --grpc-port 7985 --metrics-port 7986`
+2. `OUTPUT_DIR="./results" ./benchmarking/paper_benchmarks.sh $OUTPUT_DIR`
+3. Inspect results: `tensorboard --logdir=...`.
+To view results as figures::
 ```bash
 # convert TensorBoard to CSV
 ./benchmarking/tensorboard_to_csv.py
@@ -330,5 +333,5 @@ Results can be inspected either as tensorboards: `tensorboard --logdir=...`, or 
 ```
 
 To do the benchmarks using Docker, use the `benchmark_client.Dockerfile` in the benchmarking directory.
-It is identical to the `client.Dockerfile` in this directory, except it has access to CUDA so it can automatically start and stop Triton with GPUs.
+It is identical to the `client.Dockerfile` in this directory, except it has access to CUDA so it can export GPU metrics and automatically start and stop Triton with GPUs.
 To build it from the git root directory: `docker build -f benchmarking/benchmark_client.Dockerfile . -t triteia:benchmark`

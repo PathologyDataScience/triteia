@@ -16,7 +16,7 @@ docker run -it --gpus all -w /trt_optimize -v $PWD:/trt_optimize nvcr.io/nvidia/
 set +xe
 
 model_dst_dir="${git_root_dir}/models/resnet50_trt_uint8"
-test -d "${model_dst_dir}" || mkdir -p "${model_dst_dir}"
+test -d "${model_dst_dir}/1" || mkdir -p "${model_dst_dir}/1"
 dst="${model_dst_dir}/config.pbtxt"
 cp -v config.pbtxt "${dst}"
 # we need to replace TYPE_FP32 with UINT8. But not for the model outputs.
@@ -34,7 +34,7 @@ docker run -it --gpus all -w /resnet50_eg -v $PWD:/resnet50_eg nvcr.io/nvidia/py
 docker run -it --gpus all -w /trt_optimize -v $PWD:/trt_optimize nvcr.io/nvidia/tensorrt:${nvidia_version} trtexec --onnx=resnet50_fp32.onnx --saveEngine=modelfp32.plan --useCudaGraph  --minShapes=input_0:1x3x224x224 --optShapes=input_0:16x3x224x224 --maxShapes=input_0:256x3x224x224
 set +xe
 model_dst_dir="${git_root_dir}/models/resnet50_trt_float32"
-test -d "${model_dst_dir}" || mkdir -p "${model_dst_dir}"
+test -d "${model_dst_dir}/1" || mkdir -p "${model_dst_dir}/1"
 dst="${model_dst_dir}/config.pbtxt"
 cp config.pbtxt "${dst}"
 cp -v modelfp32.plan "${model_dst_dir}/1/model.plan"

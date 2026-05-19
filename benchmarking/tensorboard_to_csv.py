@@ -209,10 +209,11 @@ def build_gpu_scaling_dataframe(
 
         if not run_dirs:
             logging.warning(
-                "No tensorboard run directories matched for model '%s' (prefix=%r, suffix=%r)",
+                "No tensorboard run directories matched for model '%s' (prefix=%r, suffix=%r) (regex: %r)",
                 spec["name"],
                 run_prefix,
                 run_suffix,
+                spec["run_dir_re"],
             )
             continue
         for d in run_dirs:
@@ -386,7 +387,7 @@ def load_or_build_gpu_scaling(
     )
     if df.empty:
         raise ValueError(
-            f"No matching runs with scalar data found for plot key '{plot_key}'"
+            f"No matching runs with scalar data found for plot key '{plot_key}' with prefix '{run_prefix}' and suffix '{run_suffix}' in {tensorboard_dirs}"
         )
 
     df.to_csv(csv_path, index=False)
@@ -596,32 +597,31 @@ def read_and_write_data(tensorboard_dirs, output_dir):
     plot_key = "throughput_total_tiles_per_second"
 
     for run_prefix in ["triton", "pytorch"]:
-        for run_suffix in ["", ": pre-loaded slides"]:
-            key = "inferenceonly" if run_suffix else ""
+        for run_suffix in ["", "inferenceonly"]:
             df = load_or_build_gpu_scaling(
                 tensorboard_dirs=tensorboard_dirs,
                 csv_path=os.path.join(
-                    output_dir, f"{run_prefix}{key}{GPU_SCALING_CSV}"
+                    output_dir, f"{run_prefix}{run_suffix}{GPU_SCALING_CSV}"
                 ),
                 plot_key=plot_key,
                 run_prefix=run_prefix,
-                run_suffix=key,
+                run_suffix=run_suffix,
             )
             df = load_or_build_gpu_scaling(
                 tensorboard_dirs=tensorboard_dirs,
                 csv_path=os.path.join(
-                    output_dir, f"{run_prefix}{key}{LATENCY_GPU_SCALING_CSV}"
+                    output_dir, f"{run_prefix}{run_suffix}{LATENCY_GPU_SCALING_CSV}"
                 ),
                 plot_key="latency_mean_ms",
                 run_prefix=run_prefix,
-                run_suffix=key,
+                run_suffix=run_suffix,
             )
 
-    limit_df = load_or_build_limit_scaling(
-        tensorboard_dirs=tensorboard_dirs,
-        csv_path=os.path.join(output_dir, LIMIT_SCALING_CSV),
-        plot_key=plot_key,
-    )
+    # limit_df = load_or_build_limit_scaling(
+    #     tensorboard_dirs=tensorboard_dirs,
+    #     csv_path=os.path.join(output_dir, LIMIT_SCALING_CSV),
+    #     plot_key=plot_key,
+    # )
 
     # Multiuser aggregate CSV + plot
     multiuser_df = load_or_build_multiuser_scaling(

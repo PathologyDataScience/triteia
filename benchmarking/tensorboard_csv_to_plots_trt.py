@@ -1,6 +1,8 @@
 """
 Plot regular inference, inference without IO and  Multiuser performance with and without TRT
 """
+import string
+
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
@@ -53,6 +55,7 @@ colors = {
 bar_width = 0.25
 x_positions = {1: 0, 8: 1}
 
+label_idx = 0
 for ax_idx, model_cfg in enumerate(models_config):
     ax = axes[ax_idx]
 
@@ -159,6 +162,20 @@ for ax_idx, model_cfg in enumerate(models_config):
                     linewidth=2.5,
                 )
 
+    # Add subplot letter label (a, b, c, ...)
+    letter = string.ascii_lowercase[label_idx]
+    ax.text(
+        0.09,
+        1.02,
+        f"{letter})",
+        transform=ax.transAxes,
+        fontsize=16,
+        fontweight="bold",
+        va="bottom",
+        ha="right",
+    )
+    label_idx += 1
+
     ax.set_xlabel("GPUs", fontsize=14)
     if ax_idx == 0:
         ax.set_ylabel("tiles / second", fontsize=14)
@@ -194,6 +211,8 @@ fig.legend(
     fontsize=11,
 )
 
-plt.savefig("plot_out/trt_comparison.png", dpi=300, bbox_inches="tight")
+figure_dst = "plot_out/trt_comparison.png"
+plt.savefig(figure_dst, dpi=300, bbox_inches="tight")
 # plt.show()
 plt.close()
+print(f"Saved figure to {figure_dst}")
