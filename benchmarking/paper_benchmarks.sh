@@ -82,5 +82,8 @@ docker container stop tritonserver_$USER || true
 # done
 # just in case
 # docker container stop tritonserver_$USER || true
+#
+
+./benchmarking/gpu_vs_cpu_comparison.sh
  
 echo "All benchmarks done"
