@@ -138,7 +138,7 @@ def _create_model_subplots(
         n_rows,
         n_cols,
         figsize=(col_width * n_cols, row_height * n_rows),
-        gridspec_kw = {"hspace": 0.5},
+        gridspec_kw={"hspace": 0.5},
         **subplot_kw,
     )
     # Normalise axes to always be indexable
