@@ -1,0 +1,123 @@
+\documentclass[tikz,border=10pt]{standalone}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,shadows.blur,calc}
+\usetikzlibrary{shapes.multipart}
+
+% --- Font: Linux Libertine (clean serif, excellent for scientific figures) ---
+\usepackage{libertine}
+\usepackage[libertine]{newtxmath}
+\usepackage[scaled]{helvet}
+\renewcommand\familydefault{\sfdefault}
+\usepackage[T1]{fontenc}
+
+\newcommand{\nestboxes}[4][]{
+    \begin{tikzpicture}[#1]
+        \foreach \L/\C[count=\n from 0] in {#4}{\fill[\C] (\n/2,#3-\n/2)node[black, below right]{\L} rectangle (#2-\n/2,\n/2);}
+    \end{tikzpicture}
+}
+
+\def\bW{0.22}
+\def\bH{0.07}
+%\draw[fill=blue!25, draw=blue!40, sharp corners] (\i*0.22,\i*0.07) rectangle ++(0.3,1.6+\i*0.07);
+
+\begin{document}
+\begin{tikzpicture}[
+  remember picture,
+  node distance=2.0cm and 2.2cm,
+  box/.style={draw, rounded corners, very thick, align=center, inner sep=12pt, fill=gray!3},
+  light/.style={fill=gray!6, draw=gray!60, rounded corners, thick},
+  title/.style={font=\bfseries\Huge},
+  arrow/.style={-{Latex[length=4mm]}, very thick},
+  thinarrow/.style={-{Latex[length=3mm]}, thick},
+  callout/.style={font=\Large\bfseries, align=center, text=gray!30!black},
+  every node/.style={font=\Large, text=black!100},
+]
+
+
+% --- Blocks ----------------------------------------------------
+\node[box, minimum width=30mm, minimum height=4mm] (data) {%
+  Whole-Slide Image(s)\\[-2mm]
+      \begin{tikzpicture}
+          \foreach \x in {1,...,3}
+              {
+              \node[yslant=-0.5] (wsi\x) at (\x*.55,0) {
+                  \includegraphics[width=1.3cm, height=1.3cm]{wsi\x}
+              };
+          }
+      \end{tikzpicture}
+      \\[-15mm]
+};
+
+\node[box, below=3.0cm of data, minimum width=25mm, minimum height=28mm, fill=green!10] (client) {%
+  Python/Docker\\
+  environment\\[3mm]
+  \begin{tikzpicture}
+    \node[box, minimum width=55mm] (test) {\textbf{Triteia (client)} \\[4mm]
+      \begin{tikzpicture}
+          \node[draw=gray!60, rounded corners, thick, inner sep=8pt, minimum height=0pt] (aggreg) {Aggregation};
+      \end{tikzpicture}
+    };
+      \end{tikzpicture}
+  };
+
+\node[box, right=7.0cm of client, minimum height=38mm, fill=blue!10, inner sep=8pt, yshift=30mm] (server) {%
+    Server Hardware\\[-3mm]
+
+    \begin{tikzpicture}
+        \node[anchor=north, outer sep=0pt, inner sep=0pt, minimum width=0mm] (gpu-section) {
+            \hspace{-2mm}\Large GPU\\[4mm]
+            \begin{tikzpicture}[scale=1.0]
+            \draw[fill=gray!20, draw=gray!80, rounded corners=1pt] (0,0) rectangle (1.4,0.9);
+            \draw[fill=gray!70, draw=none]                         (0.1,0.2) rectangle (0.4,0.7);
+            \draw[fill=gray!60, draw=none]                         (1.1,0.2) rectangle (1.3,0.7);
+            % connector lines
+            \draw[gray!60, thick] (1.4,0.45) -- ++(0.25,0);
+            \end{tikzpicture}
+        };
+
+        \node[outer sep=0pt, inner sep=0pt, anchor=north] (cpu-section) at (3.6, 0.0) {
+            \\[-1.5mm]
+            \Large CPU\\[2mm]
+            \begin{tikzpicture}[]
+                    \draw[fill=gray!15, draw=gray!80, thick] (0.1,0) rectangle (1.0,0.9);
+                    \foreach \x in {0.1,0.3,0.5,0.7,0.9}{
+                        \draw[gray!100] (\x+0.1,-0.1) -- ++(0,-0.1);
+                        \draw[gray!100] (\x+0.1,1.0) -- ++(0,0.1);
+                        \draw[gray!100] (0.0,\x) -- ++(-0.1,0);
+                        \draw[gray!100] (1.1,\x) -- ++(0.1,0);
+                    }
+            \end{tikzpicture}
+        };
+    \end{tikzpicture}\\[-5mm]
+
+    \begin{tikzpicture}
+
+        \node[box, fill=green!10] (test2) {Docker environment\\[3mm]
+            \begin{tikzpicture}
+                \node[box] (test3) {\textbf{Triteia (server)} \\[5mm]
+                    \begin{tikzpicture}[scale=0.1, baseline={(current bounding box.center)}]
+                        \node[box, minimum height=1pt] (nvidiatri) {NVIDIA Triton\\inference server
+                        };
+                   \end{tikzpicture}\\[1mm]
+
+                    \begin{tikzpicture}[scale=0.8, baseline={(current bounding box.center)}]
+                                \node[inner sep=0] (models) at (2,0.8) { hosts DL model(s)\\[4mm]
+                                \begin{tikzpicture}
+                                    \foreach \i in {0,1,2,3} {
+                                        \draw[fill=blue!25, draw=blue!40, sharp corners] (\i*\bW,\i*\bH) rectangle ++(\bW*1.3,\bH*15+\i*\bH);
+                                    }
+                                \end{tikzpicture}
+                                };
+                    \end{tikzpicture}\\[-3mm]
+                };
+            \end{tikzpicture}
+        };
+    \end{tikzpicture}
+};
+
+% --- Flow arrows ------------------------------------------------
+\draw[arrow] (data) -- node[left, yshift=2mm, callout] {image tiles} (client);
+\draw[arrow] (client.east |- nvidiatri.west) -- node[midway, above=0.2cm, callout] {requests (gRPC)} (nvidiatri.west);
+\draw[arrow] (server.west |- aggreg.east) -- node[midway, above right=0.2cm and -10.0mm, callout] {results (gRPC)} (aggreg.east);
+\end{tikzpicture}
+\end{document}

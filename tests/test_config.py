@@ -7,7 +7,7 @@ import numpy as np
 from .triton import triton
 from .data import data
 
-from simple_triton.config import (
+from triteia.config import (
     InstanceGroup,
     ModelInput,
     ModelOutput,
@@ -17,7 +17,7 @@ from simple_triton.config import (
     TensorflowXla,
     TensorRt,
 )
-from simple_triton.model import TritonModel, create_client
+from triteia.model import TritonModel, create_client
 
 MODEL = "EfficientNetV2S.tensorflow"
 BASIC = {"name": MODEL}

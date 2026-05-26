@@ -49,14 +49,14 @@ done
 
 #just in case
 docker container stop tritonserver_$USER || true
-
+ 
 for modelname in resnet50 uni gigapath resnet50_trt_uint8 #gigapath_trt_uint8
 do
-  ./benchmarking/triton_batchsize_benchmark.sh /data/5 $modelname "${OUTPUT_DIR}" "${CLEAR_CACHE_REMOTELY}" 1 1,8 256
+  ./benchmarking/triton_batchsize_benchmark.sh /data/5 $modelname "${OUTPUT_DIR}" "${CLEAR_CACHE_REMOTELY}" 1 #1,8 256
 done
-#just in case
+# just in case
 docker container stop tritonserver_$USER || true
-
+# 
 for modelname in resnet50 uni gigapath
 do
   ./benchmarking/pytorch_batchsize_benchmark.sh /data/5 $modelname "${OUTPUT_DIR}" "${CLEAR_CACHE_REMOTELY}" false
@@ -64,7 +64,7 @@ done
 
 for modelname in resnet50 uni gigapath
 do
-  ./benchmarking/pytorch_batchsize_benchmark.sh /data/5 $modelname "${OUTPUT_DIR}" "${CLEAR_CACHE_REMOTELY}" 1 1,8 256
+  ./benchmarking/pytorch_batchsize_benchmark.sh /data/5 $modelname "${OUTPUT_DIR}" "${CLEAR_CACHE_REMOTELY}" 1 #1,8 256
 done
 
 for modelname in resnet50 uni gigapath resnet50_trt_uint8 #gigapath_trt_uint8
@@ -75,11 +75,15 @@ done
 docker container stop tritonserver_$USER || true
 
 
-for modelname in resnet50 uni gigapath
-do
-  ./benchmarking/triton_limit_benchmark.sh /data/5 $modelname "${OUTPUT_DIR}" "${CLEAR_CACHE_REMOTELY}" 1 8 16,20
-done
+# to test the impact of "--limit" parameter. Did not find anything interesting (general rule of thumb: limit should about 2x number of GPUs)
+# for modelname in resnet50 uni gigapath
+# do
+#   ./benchmarking/triton_limit_benchmark.sh /data/5 $modelname "${OUTPUT_DIR}" "${CLEAR_CACHE_REMOTELY}" 1 8 16,20
+# done
 # just in case
-docker container stop tritonserver_$USER || true
+# docker container stop tritonserver_$USER || true
+#
+
+./benchmarking/gpu_vs_cpu_comparison.sh
  
 echo "All benchmarks done"

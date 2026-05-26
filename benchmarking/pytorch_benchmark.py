@@ -23,9 +23,9 @@ from transformers import (
     ResNetModel,
 )
 
-path.append(os.path.join(os.path.dirname(__file__), "../simple_triton"))
-from simple_triton.feature_extraction import study
-from simple_triton.tile_iterators import TiffPrefetch
+path.append(os.path.join(os.path.dirname(__file__), "../triteia"))
+from triteia.feature_extraction import study
+from triteia.tile_iterators import TiffPrefetch
 from util import (
     clear_cache,
     convert_seconds_to_hms,
@@ -34,7 +34,7 @@ from util import (
     write_energy_stats,
 )
 
-from simple_triton.utils import init_tb_writer, track_method
+from triteia.utils import init_tb_writer, track_method
 
 
 def normalize_image(in_0, device, mean, std):

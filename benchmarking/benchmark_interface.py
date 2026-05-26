@@ -9,11 +9,11 @@ import time
 import tensorflow as tf
 from large_image.cache_util import cachesClear
 
-from simple_triton.config import *
-from simple_triton.feature_extraction import study, inference
-from simple_triton.model import TritonModel
-from simple_triton.tile_iterators import TiffPrefetch
-from simple_triton.utils import analyze
+from triteia.config import *
+from triteia.feature_extraction import study, inference
+from triteia.model import TritonModel
+from triteia.tile_iterators import TiffPrefetch
+from triteia.utils import analyze
 
 
 class Benchmark:
@@ -23,6 +23,9 @@ class Benchmark:
     """
 
     def __init__(self, args_dict):
+        self.times = None
+        self.tile_info = None
+        self.features = None
         self.args_dict = args_dict
 
     def create_hs_study(self, wsi_path, mask_path):
@@ -126,7 +129,7 @@ class Benchmark:
         )
         # warm up Model
         print("Warmup Model")
-        (self.features, self.tile_info, self.times, self.failed,) = inference(
+        self.features, self.tile_info, self.times = inference(
             iterator,
             model_name,
             url=self.args_dict["url"],
@@ -152,7 +155,7 @@ class Benchmark:
             )
             # start timer
             start = time.time()
-            (self.features, self.tile_info, self.times, self.failed,) = inference(
+            self.features, self.tile_info, self.times = inference(
                 iterator,
                 model_name,
                 url=self.args_dict["url"],
@@ -212,8 +215,8 @@ class Benchmark:
 def install():
     """Install dependencies for running benchmarking interface tool"""
     # install large_image with tile sources as prereq, check feature_extraction.ipynb in examples directory.
-    # install simple_triton
-    subprocess.check_call([sys.executable, "-m", "pip", "install", f"../simple_triton"])
+    # install triteia
+    subprocess.check_call([sys.executable, "-m", "pip", "install", f"../triteia"])
     subprocess.check_call([sys.executable, "-m", "pip", "install", "ray"])
     subprocess.check_call([sys.executable, "-m", "pip", "install", "pyarrow"])
 

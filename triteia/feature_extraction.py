@@ -23,10 +23,10 @@ import tensorflow as tf
 from pytriton.client import ModelClient
 from tqdm import tqdm
 
-from simple_triton.io.tfr_writer import write_record
-from simple_triton.model import TritonModel
-from simple_triton.tile_iterators import TiffPrefetch
-from simple_triton.utils import (
+from triteia.io.tfr_writer import write_record
+from triteia.model import TritonModel
+from triteia.tile_iterators import TiffPrefetch
+from triteia.utils import (
     analyze,
     init_tb_writer,
     track_method,

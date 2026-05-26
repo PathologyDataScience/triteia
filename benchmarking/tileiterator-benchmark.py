@@ -11,7 +11,7 @@ writer.add_text("char_read_theoretical_max_speed", str(theoretical_throughput_ma
 
 to get estimated number of raw disk content for a given .svs:
 (adjust the 'sed 1d;3d' and filename)
- tiffdump -m 100000  ~/simple_triton/test_data/wsi/TCGA-AN-A0G0-01Z-00-DX1.svs | grep TileByteCounts | sed '1d;3d' | awk '{ for (i=6; i<=NF; i++) sum += $i } END { print sum }'
+ tiffdump -m 100000  ~/triteia/test_data/wsi/TCGA-AN-A0G0-01Z-00-DX1.svs | grep TileByteCounts | sed '1d;3d' | awk '{ for (i=6; i<=NF; i++) sum += $i } END { print sum }'
 """
 
 import csv
@@ -21,16 +21,16 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
-# ensure we're loading the simple_triton in this directory, not installed in path
+# ensure we're loading the triteia in this directory, not installed in path
 from sys import path
 from time import perf_counter
 
 import numpy as np
 from matplotlib import pyplot as plt
 
-path.append(os.path.join(os.path.dirname(__file__), "../simple_triton"))
-from simple_triton.feature_extraction import study
-from simple_triton.tile_iterators import TiffPrefetch
+path.append(os.path.join(os.path.dirname(__file__), "../triteia"))
+from triteia.feature_extraction import study
+from triteia.tile_iterators import TiffPrefetch
 
 from util import parse_args, clear_cache
 

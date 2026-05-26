@@ -2,8 +2,8 @@ import warnings
 
 import tensorflow as tf
 
-from simple_triton.io import slide_keys, tile_keys
-from simple_triton.io.tfr_transforms import flatten, structure
+from triteia.io import slide_keys, tile_keys
+from triteia.io.tfr_transforms import flatten, structure
 
 
 def peek(serialized):

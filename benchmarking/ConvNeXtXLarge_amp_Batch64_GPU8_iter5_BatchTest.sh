@@ -22,7 +22,7 @@ while [ $gpu_num -ne 8 ]
                                         do
                                                 maxbatchsize=$(($maxbatchsize+32))
                                                 echo "gpu_num:$gpu_num  Workers: $limit maxbatchsize: $maxbatchsize"
-                                                python /tf/notebooks/simple_triton/benchmarking/benchmark_interface.py  --limit 1 --gpu-num $gpu_num  --fileoutput $filename   --iterations 5 --use-amp --precision "FP16"  --maxbatchsize $maxbatchsize  --model-name "ConvNeXtXLarge"
+                                                python /tf/notebooks/triteia/benchmarking/benchmark_interface.py  --limit 1 --gpu-num $gpu_num  --fileoutput $filename   --iterations 5 --use-amp --precision "FP16"  --maxbatchsize $maxbatchsize  --model-name "ConvNeXtXLarge"
                                                 echo "==============================================================="
                                         done
 

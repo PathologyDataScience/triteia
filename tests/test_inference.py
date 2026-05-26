@@ -1,10 +1,10 @@
 from .data import data, hash_inference, inferred, it_kwargs_icc
 import numpy as np
 import os
-from simple_triton.config import PythonConfig, TensorflowConfig
-from simple_triton.feature_extraction import inference
-from simple_triton.model import TritonModel
-from simple_triton.tile_iterators import TiffPrefetch
+from triteia.config import PythonConfig, TensorflowConfig
+from triteia.feature_extraction import inference
+from triteia.model import TritonModel
+from triteia.tile_iterators import TiffPrefetch
 from .triton import triton
 
 

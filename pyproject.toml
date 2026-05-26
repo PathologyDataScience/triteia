@@ -3,7 +3,7 @@ requires = ["setuptools", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "simple_triton"
+name = "triteia"
 authors = [
 {name = "Lee Cooper", email = "lee.cooper@northwestern.edu"},
 ]
@@ -36,6 +36,7 @@ examples = [
   "matplotlib",
   "medmnist@git+https://github.com/andsild/MedMNIST-no-gpu",
   "monai",
+  "onnxscript",
   "pooch",
   "scikit-learn",
   "umap-learn",
@@ -44,14 +45,14 @@ examples = [
 ]
 
 [project.scripts]
-inference = "simple_triton.feature_extraction:main"
+inference = "triteia.feature_extraction:main"
 
 [tool.setuptools]
-packages = ["simple_triton", "simple_triton.io"]
+packages = ["triteia", "triteia.io"]
 
 [tool.setuptools_scm]
 
 [project.urls]
-"Github" = "https://github.com/PathologyDataScience/simple_triton"
+"Github" = "https://github.com/PathologyDataScience/triteia"
 
 

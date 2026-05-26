@@ -7,7 +7,7 @@ from .data import (
     tiles_icc,
 )
 import numpy as np
-from simple_triton.tile_iterators import TiffPrefetch
+from triteia.tile_iterators import TiffPrefetch
 
 
 def compare_dict(x, y):

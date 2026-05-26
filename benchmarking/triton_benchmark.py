@@ -10,7 +10,7 @@ import os
 from contextlib import ExitStack
 from pprint import pprint
 
-# ensure we're loading the simple_triton in this directory, not installed in path
+# ensure we're loading the triteia in this directory, not installed in path
 from sys import path
 from time import perf_counter
 
@@ -19,9 +19,9 @@ import tensorflow as tf
 import torch
 from tensorboardX import GlobalSummaryWriter
 
-# Make sure we're testing the local simple_triton
-path.append(os.path.join(os.path.dirname(__file__), "../simple_triton"))
-from config import PythonConfig, InstanceGroup
+# Make sure we're testing the local triteia
+path.append(os.path.join(os.path.dirname(__file__), "../triteia"))
+from config import PythonConfig, InstanceGroup, TensorRTConfig
 from model import TritonModel
 from feature_extraction import study, inference, inference_job, initialize_clients
 from tile_iterators import TiffPrefetch
@@ -106,11 +106,22 @@ def main():
     args = parse_args()
 
     if not args.preload:
-        config = PythonConfig(
-            args.model_name,
-            args.max_batch_size,
-            instance_group=InstanceGroup(count=args.instance_group),
-        )
+        if "trt" in args.model_name:
+            config = TensorRTConfig(
+                args.model_name,
+                args.max_batch_size,
+                instance_group=InstanceGroup(
+                    count=args.instance_group, kind="gpu", gpus=args.gpus
+                ),
+            )
+        else:
+            config = PythonConfig(
+                args.model_name,
+                args.max_batch_size,
+                instance_group=InstanceGroup(
+                    count=args.instance_group, kind="gpu", gpus=args.gpus
+                ),
+            )
         model = TritonModel(args.model_name, args.url)
         model.load(config=config.json())
         assert model.is_loaded()
@@ -207,7 +218,7 @@ def main():
             )
 
             start_time = perf_counter()
-            features, metadata, times, failures = track_method(
+            features, metadata, times = track_method(
                 inference_job,
                 writer,
                 live_tracking=args.live_tracking,
@@ -219,7 +230,6 @@ def main():
             )
             elapsed_time = end_time - start_time
             write_tritonserver_metrics(args.metrics_endpoint, writer)
-            assert len(failures) == 0, "should not be any failures"
             number_of_tiles = len(features)
             writer.add_scalar("number_of_tiles", number_of_tiles)
             number_of_batches = math.ceil(number_of_tiles / args.batch_size)

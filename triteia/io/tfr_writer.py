@@ -3,9 +3,9 @@ from datetime import datetime
 import numpy as np
 import tensorflow as tf
 
-from simple_triton.io import slide_keys, tile_keys
-from simple_triton.io.tfr_reader import peek, read_record
-from simple_triton.io.tfr_transforms import structure
+from triteia.io import slide_keys, tile_keys
+from triteia.io.tfr_reader import peek, read_record
+from triteia.io.tfr_transforms import structure
 
 # acceptable types for user-provided metadata
 variable_type_list = [bytes, int, float, str, bool]

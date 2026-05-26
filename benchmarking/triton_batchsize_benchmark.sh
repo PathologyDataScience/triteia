@@ -3,7 +3,7 @@
 wsi_path="${1:?Error: WSI path must be provided as \$1}"
 modelname="${2:?Error: Model name must be provided as \$2}"
 output_dir="${3:?Error: Output directory must be provided as \$3}"
-CLEAR_CACHE_REMOTELY="${4:-true}"
+CLEAR_CACHE_REMOTELY="${4:-false}"
 inference_only="${5:-false}"
 gpus="${6:-1,2,4,6,8}"
 batch_sizes="${7:-32,64,128,256}"
@@ -18,7 +18,7 @@ fi
 clear_cache() {
   if [[ "${CLEAR_CACHE_REMOTELY,,}" == "true" ]]; then
     echo "Clearing cache remotely..."
-    curl localhost:7987/run
+    curl localhost:7987/run || exit 1
   else
     echo "Skipping remote cache clear (CLEAR_CACHE_REMOTELY=false)"
   fi
@@ -55,18 +55,22 @@ do
     fi
     test -d "${output_dir}/${tb_name}" && continue
     set -xe
-    if [ ! "$(docker ps -q -f name=tritonserver_$USER)" ]; then
-        ./launch_server.sh --num-gpus $gpu --start-gpu-id 0 ${modelname} --detached 1 --http-port 7984 --grpc-port 7985 --metrics-port 7986
-        sleep 120
-    fi
+    # The below code is useful for automatic stop and start of the server, but
+    # with "--manual-preload", all you need it to run the server with all GPUs
+    # and models available
+    # if [ ! "$(docker ps -q -f name=tritonserver_$USER)"
+    # ]; then
+    #     ./launch_server.sh --num-gpus $gpu --start-gpu-id 0 ${modelname} --detached 1 --http-port 7984 --grpc-port 7985 --metrics-port 7986
+    #     sleep 120
+    # fi
     clear_cache
-    eval "$cmd --batch-size ${bs} --tensorboard-name ${tb_name} --gpus ${gpu_string}"
+    eval "$cmd --batch-size ${bs} --tensorboard-name ${tb_name} --gpus ${gpu_string} --manual-preload"
     set +xe
   done
 
-  if [ "$(docker ps -q -f name=tritonserver_$USER)" ]
-  then
-    docker container stop tritonserver_$USER
-    sleep 10 # seems to be necessary - docker container stop does not properly clean up right away
-  fi
+  # if [ "$(docker ps -q -f name=tritonserver_$USER)" ]
+  # then
+  #   docker container stop tritonserver_$USER
+  #   sleep 10 # seems to be necessary - docker container stop does not properly clean up right away
+  # fi
 done

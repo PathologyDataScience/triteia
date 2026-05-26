@@ -3,7 +3,7 @@ import json
 from multiprocessing import get_context
 import numpy as np
 import pytest
-from simple_triton.model import TritonModel, create_client
+from triteia.model import TritonModel, create_client
 import sys
 import time
 import tritonclient.grpc as grpcclient

@@ -23,7 +23,7 @@ clear_cache() {
   fi
 }
 
-cmd="python ./benchmarking/triton_benchmark.py --numpy --inference-only --output ${output_dir} --model-name ${modelname} --wsi-path ${wsi_path} --batch-size 256 --url localhost:7985 --metrics-endpoint localhost:7986/metrics"
+cmd="python ./benchmarking/triton_benchmark.py --numpy --inference-only --output ${output_dir} --model-name ${modelname} --wsi-path ${wsi_path} --batch-size 128 --url localhost:7985 --metrics-endpoint localhost:7986/metrics"
 
 if [[ "${modelname}" == "resnet50" || "${modelname}" == "resnet50_trt_uint8" || "${modelname}" == "gigapath_trt_uint8" ]]; then
   cmd="${cmd} --nchw"

@@ -430,6 +430,60 @@ class TensorflowOptimization(PythonOptimization):
             self.config.update(xla.config)
 
 
+class TensorRTConfig(PythonConfig):
+    """A model configuration for the tensorflow backend.
+
+    This class can generate JSON format dictionaries for use with model loading
+    functions, and can save configurations in protocol buffer format for
+    file-based configuration.
+
+    Parameters
+    ----------
+    name : str
+        Model name as stored in the model repository.
+    input : ModelInput or list
+        Model inputs.
+    output : ModelOutput or list
+        Model outputs.
+    instance_group : InstanceGroup
+        An instance group configuration defining model resources.
+    max_batch_size : int
+        The maximum number of samples in a request. Use 0 for a non-batching model.
+    optimization : TensorflowOptimization
+        Python backend optimization configuration. Default value None enables
+        pinned memory by default.
+    response_cache : bool
+        Whether to cache model input-output pairs. See reference below. Default value
+        is False for no caching.
+
+    References
+    ----------
+    https://github.com/triton-inference-server/server/blob/main/docs/user_guide/response_cache.md
+    """
+
+    def __init__(
+        self,
+        name,
+        max_batch_size,
+        input=None,
+        output=None,
+        instance_group=None,
+        dynamic_batching=None,
+        response_cache=False,
+    ):
+        super(TensorRTConfig, self).__init__(
+            name=name,
+            input=input,
+            output=output,
+            instance_group=instance_group,
+            max_batch_size=max_batch_size,
+            dynamic_batching=dynamic_batching,
+            response_cache=response_cache,
+        )
+        self.config["backend"] = "tensorrt"
+        self.config["platform"] = "tensorrt_plan"
+
+
 class TensorflowConfig(PythonConfig):
     """A model configuration for the tensorflow backend.
 
