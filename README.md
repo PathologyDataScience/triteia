@@ -1,6 +1,6 @@
 # triteia
 
-triteia is a Python client for performing inference on the NVIDIA Triton Inference Server. It provides model deployment, configuration, and optimization capabilities for the TensorFlow, ONNX, and Python Triton backends directly from Python. This was developed to address limitations in the [PyTriton](https://github.com/triton-inference-server/pytriton) package that only suppports deployments with the Python backend where TensorRT, XLA, and mixed precision are not available.
+triteia is a Python client for performing inference on the NVIDIA Triton Inference Server. It provides model deployment, configuration, and optimization capabilities for the TensorFlow, ONNX, and Python Triton backends directly from Python. This was developed to address limitations in the [PyTriton](https://github.com/triton-inference-server/pytriton) package, and to provide a simple-to-use interface for Whole-Slide Image inference.
 
 ![doc/overview_figure.png](doc/overview_figure.png)
 
@@ -22,14 +22,15 @@ triteia is a Python client for performing inference on the NVIDIA Triton Inferen
 
 ## Quick start <a name="quick-start"></a>
 
-triteia requires `histomcs_stream` and `large_image` packages with the tiff reader
+triteia requires `histomcs_stream` and `large_image` packages with the TIFF reader
 ```
 git clone https://github.com/PathologyDataScience/triteia.git
-pip install --editable ./triteia
+cd triteia
+pip install --editable .
 ```
-> `--editable` ensures that updates to the `triteia` package (after `git pull`) immediately takes effect.
+> `--editable` ensures that updates to the `triteia` package (after `git pull`) immediately take effect.
 
-Or, you can try the Docker image. First, run `git clone` (as above) or make sure to do a git pull inside the "triteia" directory. Then:
+Alternatively, to use the Docker image, run the following from the repository root (same directory as this file is located):
 ```bash
 # optional: download test data
 python download_test_data.py
@@ -42,21 +43,20 @@ docker run \
   -v ${PWD}/test_data:/data:ro \
   --name tritonclient triteia:latest
 ```
-> **_NOTE:_**  `--network=` option allows the Docker image to access ports from other containers or the host. The default shared memory size for Docker containers is 64MB; use `--shm-size=` to increase it if you need to process large whole-slide images. The `--security-opt seccomp:unconfined` option may be needed on larger machines to enable [OpenBLAS](https://www.openblas.net/) threading support. The `--rm` option removes the container after it stops, so be cautious if you need persistent data.
+> **_NOTE:_** The `--network=host` option lets the Docker container access ports from other containers or the host. Since Docker defaults to 64MB of shared memory, use `--shm-size=` to increase shared memory for processing large whole-slide images. The `--security-opt seccomp:unconfined` option may be required to enable [OpenBLAS](https://www.openblas.net/) threading, especially on larger machines. Add the `--rm` option to have the container removed after it stops, but avoid it if you need to persist data.
 
-> The client Docker utilizes the server Docker network, so any ports required by the client must be exposed when launching the _server_ container. For example, running a Jupyter notebook on the client requires exposing the Jupyter port (8888) on the server using `-p <your port>:8888`.
+> The client Docker container uses the server's Docker network, so any client-required ports must be exposed by the server container. For example, to use Jupyter notebooks on the client, ensure the Jupyter port (8888) is exposed with `-p <your port>:8888` when launching the server container.
 
 ### Example <a name="example"></a>
 
 * [feature_extraction](./examples/feature_extraction.ipynb) demonstrates whole-slide image feature extraction.
-* [patch_inference](./examples/patch_inference.ipynb) demonstrates feature extraction using a list of images instead of WSIs.
-* [export_pytorch_model](./examples/export_pytorch_model.ipynb) demonstrates how to export a PyTorch model to be used with TritonServer.
+* [patch_inference](./examples/patch_inference.ipynb)patch_inference shows feature extraction with image lists instead of WSIs.
+* [export_pytorch_model](./examples/export_pytorch_model.ipynb) shows how to export PyTorch models for Triton.
 
 These examples require a running TritonServer container on the client machine.
 
-#### Running notebook examples with docker:
-This command is similar to the command [given below](#container), but adds the JupyterLab command and runs it as your host user.
-This launches a jupyter-lab/notebook at port 8888. Copy the URL you see in the console into your web browser.
+#### Running notebook examples with Docker:
+This launches a Jupyter Notebook on port 8888. To access it, look for the URL that will be displayed in the terminal and open it in your web browser:
 ```bash
 docker run \
   --security-opt seccomp:unconfined --network=host \
@@ -68,14 +68,19 @@ docker run \
   bash -c "jupyter-lab --notebook-dir /examples/ --no-browser"
 ```
 
-### Running the Triton container <a name="container"></a>
+### Running the Server (Triton container) <a name="container"></a>
 
 triteia is tested with [Triton version 25.02](https://github.com/triton-inference-server/server/releases/tag/v2.55.0).
 Support for Tensorflow is deprecated in later versions, but other model backends (like PyTorch) should still work.
 
-We recommend starting from the repository’s root directory (the same as the directory containing this README.md file). You can run using the `./launch_server.sh` script (which also has some command-line options) or the command below:
+To run the server,  we recommend using the `./launch_server.sh` script. Use `./launch_server --help` to see available options. It will prompt you for a model to start with. Additional models can be loaded (or unloaded) with the client.
 
-```
+Some models require a HuggingFace token to access the HuggingFace model hub for download. See [HuggingFace token setup](#hf-token) for details.
+
+If you want to run the server manually, use the command below:
+
+```bash
+# cd: the current directory should be triteia, where the models folder is located
 docker run \
   --gpus=all \
   -d \
@@ -89,55 +94,53 @@ docker run \
   tritonserver --model-repository=/models --model-control-mode=explicit --exit-on-error=false
 ```
 
-The command above uses the `./models` as the model repository for Triton. So, if you have a model you would like to load, for example, ResNet50, make sure it is in the `./models` directory before starting the server. 
-
 > **Note:** The `--ipc`, `--shm-size`, and `--ulimit` memlock options are recommended when using shared memory for client/server communication. These settings allow Triton to access the host's shared memory, increase the default shared memory limit (64MB by default), and prevent RAM from being swapped to disk. To load and modify models while the server is running, use the `--model-control-mode=explicit` argument. If you are running the client in a Docker container, using `--network=host` allows the client container to communicate with the server container over the host's network.
 
 ## Command-line interface <a name="cli"></a>
 ### Inference <a name="inference"></a>
 A command-line interface is provided for inference with single or multiple slides, with control over tiling, masking, data loading, and serialization parameters. Models must be loaded prior to inference.
 
-Perform inference with the EfficientNetV2S model on a single slide, outputting serialized embeddings to your home directory.
+Perform inference with the EfficientNetV2S model on a single slide, outputting serialized embeddings to your home directory:
 ```bash
 python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow
 ```
 
-Optional parameters allow restricting inference to a tissue mask (`-m`)
+Optional parameters allow restricting inference to a tissue mask (`-m`):
 ```bash
 python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -m TCGA-AN-A0G0-01Z-00-DX1.mask.png
 ```
 
-Store features in float32 precision rather than default float16 (`-f`)
+Store features in float32 precision rather than the default float16 (`-f`):
 ```bash
 python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -f
 ```
 
-modification tile size (`-t`), add tile overlap (`-o`), and change magnification (`-M`)
+Modification tile size (`-t`), add tile overlap (`-o`), and change magnification (`-M`):
 ```bash
 python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -t 256 -o 128 -M 10
 ```
 
-adjustment of tile reading parameters including ICC correction (`-i`), read chunk size (`-c`), batch size (`-b`), prefetch (`-p`), and multiprocessing workers (`-w`).
+Adjustment of tile reading parameters, including ICC correction (`-i`), read chunk size (`-c`), batch size (`-b`), prefetch (`-p`), and multiprocessing workers (`-w`):
 ```bash
 python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -i -c 8 -b 128 -p 2 -w 16
 ```
 
-Provide image source (`-n`) and target (`-r`) parameters for Macenko color normalization
+Provide image source (`-n`) and target (`-r`) parameters for Macenko color normalization:
 ```bash
 python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -n ~/TCGA-AN-A0G0-01Z-00-DX1.stain.npy -r ~/standard_stain.npy
 ```
 
-Change the address of the Triton inference server.
+Change the Triton inference server's address:
 ```bash
 python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -a "foo.edu:8001"
 ```
 
-Increase the precision of serialized features to float (default is half float)
+Increase the precision of serialized features to float (default is half float):
 ```bash
 python feature_extraction.py ~/TCGA-AN-A0G0-01Z-00-DX1.svs ~/ EfficientNetV2S.tensorflow -f
 ```
 
-For large jobs, use a tab-delimited file containing input images and, optionally, their masks and normalization stain profiles.
+For large jobs, use a tab-delimited file containing input images and, optionally, their masks and normalization stain profiles:
 ```bash
 more ~/inputs.tsv
 TCGA-AN-A0G0-01Z-00-DX1.svs    TCGA-AN-A0G0-01Z-00-DX1.mask.py    TCGA-AN-A0G0-01Z-00-DX1.stain.npy    
@@ -147,31 +150,33 @@ TCGA-AN-A0G0-01Z-00-DX4.svs    TCGA-AN-A0G0-01Z-00-DX4.mask.py    TCGA-AN-A0G0-0
 python feature_extraction.py ~/inputs.tsv ~/ EfficientNetV2S.tensorflow
 ```
 
-Skip images where output already exists.
+Skip images where output already exists:
 ```bash
 python feature_extraction.py ~/inputs.tsv ~/ EfficientNetV2S.tensorflow -s
 ```
 
 ## Model wrappers <a name="wrappers"></a>
-triteia contains wrappers for serving popular digital pathology models, including CONCH, UNI, Prov-GigaPath, hibou-L, Phikon, Virchow, and Virchow2 on the [Python backend](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/python_backend/README.html). All models are served using mixed precision.
+triteia provides wrappers for serving popular digital pathology models, including CONCH, UNI, Prov-GigaPath, hibou-L, Phikon, Virchow, and Virchow2 on the [Python backend](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/python_backend/README.html). All models are served using mixed precision.
 
-| Model | Input | Output | Size |
-|---|---|---|---|
-| [conch](https://huggingface.co/MahmoodLab/CONCH) | (224, 224, 3) | 512 | 0.802 GB |
-| [gigapath](https://huggingface.co/prov-gigapath/prov-gigapath) | (224, 224, 3) | 1536 | 4.54 GB |
-| [hibou-L](https://huggingface.co/histai/hibou-L) | (224, 224, 3) | 1024 | 1.21 GB |
-| [phikon](https://huggingface.co/owkin/phikon) | (224, 224, 3) | 768 | 0.346 GB |
-| [uni](https://huggingface.co/MahmoodLab/UNI) | (224, 224, 3) | 1024 | 1.21 GB |
-| [uni2](https://huggingface.co/MahmoodLab/UNI2-h) | (224, 224, 3) | 1536 | 2.73 GB |
-| [virchow](https://huggingface.co/paige-ai/Virchow) | (224, 224, 3) | 2560 | 2.53 GB |
-| [virchow2](https://huggingface.co/paige-ai/Virchow2) | (224, 224, 3) | 2560 | 2.53 GB |
+| Model                                                          | Input         | Output          | Size     |
+|----------------------------------------------------------------|---------------|-----------------|----------|
+| [conch](https://huggingface.co/MahmoodLab/CONCH)               | (224, 224, 3) | 512             | 0.802 GB |
+| [gigapath](https://huggingface.co/prov-gigapath/prov-gigapath) | (224, 224, 3) | 1536            | 4.54 GB  |
+| [hibou-L](https://huggingface.co/histai/hibou-L)               | (224, 224, 3) | 1024            | 1.21 GB  |
+| [phikon](https://huggingface.co/owkin/phikon)                  | (224, 224, 3) | 768             | 0.346 GB |
+| [resnet50](https://huggingface.co/microsoft/resnet-50)         | (3, 224, 224) | 1000            | 0.1 GB   |
+| [SegFormer](https://huggingface.co/nvidia/segformer-b0-finetuned-ade-512-512)        | (3,_dynamic_) | (150,_dynamic_) | 0.01 GB  |
+| [uni](https://huggingface.co/MahmoodLab/UNI)                   | (224, 224, 3) | 1024            | 1.21 GB  |
+| [uni2](https://huggingface.co/MahmoodLab/UNI2-h)               | (224, 224, 3) | 1536            | 2.73 GB  |
+| [virchow](https://huggingface.co/paige-ai/Virchow)             | (224, 224, 3) | 2560            | 2.53 GB  |
+| [virchow2](https://huggingface.co/paige-ai/Virchow2)           | (224, 224, 3) | 2560            | 2.53 GB  |
 
 A [dockerfile](server.Dockerfile) built on Triton Server container encapsulates all requirements for serving these models
 ```bash
 docker build -t model-tritonserver -f server.Dockerfile .
 ```
 
-Each folder in the `/models` directory contains a `model.py` file that implements model loading, inference, and cleanup. The `model.py` files must be placed into the model repository for serving (a config.pbtxt file is not required).
+Each folder in the `/models` directory contains a `model.py` file that implements model loading, inference, and cleanup. The `model.py` files must be placed into the model repository for serving ("config.pbtxt" file is not required).
 
 ```plaintext
     models
@@ -181,7 +186,7 @@ Each folder in the `/models` directory contains a `model.py` file that implement
 ```
 
 
-### Huggingface tokens
+### Huggingface tokens <a name="hf-token"></a>
 A [HuggingFace token](https://huggingface.co/settings/tokens) is required to access the UNI, gigapath, and hibou-L models. This is passed to the server by setting the environment variable `HF_TOKEN` before launch:
 ```bash
 export HF_TOKEN=hf_**********************************
@@ -209,7 +214,7 @@ model = TritonModel(name, "localhost:8001")
 model.load(config=config.json())
 ```
 
-Alternatively, model inputs and output signatures can be defined using the `ModelInput` and `ModelOutput` classes
+Alternatively, model inputs and output signatures can be defined using the `ModelInput` and `ModelOutput` classes.
 ```python
 from triteia.config import ModelInput
 input = [ModelInput(name="input_0", shape=[224, 224, 3], dtype=np.float32, optional=False)]
@@ -218,7 +223,7 @@ config = TensorflowConfig(name, max_batch_size=64, input=input)
 
 Variable-sized input dimensions can be indicated using a value of -1.
 
-The `InstanceGroup` class configures the use of CPU or GPU resources and the number of model instances hosted on each GPU.
+The `InstanceGroup` class configures the use of CPU or GPU resources and the number of model instances per GPU.
 ```python
 from triteia.config import InstanceGroup
 instances = InstanceGroup(count=2, kind="gpu", gpus=[0,1,2,3])
@@ -289,7 +294,7 @@ Inference is performed using `feature_extraction.inference`. This function consu
 # Developer guide <a name="developer-guide"></a>
 ## Testing <a name="testing"></a>
 ### Locally
-Testing and code formatting are automated with tox and pytest, and can be run with `python -m tox run`. Running this will evaluate the tests in the environments defined in `tox.ini` and will format the source using Black. Following testing, a coverage.html file will be located in .tox/coverage.
+Testing and code formatting are automated with [`tox`](https://tox.wiki/) and [`pytest`](https://docs.pytest.org/), and can be run with `python -m tox run`. Running this will evaluate the tests in the environments defined in `tox.ini` and will format the source using [`black`](https://github.com/psf/black). Following testing, a coverage.html file will be located in .tox/coverage.
 
 Testing requires running a Triton server on the local machine. Tests are run using an `EfficientNetV2S.tensorflow` model that can be downloaded using pooch:
 
@@ -303,13 +308,13 @@ pooch.retrieve(
 )
 ```
 
-### Using standalone docker container
+### Using a standalone Docker container
 To test using the Docker container, launch and build the client as follows:
 ```
 docker build -f client.Dockerfile . -t triteia:latest --build-arg DOCKER_GROUP_ID=$(getent group docker | cut -d: -f3)
 ./launch_test_container.sh
 ```
-You can now run tests inside the container using `pytest tests` inside the container.
+You can now run tests inside the container using `pytest tests`.
 
 ## TRT Conversion <a name="trt"></a>
 Models usually come as PyTorch, TensorFlow, or ONNX backends. NVIDIA has a format called "TRT" (https://github.com/NVIDIA/TensorRT) that is optimized for inference.
@@ -321,17 +326,17 @@ PyTorch offers many optimizations that may not be available in the ONNX or TRT b
 
 ## Paper results
 To reproduce the (TBD) paper
-1. start the NVIDIA triton server with all GPUs and models available: `./launch_server.sh --num-gpus <num_gpu> --http-port 7984 --grpc-port 7985 --metrics-port 7986`
+1. Start the NVIDIA Triton server with all GPUs and models available: `./launch_server.sh --num-gpus <num_gpu> --http-port 7984 --grpc-port 7985 --metrics-port 7986`
 2. `OUTPUT_DIR="./results" ./benchmarking/paper_benchmarks.sh $OUTPUT_DIR`
 3. Inspect results: `tensorboard --logdir=...`.
-To view results as figures::
+To view results as figures:
 ```bash
 # convert TensorBoard to CSV
 ./benchmarking/tensorboard_to_csv.py
 # CSV to plot files 
-`./benchmarking/tensorboard_csv_to_plot.py`
+./benchmarking/tensorboard_csv_to_plot.py
 ```
 
 To do the benchmarks using Docker, use the `benchmark_client.Dockerfile` in the benchmarking directory.
-It is identical to the `client.Dockerfile` in this directory, except it has access to CUDA so it can export GPU metrics and automatically start and stop Triton with GPUs.
+It is identical to the `client.Dockerfile` in this directory, except it has access to CUDA, allowing it to export GPU metrics and automatically start and stop Triton with GPUs.
 To build it from the git root directory: `docker build -f benchmarking/benchmark_client.Dockerfile . -t triteia:benchmark`
