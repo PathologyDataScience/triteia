@@ -607,15 +607,15 @@ def read_and_write_data(tensorboard_dirs, output_dir):
                 run_prefix=run_prefix,
                 run_suffix=run_suffix,
             )
-            df = load_or_build_gpu_scaling(
-                tensorboard_dirs=tensorboard_dirs,
-                csv_path=os.path.join(
-                    output_dir, f"{run_prefix}{run_suffix}{LATENCY_GPU_SCALING_CSV}"
-                ),
-                plot_key="latency_mean_ms",
-                run_prefix=run_prefix,
-                run_suffix=run_suffix,
-            )
+            # df = load_or_build_gpu_scaling(
+            #     tensorboard_dirs=tensorboard_dirs,
+            #     csv_path=os.path.join(
+            #         output_dir, f"{run_prefix}{run_suffix}{LATENCY_GPU_SCALING_CSV}"
+            #     ),
+            #     plot_key="latency_mean_ms",
+            #     run_prefix=run_prefix,
+            #     run_suffix=run_suffix,
+            # )
 
     # limit_df = load_or_build_limit_scaling(
     #     tensorboard_dirs=tensorboard_dirs,

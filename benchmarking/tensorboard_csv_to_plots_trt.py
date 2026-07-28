@@ -22,7 +22,7 @@ models_config = [
         "base_pattern": "tritonProv-GigaPath-trt",
         "non_trt_pattern": "tritonProv-GigaPath",
         "non_trt_pattern_inf": "tritonProv-GigaPathinferenceonly",
-        "multiuser_name": "Prov-GigaPath-trt",
+        "multiuser_name": "Prov-GigaPath_trt",
         "multiuser_name_non_trt": "Prov-GigaPath",
     },
     {

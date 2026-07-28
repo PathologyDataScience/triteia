@@ -509,7 +509,7 @@ def plot_multiuser_single_concurrency_combined(
 
 
 def plot_inferenceonly_triton_pytorch(
-    df_combined, batch_size, output_dir, output_prefix="", ylim=8200
+    df_combined, batch_size, output_dir, output_prefix="", ylim=8400
 ):
     df = df_combined[df_combined["batch_size"] == batch_size].copy()
     if df.empty:
@@ -841,7 +841,7 @@ def plot_combined_triton_pytorch_raw_grouped(
         row_height=5,
         sharey=True,
         sharex=True,
-        gridspec_kw={"hspace": 0.5},
+        #gridspec_kw={"hspace": 0.5},
     )
 
     label_idx = 0
@@ -918,7 +918,7 @@ def plot_combined_triton_pytorch_raw_grouped(
         row_height=5,
         sharey=True,
         sharex=True,
-        gridspec_kw={"hspace": 0.5},
+        #gridspec_kw={"hspace": 0.5},
     )
 
     label_idx = 0
@@ -1039,16 +1039,16 @@ def main():
             if not os.path.exists(csv_path) or not os.path.isfile(csv_path):
                 logging.info("Not found %s; skipping TensorBoard read.", csv_path)
                 continue
-            df = pd.read_csv(csv_path)
-            ylim_max = 18000
-            plot_gpu_scaling_stacked_bar_from_df(
-                df,
-                plot_key="latency_mean_ms",
-                output_dir=args.output_dir,
-                title=f"{run_prefix}{run_suffix}: Batch and GPU latencies",
-                output_prefix=f"{run_prefix}{key}_latencies_",
-                ylim_max=ylim_max,
-            )
+            # df = pd.read_csv(csv_path)
+            # ylim_max = 18000
+            # plot_gpu_scaling_stacked_bar_from_df(
+            #     df,
+            #     plot_key="latency_mean_ms",
+            #     output_dir=args.output_dir,
+            #     title=f"{run_prefix}{run_suffix}: Batch and GPU latencies",
+            #     output_prefix=f"{run_prefix}{key}_latencies_",
+            #     ylim_max=ylim_max,
+            # )
 
     csv_path_triton_inferenceonly = os.path.join(
         args.output_dir, f"tritoninferenceonly{GPU_SCALING_CSV}"
