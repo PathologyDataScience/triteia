@@ -17,7 +17,6 @@ dependencies = [
   "histomics-stream",
   "numpy",
   "large-image[tiff]",
-  "nvidia-pytriton",
   "pandas",
   "psutil",
   "pooch",

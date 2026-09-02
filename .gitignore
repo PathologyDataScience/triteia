@@ -9,7 +9,9 @@ models/resnet50_trt_float32/
 examples/.Trash*
 examples/examples_inference_images/
 examples/mnist_data/
-models/*/1
+# models/*/1 was ignored here because launch_server.sh generated the version
+# directories at launch. They are now tracked: Triton reads the checkout
+# directly, so nothing is generated and nothing needs ignoring.
 benchmarking/benchmark_output.txt
 model_repository/
 test_data/

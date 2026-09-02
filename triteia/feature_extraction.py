@@ -20,7 +20,7 @@ import histomics_stream as hs
 import large_image_source_tiff
 import numpy as np
 import tensorflow as tf
-from pytriton.client import ModelClient
+from triteia.grpc_model_client import GrpcModelClient as ModelClient
 from tqdm import tqdm
 
 from triteia.io.tfr_writer import write_record
