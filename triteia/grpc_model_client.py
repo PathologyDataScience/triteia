@@ -115,9 +115,7 @@ class GrpcModelClient:
         )
 
     def _load_metadata(self):
-        meta = self._client.get_model_metadata(
-            self._model_name, self._model_version
-        )
+        meta = self._client.get_model_metadata(self._model_name, self._model_version)
         # (name, triton_datatype) per input, in the server's declared order.
         self._input_specs = [(i.name, i.datatype) for i in meta.inputs]
         self._output_names = [o.name for o in meta.outputs]
@@ -153,9 +151,7 @@ class GrpcModelClient:
                     f"{len(args)} positional inputs given but model "
                     f"'{self._model_name}' declares {len(self._input_specs)}"
                 )
-            named = {
-                spec[0]: arr for spec, arr in zip(self._input_specs, args)
-            }
+            named = {spec[0]: arr for spec, arr in zip(self._input_specs, args)}
         else:
             raise ValueError("infer_batch() requires at least one input array")
 
