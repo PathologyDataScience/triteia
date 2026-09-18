@@ -1,0 +1,89 @@
+Patched model.py files for the Quest port
+=========================================
+
+This archive contains the models/ directory as it should appear in the
+repository. Unpack it over the repository root, or copy models/ into place.
+
+  models/
+    conch/1/model.py
+    gigapath/1/model.py
+    hibou-L/1/model.py
+    phikon/1/model.py
+    resnet50/1/model.py
+    uni/1/model.py
+    uni2/1/model.py
+    useless_and_empty/1/model.py
+    virchow/1/model.py
+    virchow2/1/model.py
+
+The `1/` version directory is required by Triton. Upstream stores these flat as
+models/<name>/model.py and launch_server.sh copies them into place at launch;
+storing them in the version directory lets Triton read the checkout directly,
+so the git tree is the deployment and the copy loop in launch_server.sh becomes
+redundant.
+
+useless_and_empty is included UNCHANGED. It builds a bare torch Module and
+never touches the hub, so it needed no patch - only the move into the version
+directory. It is also the only model that runs with no downloads at all, which
+makes it the best way to test the server path end to end.
+
+Verification status
+-------------------
+  phikon    VERIFIED end to end on an A100: loads from local weights with no
+            network access and returns correct 768-dim embeddings over gRPC.
+
+  all other models
+            PATCHED BUT UNTESTED. The gated weights could not be downloaded,
+            so these have not been run. They are structurally identical to the
+            phikon patch and each fails loudly rather than silently if
+            something is wrong, but they need a real load before being trusted.
+
+What changed, and what did not
+------------------------------
+Unchanged in every file: auto_complete_config() and execute(). The tensor
+contract and the entire inference path are exactly as upstream wrote them,
+including the token slicing in virchow/virchow2 and the CHW handling in
+resnet50.
+
+Changed: initialize() only, plus new module-level helpers.
+
+  * All hub references and HF_TOKEN handling removed. Weights come from
+    ${TRITEIA_WEIGHTS_DIR}/<model>/. The login(os.getenv("HF_TOKEN")) calls had
+    to be removed rather than left unset, since login(None) raises.
+
+  * timm models (uni, uni2, gigapath, virchow, virchow2) rebuild the
+    architecture locally. Rather than hardcoding architecture parameters, the
+    helper reads `architecture` and `model_args` from the repository's own
+    config.json - the same values timm.create_model("hf-hub:...") would have
+    used. Weights then load with strict=True, so a key or shape mismatch raises
+    at load rather than producing a partially initialised model.
+
+    uni2 additionally carries the published model-card parameters as a fallback
+    if config.json does not declare an architecture.
+
+  * Normalisation constants come from the repository config, and a missing
+    config is FATAL. Building the architecture locally leaves timm's generic
+    architecture defaults in place, which are not guaranteed to match. That
+    mismatch does not raise anywhere - it produces plausible, incorrect
+    embeddings - so it is better to refuse to start.
+
+  * transformers models (phikon, resnet50, hibou-L) pass the local directory to
+    from_pretrained with local_files_only=True, so a stray network call fails
+    immediately instead of hanging on a node with no route out.
+
+  * conch passes a filesystem path to create_model_from_pretrained instead of
+    "hf_hub:MahmoodLab/conch". CONCH treats the hf_hub: prefix as a download
+    instruction and anything else as a path, so hf_auth_token is not needed.
+
+  * hibou-L checks for .py files in the weights directory before loading. It
+    uses trust_remote_code=True, which executes modeling code that normally
+    comes from the hub alongside the weights; without them the transformers
+    error is not obvious.
+
+  * resnet50 and phikon request the image-processor backend explicitly
+    (backend="torchvision", falling back to use_fast=True), since transformers
+    5.x deprecated use_fast. Measured: the two produce bit-identical output.
+
+Every file prints [triteia] lines during load - which checkpoint was opened,
+which architecture was built, which normalisation constants were used - so the
+server log records what actually happened.

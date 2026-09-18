@@ -150,18 +150,50 @@ def _timm_from_local(weights_dir, fallback_args=None, **overrides):
     arch = cfg.get("architecture")
     model_args = dict(cfg.get("model_args") or {})
 
-    if not arch:
-        if not fallback_args:
-            raise RuntimeError(
-                f"'{cfg_path}' does not declare an 'architecture', so the model "
-                f"cannot be rebuilt locally. Re-download the full repository "
-                f"rather than only the checkpoint."
+    # Some repositories declare `architecture` but omit `model_args` - UNI2-h's
+    # config.json is one. Taking the architecture at face value there would
+    # build timm's stock configuration for that name, which for
+    # vit_giant_patch14_224 is a different width, depth and head count from
+    # this model, with no register tokens and no SwiGLU. strict=True below
+    # would catch it, but only as a wall of shape mismatches, so substitute the
+    # published parameters instead and say so.
+    if fallback_args:
+        if not arch:
+            arch = fallback_args["architecture"]
+            print(
+                f"[triteia] {MODEL_NAME}: config.json declares no architecture; "
+                f"using the published value compiled into this file",
+                flush=True,
             )
-        arch = fallback_args["architecture"]
-        model_args = dict(fallback_args.get("model_args") or {})
+        if not model_args:
+            model_args = dict(fallback_args.get("model_args") or {})
+            print(
+                f"[triteia] {MODEL_NAME}: config.json declares no model_args; "
+                f"using the published parameters compiled into this file",
+                flush=True,
+            )
+        if arch != fallback_args["architecture"]:
+            print(
+                f"[triteia] {MODEL_NAME}: WARNING - config.json declares "
+                f"architecture '{arch}' but this file expects "
+                f"'{fallback_args['architecture']}'. Proceeding with the "
+                f"config value.",
+                flush=True,
+            )
+
+    if not arch:
+        raise RuntimeError(
+            f"'{cfg_path}' does not declare an 'architecture', so the model "
+            f"cannot be rebuilt locally. Re-download the full repository "
+            f"rather than only the checkpoint."
+        )
+
+    if not model_args:
         print(
-            f"[triteia] {MODEL_NAME}: config.json has no architecture; using "
-            f"the published parameters compiled into this file",
+            f"[triteia] {MODEL_NAME}: WARNING - no model_args available, so "
+            f"timm's default configuration for '{arch}' will be used. If this "
+            f"model differs from that default, the strict state-dict load "
+            f"below will fail with shape mismatches.",
             flush=True,
         )
 

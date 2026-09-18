@@ -108,6 +108,27 @@ def _load_state_dict(path):
     return torch.load(path, map_location="cpu", weights_only=True)
 
 
+# Architecture parameters from the Virchow2 model card, used if the downloaded
+# config.json does not declare model_args.
+#
+# reg_tokens=4 is load-bearing: execute() slices patch tokens from index 5
+# (1 class token + 4 register tokens). Without the register tokens the model
+# would build with a different token layout and the slicing would silently
+# select the wrong tokens - though the strict state-dict load should fail
+# first.
+VIRCHOW2_FALLBACK = {
+    "architecture": "vit_huge_patch14_224",
+    "model_args": {
+        "img_size": 224,
+        "init_values": 1e-5,
+        "num_classes": 0,
+        "reg_tokens": 4,
+        "mlp_ratio": 5.3375,
+        "global_pool": "",
+        "dynamic_img_size": True,
+    },
+}
+
 
 def _timm_from_local(weights_dir, fallback_args=None, **overrides):
     """Rebuild a timm model from a downloaded HuggingFace repo directory.
@@ -131,18 +152,50 @@ def _timm_from_local(weights_dir, fallback_args=None, **overrides):
     arch = cfg.get("architecture")
     model_args = dict(cfg.get("model_args") or {})
 
-    if not arch:
-        if not fallback_args:
-            raise RuntimeError(
-                f"'{cfg_path}' does not declare an 'architecture', so the model "
-                f"cannot be rebuilt locally. Re-download the full repository "
-                f"rather than only the checkpoint."
+    # Some repositories declare `architecture` but omit `model_args` - UNI2-h's
+    # config.json is one. Taking the architecture at face value there would
+    # build timm's stock configuration for that name, which for
+    # vit_giant_patch14_224 is a different width, depth and head count from
+    # this model, with no register tokens and no SwiGLU. strict=True below
+    # would catch it, but only as a wall of shape mismatches, so substitute the
+    # published parameters instead and say so.
+    if fallback_args:
+        if not arch:
+            arch = fallback_args["architecture"]
+            print(
+                f"[triteia] {MODEL_NAME}: config.json declares no architecture; "
+                f"using the published value compiled into this file",
+                flush=True,
             )
-        arch = fallback_args["architecture"]
-        model_args = dict(fallback_args.get("model_args") or {})
+        if not model_args:
+            model_args = dict(fallback_args.get("model_args") or {})
+            print(
+                f"[triteia] {MODEL_NAME}: config.json declares no model_args; "
+                f"using the published parameters compiled into this file",
+                flush=True,
+            )
+        if arch != fallback_args["architecture"]:
+            print(
+                f"[triteia] {MODEL_NAME}: WARNING - config.json declares "
+                f"architecture '{arch}' but this file expects "
+                f"'{fallback_args['architecture']}'. Proceeding with the "
+                f"config value.",
+                flush=True,
+            )
+
+    if not arch:
+        raise RuntimeError(
+            f"'{cfg_path}' does not declare an 'architecture', so the model "
+            f"cannot be rebuilt locally. Re-download the full repository "
+            f"rather than only the checkpoint."
+        )
+
+    if not model_args:
         print(
-            f"[triteia] {MODEL_NAME}: config.json has no architecture; using "
-            f"the published parameters compiled into this file",
+            f"[triteia] {MODEL_NAME}: WARNING - no model_args available, so "
+            f"timm's default configuration for '{arch}' will be used. If this "
+            f"model differs from that default, the strict state-dict load "
+            f"below will fail with shape mismatches.",
             flush=True,
         )
 
@@ -235,7 +288,10 @@ class TritonPythonModel:
         # JSON-serialisable, so they are always supplied as overrides rather
         # than read from the repo config.
         self.model, pretrained_cfg = _timm_from_local(
-            weights_dir, mlp_layer=SwiGLUPacked, act_layer=torch.nn.SiLU
+            weights_dir,
+            fallback_args=VIRCHOW2_FALLBACK,
+            mlp_layer=SwiGLUPacked,
+            act_layer=torch.nn.SiLU,
         )
 
         self.model = self.model.eval()
